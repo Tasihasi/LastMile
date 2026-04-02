@@ -2166,6 +2166,52 @@ body {
   background: #dc2626;
 }
 
+/* Drag handle */
+.session-card-drag-handle {
+  width: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-border);
+  cursor: grab;
+  flex-shrink: 0;
+  transition: color var(--transition);
+}
+
+.session-card-drag-handle:active {
+  cursor: grabbing;
+}
+
+.session-card:hover .session-card-drag-handle {
+  color: var(--color-text-muted);
+}
+
+.session-card-drag-handle svg {
+  width: 12px;
+  height: 12px;
+}
+
+/* Dragging state */
+.session-card--dragging {
+  opacity: 0.4;
+}
+
+/* Drop target highlight */
+.dashboard-drop-active {
+  outline: 2px dashed var(--color-primary);
+  outline-offset: -2px;
+  border-radius: var(--radius-lg);
+}
+
+.dashboard-drop-active .dashboard-column {
+  border-color: transparent;
+}
+
+.dashboard-column.dashboard-drop-active {
+  border-color: transparent;
+  background: var(--color-primary-light);
+}
+
 /* ============================================
    Mobile Sidebar Toggle (hidden on desktop)
    ============================================ */

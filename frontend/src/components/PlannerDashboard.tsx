@@ -23,6 +23,9 @@ function formatDate(iso: string): string {
   });
 }
 
+// Drop zone identifier: biker id or "unassigned"
+type DropTarget = number | "unassigned";
+
 export function PlannerDashboard({ onViewSession }: PlannerDashboardProps) {
   const [bikers, setBikers] = useState<User[]>([]);
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
@@ -31,6 +34,8 @@ export function PlannerDashboard({ onViewSession }: PlannerDashboardProps) {
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploadTarget, setUploadTarget] = useState<number | undefined>();
+  const [dragOverTarget, setDragOverTarget] = useState<DropTarget | null>(null);
+  const [draggingId, setDraggingId] = useState<string | null>(null);
 
   const [refreshKey, setRefreshKey] = useState(0);
   const refresh = useCallback(() => setRefreshKey((k) => k + 1), []);
@@ -79,6 +84,40 @@ export function PlannerDashboard({ onViewSession }: PlannerDashboardProps) {
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
+  // Drag & drop handlers
+  const handleDragStart = (sessionId: string) => {
+    setDraggingId(sessionId);
+  };
+
+  const handleDragEnd = () => {
+    setDraggingId(null);
+    setDragOverTarget(null);
+  };
+
+  const handleDragOver = (e: React.DragEvent, target: DropTarget) => {
+    e.preventDefault();
+    setDragOverTarget(target);
+  };
+
+  const handleDragLeave = () => {
+    setDragOverTarget(null);
+  };
+
+  const handleDrop = async (e: React.DragEvent, target: DropTarget) => {
+    e.preventDefault();
+    setDragOverTarget(null);
+    setDraggingId(null);
+
+    if (!draggingId) return;
+
+    if (target === "unassigned") {
+      // Can't unassign via drag for now — would need a backend endpoint
+      return;
+    }
+
+    await handleAssign(draggingId, target);
+  };
+
   // Group sessions by owner
   const unassigned = sessions.filter((s) => !s.owner_name);
   const bikerSessions = new Map<string, SessionSummary[]>();
@@ -121,7 +160,12 @@ export function PlannerDashboard({ onViewSession }: PlannerDashboardProps) {
       <div className="dashboard-layout">
         {/* Left: Unassigned routes */}
         {unassigned.length > 0 && (
-          <div className="dashboard-unassigned">
+          <div
+            className={`dashboard-unassigned ${dragOverTarget === "unassigned" ? "dashboard-drop-active" : ""}`}
+            onDragOver={(e) => handleDragOver(e, "unassigned")}
+            onDragLeave={handleDragLeave}
+            onDrop={(e) => handleDrop(e, "unassigned")}
+          >
             <div className="dashboard-column">
               <div className="dashboard-column-header">
                 <span className="dashboard-column-title">Unassigned</span>
@@ -135,6 +179,9 @@ export function PlannerDashboard({ onViewSession }: PlannerDashboardProps) {
                     bikers={bikers}
                     assignDropdown={assignDropdown}
                     confirmDelete={confirmDelete}
+                    isDragging={draggingId === s.id}
+                    onDragStart={() => handleDragStart(s.id)}
+                    onDragEnd={handleDragEnd}
                     onView={() => onViewSession(s.id)}
                     onAssignOpen={() => setAssignDropdown(assignDropdown === s.id ? null : s.id)}
                     onAssign={(ownerId) => handleAssign(s.id, ownerId)}
@@ -152,8 +199,15 @@ export function PlannerDashboard({ onViewSession }: PlannerDashboardProps) {
         <div className="dashboard-bikers">
           {bikers.map((biker) => {
             const bikerRoutes = bikerSessions.get(biker.username) ?? [];
+            const isDropTarget = dragOverTarget === biker.id;
             return (
-              <div className="dashboard-column" key={biker.id}>
+              <div
+                className={`dashboard-column ${isDropTarget ? "dashboard-drop-active" : ""}`}
+                key={biker.id}
+                onDragOver={(e) => handleDragOver(e, biker.id)}
+                onDragLeave={handleDragLeave}
+                onDrop={(e) => handleDrop(e, biker.id)}
+              >
                 <div className="dashboard-column-header">
                   <div className="dashboard-column-biker">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -173,6 +227,9 @@ export function PlannerDashboard({ onViewSession }: PlannerDashboardProps) {
                       bikers={bikers}
                       assignDropdown={assignDropdown}
                       confirmDelete={confirmDelete}
+                      isDragging={draggingId === s.id}
+                      onDragStart={() => handleDragStart(s.id)}
+                      onDragEnd={handleDragEnd}
                       onView={() => onViewSession(s.id)}
                       onAssignOpen={() => setAssignDropdown(assignDropdown === s.id ? null : s.id)}
                       onAssign={(ownerId) => handleAssign(s.id, ownerId)}
@@ -182,7 +239,9 @@ export function PlannerDashboard({ onViewSession }: PlannerDashboardProps) {
                     />
                   ))}
                   {bikerRoutes.length === 0 && (
-                    <div className="dashboard-empty">No routes assigned</div>
+                    <div className="dashboard-empty">
+                      {draggingId ? "Drop here to assign" : "No routes assigned"}
+                    </div>
                   )}
                 </div>
                 <button
@@ -217,6 +276,9 @@ interface SessionCardProps {
   bikers: User[];
   assignDropdown: string | null;
   confirmDelete: string | null;
+  isDragging: boolean;
+  onDragStart: () => void;
+  onDragEnd: () => void;
   onView: () => void;
   onAssignOpen: () => void;
   onAssign: (ownerId: number) => void;
@@ -230,6 +292,9 @@ function SessionCard({
   bikers,
   assignDropdown,
   confirmDelete,
+  isDragging,
+  onDragStart,
+  onDragEnd,
   onView,
   onAssignOpen,
   onAssign,
@@ -241,7 +306,25 @@ function SessionCard({
   const isConfirmingDelete = confirmDelete === session.id;
 
   return (
-    <div className="session-card">
+    <div
+      className={`session-card ${isDragging ? "session-card--dragging" : ""}`}
+      draggable
+      onDragStart={(e) => {
+        e.dataTransfer.effectAllowed = "move";
+        onDragStart();
+      }}
+      onDragEnd={onDragEnd}
+    >
+      <div className="session-card-drag-handle">
+        <svg viewBox="0 0 24 24" fill="currentColor">
+          <circle cx="9" cy="6" r="1.5" />
+          <circle cx="15" cy="6" r="1.5" />
+          <circle cx="9" cy="12" r="1.5" />
+          <circle cx="15" cy="12" r="1.5" />
+          <circle cx="9" cy="18" r="1.5" />
+          <circle cx="15" cy="18" r="1.5" />
+        </svg>
+      </div>
       <div className="session-card-info" onClick={onView} role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === "Enter") onView(); }}>
         <span className="session-card-date">{formatDate(session.created_at)}</span>
         <span className="session-card-stops">
