@@ -510,6 +510,36 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
+.stop-phone {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.78rem;
+  color: var(--color-text-secondary);
+}
+
+.stop-phone svg {
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+  opacity: 0.6;
+}
+
+.stop-phone a {
+  color: var(--color-primary);
+  text-decoration: none;
+}
+
+.stop-phone a:hover {
+  text-decoration: underline;
+}
+
+.stop-phone .copy-btn {
+  width: 20px;
+  height: 20px;
+  padding: 2px;
+}
+
 .stop-error {
   font-size: 0.75rem;
   color: var(--color-danger);
