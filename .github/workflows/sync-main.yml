@@ -34,9 +34,11 @@ jobs:
             exit 0
           fi
 
-          # Create sync PR
-          gh pr create \
+          # Create sync PR and auto-merge it
+          PR_URL=$(gh pr create \
             --title "Sync: merge production back into main" \
-            --body "Auto-created to keep main in sync with production merge commits. Merge this to prevent future 'out-of-date' warnings on deploy PRs." \
+            --body "Auto-created and auto-merged to keep main in sync with production merge commits." \
             --base main \
-            --head production
+            --head production)
+          echo "Created: $PR_URL"
+          gh pr merge "$PR_URL" --merge --auto
