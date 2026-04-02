@@ -398,7 +398,7 @@ function App() {
                       )}
                     </button>
                   )}
-                  {canOptimize && (
+                  {canOptimize && !isOptimized && (
                     <button
                       className="btn btn-primary"
                       onClick={() => optimize(
