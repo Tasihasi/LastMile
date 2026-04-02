@@ -27,8 +27,10 @@
 | Route optimization | OpenRouteService (VROOM algorithm) | 2000 req/day free |
 | Route geometry | ORS Directions API | same key |
 | File parsing | csv, openpyxl, xml.etree | built-in + openpyxl |
+| Static files | WhiteNoise | 6.x |
 | Linting | Ruff (backend), ESLint (frontend) | |
 | CI/CD | GitHub Actions | Python 3.12, Node 20 |
+| Hosting | Render (single web service) | Free tier |
 
 ---
 
@@ -92,12 +94,14 @@ delivery_planner/
 │   │   └── utils/
 │   │       └── format.ts         # Duration, distance, time formatting
 │   ├── index.html                # HTML entry (Inter font, "LastMile" title)
+│   ├── .env.development          # Dev API URL (VITE_API_BASE=http://localhost:8000/api)
 │   ├── vite.config.ts
 │   ├── package.json
 │   ├── tsconfig.json
 │   └── eslint.config.js
 ├── .github/workflows/
 │   └── ci.yml                    # Backend lint/test + frontend build
+├── build.sh                      # Render build script (frontend + backend)
 ├── CLAUDE.md                     # This file
 ├── PLAN.md                       # Tier 1 & 2 implementation roadmap (all completed)
 ├── README.md                     # Setup docs, API reference
@@ -298,6 +302,29 @@ python manage.py seed_test_data  # Creates 3 bikers, 9 routes
 Runs on **all branches** + PRs:
 - **Backend**: Python 3.12, `ruff check` + `ruff format --check`, `python manage.py check`, `python manage.py migrate`, `python manage.py test`
 - **Frontend**: Node 20, `npx eslint .`, `npx tsc -b`, `npx vite build`
+
+---
+
+## Deployment (Render)
+
+Single web service on Render. Django serves both the API and the built React SPA.
+
+**How it works:**
+- `build.sh` (repo root) runs during Render build: installs deps, builds frontend, runs collectstatic + migrate
+- **WhiteNoise** middleware serves Vite build output (`frontend/dist/`) at root URLs (e.g. `/assets/xxx.js`, `/favicon.svg`)
+- **Catch-all URL pattern** in `config/urls.py` returns `frontend/dist/index.html` for all non-API/admin routes (SPA routing)
+- API calls use relative `/api` path in production (no CORS needed, same origin)
+
+**Render settings:**
+- Build command: `./build.sh`
+- Start command: `cd backend && gunicorn config.wsgi`
+- Environment variables: `DEBUG=False`, `SECRET_KEY`, `ORS_API_KEY`, `ALLOWED_HOSTS`
+- `RENDER_EXTERNAL_HOSTNAME` is auto-set by Render and added to `ALLOWED_HOSTS`
+
+**Frontend API URL:**
+- Production: `/api` (relative, same origin)
+- Development: `http://localhost:8000/api` (via `frontend/.env.development`)
+- Configurable via `VITE_API_BASE` env var
 
 ---
 
