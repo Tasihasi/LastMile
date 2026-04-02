@@ -10,6 +10,16 @@ After logging in as a planner, you see the management dashboard instead of the m
 - **Biker columns**: One column per registered biker, showing their assigned routes
 - **Bottom section**: Finished routes (collapsed by default)
 
+### Filtering Bikers
+
+The dashboard header has a filter with three options:
+
+| Filter | Shows |
+|--------|-------|
+| **Active Bikers** (default) | Only bikers with at least one in-progress route |
+| **Inactive Bikers** | Only bikers with no active routes |
+| **All Bikers** | Every registered biker |
+
 ### Route Cards
 
 Each card shows:
@@ -18,16 +28,24 @@ Each card shows:
 - Duration and distance (if optimized)
 - Status badge: "In Progress" (with pulsing dot) or status indicator
 - Progress: "Heading to: Stop Name" and "X/Y stops done" for active routes
+- **Estimated return time**: "Back by ~14:30" on in-progress routes (calculated from start time + route duration + dwell time per stop)
+- **Not received count**: warning badge on finished routes if any stops were not received
 
 ## Assigning Routes
 
 ### Drag and drop
 
-Drag a route card from one column to another. The route is reassigned to the target biker (or moved to "Unassigned").
+Drag a route card from one column to another. The route is reassigned to the target biker. You can also drag a route back to the **Unassigned** column to unassign it.
 
 ### Assign button
 
 Click the person icon on a route card to open a dropdown of all bikers. Select a biker to assign the route.
+
+### Unassigning a route
+
+Two ways to unassign a route from a biker:
+- **Drag** the route card to the Unassigned column
+- **Click the assign button** and select **Unassign** at the bottom of the dropdown (only appears when the route is currently assigned)
 
 ## Uploading Routes
 
@@ -45,7 +63,7 @@ Click the trash icon on a route card. A confirmation dialog appears. This perman
 
 Click the eye icon on a route card to open the full map view for that route. A **Back to Dashboard** button appears in the header to return.
 
-From the map view you can geocode, optimize, adjust settings, and share -- just like the biker view.
+From the map view you can geocode, optimize, adjust settings, and share -- just like the biker view. A **Dashboard** button appears in the header to return to the management view.
 
 ## Live Map
 
