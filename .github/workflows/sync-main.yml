@@ -1,0 +1,42 @@
+name: Sync main after production merge
+
+on:
+  push:
+    branches: [production]
+
+jobs:
+  sync:
+    name: Create sync PR (production → main)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check for divergence and create sync PR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Check if production has commits that main doesn't
+          DIFF=$(git log origin/main..origin/production --oneline)
+          if [ -z "$DIFF" ]; then
+            echo "main and production are in sync. Nothing to do."
+            exit 0
+          fi
+
+          echo "Production has commits not in main:"
+          echo "$DIFF"
+
+          # Check if a sync PR already exists
+          EXISTING=$(gh pr list --base main --head production --state open --json number -q '.[0].number')
+          if [ -n "$EXISTING" ]; then
+            echo "Sync PR #$EXISTING already exists. Skipping."
+            exit 0
+          fi
+
+          # Create sync PR
+          gh pr create \
+            --title "Sync: merge production back into main" \
+            --body "Auto-created to keep main in sync with production merge commits. Merge this to prevent future 'out-of-date' warnings on deploy PRs." \
+            --base main \
+            --head production
