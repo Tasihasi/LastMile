@@ -1,0 +1,20 @@
+name: Protect Production
+
+on:
+  pull_request:
+    branches: [production]
+
+jobs:
+  block:
+    name: Block direct PRs to production
+    runs-on: ubuntu-latest
+    steps:
+      - name: Reject PR
+        if: github.head_ref != 'main'
+        run: |
+          echo "::error::Only the main branch can be merged into production. This PR is from '${{ github.head_ref }}'."
+          exit 1
+
+      - name: Allow from main
+        if: github.head_ref == 'main'
+        run: echo "PR from main — allowed."

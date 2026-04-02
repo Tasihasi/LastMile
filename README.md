@@ -1,6 +1,6 @@
-# Delivery Route Planner
+# LastMile
 
-A web application for planning optimized bicycle delivery routes. Upload a list of delivery addresses, see them on a map, and get an optimized route that follows real roads.
+A delivery route planner for bicycle couriers. Upload a list of delivery addresses, see them on a map, and get an optimized route that follows real roads.
 
 Built as a learning project to explore geospatial APIs, file parsing, and real-time streaming.
 
@@ -8,6 +8,16 @@ Built as a learning project to explore geospatial APIs, file parsing, and real-t
 ![Tech Stack](https://img.shields.io/badge/React-61DAFB?style=flat&logo=react&logoColor=black)
 ![Tech Stack](https://img.shields.io/badge/TypeScript-3178C6?style=flat&logo=typescript&logoColor=white)
 ![Tech Stack](https://img.shields.io/badge/Leaflet-199900?style=flat&logo=leaflet&logoColor=white)
+
+## Documentation
+
+Full user guides and API reference are in the [`docs/`](docs/) folder:
+
+- [Getting Started](docs/getting-started.md) -- login, first route, basic workflow
+- [Biker Guide](docs/biker-guide.md) -- delivering, marking stops, map navigation
+- [Planner Guide](docs/planner-guide.md) -- dashboard, assigning routes, live tracking
+- [File Format Reference](docs/file-formats.md) -- CSV, XLSX, TXT, XML specs and examples
+- [API Reference](docs/api-reference.md) -- all REST endpoints
 
 ## Features
 

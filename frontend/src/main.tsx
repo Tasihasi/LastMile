@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthContext, useAuthProvider } from "./hooks/useAuth";
 import { SharedRouteView } from "./components/SharedRouteView";
+import { DocsPage } from "./components/DocsPage";
 import "./index.css";
 import App from "./App.tsx";
 
@@ -23,6 +24,7 @@ function Root() {
       <BrowserRouter>
         <Routes>
           <Route path="/shared/:shareId" element={<SharedRouteView />} />
+          <Route path="/docs" element={<DocsPage />} />
           <Route path="*" element={<App />} />
         </Routes>
       </BrowserRouter>

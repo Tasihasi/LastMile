@@ -1,6 +1,8 @@
 import contextlib
 import json
 
+import requests
+from django.conf import settings as django_settings
 from django.contrib.auth.models import User
 from django.http import StreamingHttpResponse
 from django.utils import timezone
@@ -299,6 +301,15 @@ def optimize(request, session_id):
             status=status.HTTP_400_BAD_REQUEST,
         )
 
+    if not django_settings.ORS_API_KEY:
+        return Response(
+            {
+                "error": "Route optimization is not available: ORS_API_KEY is not configured. "
+                "Get a free key at https://openrouteservice.org and add it to your .env file."
+            },
+            status=status.HTTP_503_SERVICE_UNAVAILABLE,
+        )
+
     # Optional depot/home location
     depot = None
     depot_lat = request.data.get("depot_lat")
@@ -309,6 +320,19 @@ def optimize(request, session_id):
 
     try:
         ordered_ids = optimize_route(located_stops, depot=depot)
+    except requests.HTTPError as e:
+        if e.response is not None and e.response.status_code in (401, 403):
+            return Response(
+                {
+                    "error": "Route optimization failed: ORS_API_KEY is invalid or expired. "
+                    "Check your key at https://openrouteservice.org."
+                },
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+        return Response(
+            {"error": f"Route optimization failed: {e}"},
+            status=status.HTTP_502_BAD_GATEWAY,
+        )
     except Exception as e:
         return Response(
             {"error": f"Route optimization failed: {e}"},
