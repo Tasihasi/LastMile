@@ -1,3 +1,4 @@
+import contextlib
 import json
 
 from django.http import StreamingHttpResponse
@@ -178,8 +179,16 @@ def optimize(request, session_id):
             status=status.HTTP_400_BAD_REQUEST,
         )
 
+    # Optional depot/home location
+    depot = None
+    depot_lat = request.data.get("depot_lat")
+    depot_lng = request.data.get("depot_lng")
+    if depot_lat is not None and depot_lng is not None:
+        with contextlib.suppress(ValueError, TypeError):
+            depot = (float(depot_lat), float(depot_lng))
+
     try:
-        ordered_ids = optimize_route(located_stops)
+        ordered_ids = optimize_route(located_stops, depot=depot)
     except Exception as e:
         return Response(
             {"error": f"Route optimization failed: {e}"},
@@ -196,7 +205,7 @@ def optimize(request, session_id):
     # Get the route geometry and timing along real roads
     ordered_stops = [id_to_stop[sid] for sid in ordered_ids]
     try:
-        route = get_route_details(ordered_stops)
+        route = get_route_details(ordered_stops, depot=depot)
     except Exception:
         route = None
 

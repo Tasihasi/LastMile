@@ -20,10 +20,13 @@ export async function getSession(sessionId: string): Promise<SessionResponse> {
 }
 
 export async function optimizeRoute(
-  sessionId: string
+  sessionId: string,
+  depot?: { lat: number; lng: number } | null
 ): Promise<OptimizeResponse> {
+  const body = depot ? { depot_lat: depot.lat, depot_lng: depot.lng } : {};
   const { data } = await api.post<OptimizeResponse>(
-    `/sessions/${sessionId}/optimize/`
+    `/sessions/${sessionId}/optimize/`,
+    body
   );
   return data;
 }

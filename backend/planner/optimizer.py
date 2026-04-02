@@ -11,15 +11,20 @@ def _get_headers():
     }
 
 
-def optimize_route(stops) -> list[int]:
+def optimize_route(stops, depot=None) -> list[int]:
     """
     Call ORS optimization (VROOM) to get optimal stop order.
+    depot is an optional (lat, lng) tuple for start/end location.
     Returns list of stop IDs in optimized order.
     """
     if len(stops) < 2:
         return [s.id for s in stops]
 
-    first = stops[0]
+    if depot:
+        start_end = [depot[1], depot[0]]  # [lng, lat] for ORS
+    else:
+        first = stops[0]
+        start_end = [first.lng, first.lat]
 
     body = {
         "jobs": [{"id": stop.id, "location": [stop.lng, stop.lat]} for stop in stops],
@@ -27,8 +32,8 @@ def optimize_route(stops) -> list[int]:
             {
                 "id": 1,
                 "profile": "driving-car",
-                "start": [first.lng, first.lat],
-                "end": [first.lng, first.lat],
+                "start": start_end,
+                "end": start_end,
             }
         ],
     }
@@ -50,15 +55,21 @@ def optimize_route(stops) -> list[int]:
     return ordered_ids
 
 
-def get_route_details(ordered_stops) -> dict | None:
+def get_route_details(ordered_stops, depot=None) -> dict | None:
     """
     Call ORS directions to get route geometry and segment durations/distances.
+    depot is an optional (lat, lng) tuple -- if provided, route starts and ends there.
     Returns {geometry, segments, total_duration, total_distance} or None.
     """
-    if len(ordered_stops) < 2:
+    if len(ordered_stops) < 2 and not depot:
         return None
 
-    coordinates = [[s.lng, s.lat] for s in ordered_stops]
+    coordinates = []
+    if depot:
+        coordinates.append([depot[1], depot[0]])  # [lng, lat]
+    coordinates.extend([[s.lng, s.lat] for s in ordered_stops])
+    if depot:
+        coordinates.append([depot[1], depot[0]])
 
     response = requests.post(
         f"{ORS_BASE}/v2/directions/driving-car/geojson",

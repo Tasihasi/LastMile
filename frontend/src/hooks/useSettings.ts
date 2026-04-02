@@ -4,6 +4,9 @@ export interface DeliverySettings {
   startTime: string; // "HH:MM" format
   dwellMinutes: number; // minutes spent at each stop
   speedKmh: number; // travel speed in km/h
+  homeAddress: string; // optional home/depot address
+  homeLat: number | null;
+  homeLng: number | null;
 }
 
 const STORAGE_KEY = "delivery-settings";
@@ -11,7 +14,10 @@ const STORAGE_KEY = "delivery-settings";
 const DEFAULTS: DeliverySettings = {
   startTime: "09:00",
   dwellMinutes: 3,
-  speedKmh: 15, // bicycle default
+  speedKmh: 15,
+  homeAddress: "",
+  homeLat: null,
+  homeLng: null,
 };
 
 function load(): DeliverySettings {

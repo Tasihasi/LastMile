@@ -68,13 +68,13 @@ export function useDeliveryPlanner() {
     }
   }, [sessionId]);
 
-  const optimize = useCallback(async () => {
+  const optimize = useCallback(async (depot?: { lat: number; lng: number } | null) => {
     if (!sessionId) return;
     setIsOptimizing(true);
     setError(null);
 
     try {
-      const result = await apiOptimize(sessionId);
+      const result = await apiOptimize(sessionId, depot);
       setStops(result.optimized_stops);
       setRouteGeometry(result.route_geometry);
       setRouteSegments(result.route_segments);

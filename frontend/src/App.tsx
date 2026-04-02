@@ -229,7 +229,11 @@ function App() {
                   {canOptimize && (
                     <button
                       className="btn btn-primary"
-                      onClick={optimize}
+                      onClick={() => optimize(
+                        settings.homeLat != null && settings.homeLng != null
+                          ? { lat: settings.homeLat, lng: settings.homeLng }
+                          : null
+                      )}
                       disabled={isOptimizing}
                       style={isOptimized ? undefined : { background: "var(--color-accent)" }}
                     >
