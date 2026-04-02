@@ -1,11 +1,13 @@
 import io
 import os
 
+from django.contrib.auth.models import User
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
+from rest_framework.authtoken.models import Token
 from rest_framework.test import APIClient
 
-from .models import DeliverySession, DeliveryStop
+from .models import DeliverySession, DeliveryStop, UserProfile
 from .parsers import parse_csv, parse_file, parse_txt, parse_xml
 
 
@@ -128,6 +130,10 @@ class SampleDataTest(TestCase):
 class UploadAPITest(TestCase):
     def setUp(self):
         self.client = APIClient()
+        self.user = User.objects.create_user(username="testbiker")
+        UserProfile.objects.create(user=self.user, role="biker")
+        token = Token.objects.create(user=self.user)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Token {token.key}")
 
     def test_upload_csv(self):
         content = b"name,address\nShop A,Main St Budapest\nShop B,Vaci ut Budapest\n"
@@ -169,7 +175,11 @@ class UploadAPITest(TestCase):
 class SessionAPITest(TestCase):
     def setUp(self):
         self.client = APIClient()
-        self.session = DeliverySession.objects.create()
+        self.user = User.objects.create_user(username="testbiker2")
+        UserProfile.objects.create(user=self.user, role="biker")
+        token = Token.objects.create(user=self.user)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Token {token.key}")
+        self.session = DeliverySession.objects.create(owner=self.user)
         DeliveryStop.objects.create(
             session=self.session, name="Shop A", raw_address="Main St", geocode_status="pending"
         )

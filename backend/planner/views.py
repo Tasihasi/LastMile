@@ -1,17 +1,142 @@
 import contextlib
 import json
 
+from django.contrib.auth.models import User
 from django.http import StreamingHttpResponse
+from django.utils import timezone
 from rest_framework import status
-from rest_framework.decorators import api_view, parser_classes
+from rest_framework.authtoken.models import Token
+from rest_framework.decorators import api_view, parser_classes, permission_classes
 from rest_framework.parsers import MultiPartParser
+from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
 from .geocoder import geocode_address
-from .models import DeliverySession, DeliveryStop
+from .models import DeliverySession, DeliveryStop, SharedRoute, UserProfile
 from .optimizer import get_route_details, optimize_route
 from .parsers import parse_file
-from .serializers import DeliverySessionSerializer, DeliveryStopSerializer
+from .serializers import (
+    ActiveSessionSerializer,
+    DeliverySessionSerializer,
+    DeliveryStopSerializer,
+    SessionListSerializer,
+    SharedRouteSerializer,
+    UserSerializer,
+)
+
+# ============================================
+# Helpers
+# ============================================
+
+
+def _get_user_session(request, session_id):
+    """Get a session, enforcing ownership for bikers."""
+    try:
+        session = DeliverySession.objects.get(id=session_id)
+    except DeliverySession.DoesNotExist:
+        return None
+
+    # Planners can access any session; bikers only their own
+    if hasattr(request.user, "profile") and request.user.profile.role == "planner":
+        return session
+    if session.owner == request.user:
+        return session
+    # Unowned sessions (legacy) are accessible to anyone
+    if session.owner is None:
+        return session
+    return None
+
+
+# ============================================
+# Auth Endpoints
+# ============================================
+
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def login_view(request):
+    username = request.data.get("username", "").strip()
+    role = request.data.get("role", "biker").strip()
+
+    if not username:
+        return Response({"error": "Username is required."}, status=status.HTTP_400_BAD_REQUEST)
+    if role not in ("biker", "planner"):
+        return Response({"error": "Role must be 'biker' or 'planner'."}, status=status.HTTP_400_BAD_REQUEST)
+
+    user, created = User.objects.get_or_create(username=username)
+    if created:
+        user.set_unusable_password()
+        user.save()
+
+    profile, _ = UserProfile.objects.get_or_create(user=user, defaults={"role": role})
+    if not created and profile.role != role:
+        # Update role if user logs in with different role
+        profile.role = role
+        profile.save()
+
+    token, _ = Token.objects.get_or_create(user=user)
+
+    return Response(
+        {
+            "token": token.key,
+            "user": UserSerializer(user).data,
+        }
+    )
+
+
+@api_view(["GET"])
+def me_view(request):
+    return Response(UserSerializer(request.user).data)
+
+
+@api_view(["POST"])
+def logout_view(request):
+    Token.objects.filter(user=request.user).delete()
+    return Response({"message": "Logged out."})
+
+
+# ============================================
+# Planner Endpoints
+# ============================================
+
+
+@api_view(["GET"])
+def list_bikers(request):
+    if not hasattr(request.user, "profile") or request.user.profile.role != "planner":
+        return Response({"error": "Planner access required."}, status=status.HTTP_403_FORBIDDEN)
+
+    bikers = User.objects.filter(profile__role="biker").select_related("profile")
+    return Response(UserSerializer(bikers, many=True).data)
+
+
+@api_view(["GET"])
+def active_sessions(request):
+    """All in-progress sessions with stops and route geometry for aggregate map."""
+    if not _require_planner(request):
+        return Response({"error": "Planner access required."}, status=status.HTTP_403_FORBIDDEN)
+
+    qs = DeliverySession.objects.filter(status="in_progress").select_related("owner").prefetch_related("stops")
+    return Response(ActiveSessionSerializer(qs, many=True).data)
+
+
+@api_view(["GET"])
+def list_sessions(request):
+    """List sessions. Bikers see their own; planners see all (optionally filtered by owner_id)."""
+    if hasattr(request.user, "profile") and request.user.profile.role == "planner":
+        qs = DeliverySession.objects.all()
+        owner_id = request.query_params.get("owner_id")
+        if owner_id:
+            qs = qs.filter(owner_id=owner_id)
+    else:
+        qs = DeliverySession.objects.filter(owner=request.user)
+
+    qs = qs.order_by("-created_at")
+    return Response(SessionListSerializer(qs, many=True).data)
+
+
+# ============================================
+# Session Endpoints (existing, now with auth)
+# ============================================
 
 
 @api_view(["POST"])
@@ -40,7 +165,18 @@ def upload_file(request):
             status=status.HTTP_400_BAD_REQUEST,
         )
 
-    session = DeliverySession.objects.create(original_file=file)
+    # Determine owner: planners can assign to a biker via owner_id
+    owner = request.user
+    owner_id = request.data.get("owner_id")
+    if owner_id and hasattr(request.user, "profile") and request.user.profile.role == "planner":
+        with contextlib.suppress(User.DoesNotExist, ValueError, TypeError):
+            owner = User.objects.get(id=int(owner_id))
+
+    # Auto-generate route name from filename
+    raw_name = file.name.rsplit(".", 1)[0] if "." in file.name else file.name
+    route_name = raw_name.replace("_", " ").replace("-", " ").strip().title()
+
+    session = DeliverySession.objects.create(original_file=file, owner=owner, name=route_name)
 
     stops = []
     for row in rows:
@@ -67,13 +203,9 @@ def upload_file(request):
 
 @api_view(["GET"])
 def get_session(request, session_id):
-    try:
-        session = DeliverySession.objects.get(id=session_id)
-    except DeliverySession.DoesNotExist:
-        return Response(
-            {"error": "Session not found."},
-            status=status.HTTP_404_NOT_FOUND,
-        )
+    session = _get_user_session(request, session_id)
+    if not session:
+        return Response({"error": "Session not found."}, status=status.HTTP_404_NOT_FOUND)
 
     serializer = DeliverySessionSerializer(session)
     return Response(serializer.data)
@@ -115,13 +247,9 @@ def _geocode_stream(session_id):
 
 @api_view(["POST"])
 def geocode_stops(request, session_id):
-    try:
-        session = DeliverySession.objects.get(id=session_id)
-    except DeliverySession.DoesNotExist:
-        return Response(
-            {"error": "Session not found."},
-            status=status.HTTP_404_NOT_FOUND,
-        )
+    session = _get_user_session(request, session_id)
+    if not session:
+        return Response({"error": "Session not found."}, status=status.HTTP_404_NOT_FOUND)
 
     pending = session.stops.filter(geocode_status="pending").count()
     if pending == 0:
@@ -136,13 +264,9 @@ def geocode_stops(request, session_id):
 
 @api_view(["GET"])
 def geocode_status(request, session_id):
-    try:
-        session = DeliverySession.objects.get(id=session_id)
-    except DeliverySession.DoesNotExist:
-        return Response(
-            {"error": "Session not found."},
-            status=status.HTTP_404_NOT_FOUND,
-        )
+    session = _get_user_session(request, session_id)
+    if not session:
+        return Response({"error": "Session not found."}, status=status.HTTP_404_NOT_FOUND)
 
     stops = session.stops.all()
     total = stops.count()
@@ -163,13 +287,9 @@ def geocode_status(request, session_id):
 
 @api_view(["POST"])
 def optimize(request, session_id):
-    try:
-        session = DeliverySession.objects.get(id=session_id)
-    except DeliverySession.DoesNotExist:
-        return Response(
-            {"error": "Session not found."},
-            status=status.HTTP_404_NOT_FOUND,
-        )
+    session = _get_user_session(request, session_id)
+    if not session:
+        return Response({"error": "Session not found."}, status=status.HTTP_404_NOT_FOUND)
 
     located_stops = list(session.stops.filter(lat__isnull=False, lng__isnull=False))
 
@@ -209,6 +329,14 @@ def optimize(request, session_id):
     except Exception:
         route = None
 
+    # Persist totals, geometry, and segments on session
+    if route:
+        session.total_duration = route["total_duration"]
+        session.total_distance = route["total_distance"]
+        session.route_geometry = route["geometry"]
+        session.route_segments = route["segments"]
+        session.save(update_fields=["total_duration", "total_distance", "route_geometry", "route_segments"])
+
     return Response(
         {
             "optimized_stops": DeliveryStopSerializer(ordered_stops, many=True).data,
@@ -216,5 +344,171 @@ def optimize(request, session_id):
             "route_segments": route["segments"] if route else None,
             "total_duration": route["total_duration"] if route else None,
             "total_distance": route["total_distance"] if route else None,
+        }
+    )
+
+
+# ============================================
+# Share Endpoints
+# ============================================
+
+
+@api_view(["POST"])
+def share_session(request, session_id):
+    session = _get_user_session(request, session_id)
+    if not session:
+        return Response({"error": "Session not found."}, status=status.HTTP_404_NOT_FOUND)
+
+    share = SharedRoute.objects.create(session=session)
+    return Response({"share_id": str(share.id)}, status=status.HTTP_201_CREATED)
+
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def get_shared_route(request, share_id):
+    try:
+        share = SharedRoute.objects.select_related("session").get(id=share_id)
+    except SharedRoute.DoesNotExist:
+        return Response({"error": "Shared route not found."}, status=status.HTTP_404_NOT_FOUND)
+
+    return Response(SharedRouteSerializer(share).data)
+
+
+# ============================================
+# Session Management (planner only)
+# ============================================
+
+
+def _require_planner(request):
+    return hasattr(request.user, "profile") and request.user.profile.role == "planner"
+
+
+@api_view(["DELETE"])
+def delete_session(request, session_id):
+    if not _require_planner(request):
+        return Response({"error": "Planner access required."}, status=status.HTTP_403_FORBIDDEN)
+
+    try:
+        session = DeliverySession.objects.get(id=session_id)
+    except DeliverySession.DoesNotExist:
+        return Response({"error": "Session not found."}, status=status.HTTP_404_NOT_FOUND)
+
+    session.delete()
+    return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+@api_view(["PATCH"])
+def assign_session(request, session_id):
+    if not _require_planner(request):
+        return Response({"error": "Planner access required."}, status=status.HTTP_403_FORBIDDEN)
+
+    try:
+        session = DeliverySession.objects.get(id=session_id)
+    except DeliverySession.DoesNotExist:
+        return Response({"error": "Session not found."}, status=status.HTTP_404_NOT_FOUND)
+
+    owner_id = request.data.get("owner_id")
+    if owner_id is None:
+        return Response({"error": "owner_id is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        new_owner = User.objects.get(id=int(owner_id))
+    except (User.DoesNotExist, ValueError, TypeError):
+        return Response({"error": "User not found."}, status=status.HTTP_404_NOT_FOUND)
+
+    session.owner = new_owner
+    session.save(update_fields=["owner"])
+    return Response({"message": "Session reassigned.", "owner_name": new_owner.username})
+
+
+@api_view(["PATCH"])
+def rename_session(request, session_id):
+    if not _require_planner(request):
+        return Response({"error": "Planner access required."}, status=status.HTTP_403_FORBIDDEN)
+
+    try:
+        session = DeliverySession.objects.get(id=session_id)
+    except DeliverySession.DoesNotExist:
+        return Response({"error": "Session not found."}, status=status.HTTP_404_NOT_FOUND)
+
+    name = request.data.get("name", "").strip()
+    if not name:
+        return Response({"error": "Name is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+    session.name = name
+    session.save(update_fields=["name"])
+    return Response({"name": session.name})
+
+
+# ============================================
+# Route Lifecycle (biker)
+# ============================================
+
+
+@api_view(["PATCH"])
+def start_route(request, session_id):
+    """Biker starts a route — sets status to in_progress."""
+    session = _get_user_session(request, session_id)
+    if not session:
+        return Response({"error": "Session not found."}, status=status.HTTP_404_NOT_FOUND)
+
+    if session.status != "not_started":
+        return Response({"error": "Route already started."}, status=status.HTTP_400_BAD_REQUEST)
+
+    # Find the first stop in optimized order
+    first_stop = session.stops.filter(sequence_order__isnull=False).order_by("sequence_order").first()
+    if not first_stop:
+        return Response({"error": "Route must be optimized before starting."}, status=status.HTTP_400_BAD_REQUEST)
+
+    session.status = "in_progress"
+    session.started_at = timezone.now()
+    session.current_stop_index = first_stop.sequence_order
+    session.save(update_fields=["status", "started_at", "current_stop_index"])
+
+    return Response(SessionListSerializer(session).data)
+
+
+@api_view(["PATCH"])
+def update_stop_status(request, session_id, stop_id):
+    """Biker marks a stop as delivered/not_received/skipped."""
+    session = _get_user_session(request, session_id)
+    if not session:
+        return Response({"error": "Session not found."}, status=status.HTTP_404_NOT_FOUND)
+
+    new_status = request.data.get("status")
+    if new_status not in ("delivered", "not_received", "skipped"):
+        return Response(
+            {"error": "Status must be 'delivered', 'not_received', or 'skipped'."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    try:
+        stop = session.stops.get(id=stop_id)
+    except DeliveryStop.DoesNotExist:
+        return Response({"error": "Stop not found."}, status=status.HTTP_404_NOT_FOUND)
+
+    stop.delivery_status = new_status
+    stop.save(update_fields=["delivery_status"])
+
+    # Auto-advance current_stop_index to next pending stop
+    next_stop = (
+        session.stops.filter(sequence_order__isnull=False, delivery_status="pending").order_by("sequence_order").first()
+    )
+
+    if next_stop:
+        session.current_stop_index = next_stop.sequence_order
+        session.save(update_fields=["current_stop_index"])
+    else:
+        # All stops done — finish the route
+        session.status = "finished"
+        session.finished_at = timezone.now()
+        session.current_stop_index = None
+        session.save(update_fields=["status", "finished_at", "current_stop_index"])
+
+    return Response(
+        {
+            "stop": DeliveryStopSerializer(stop).data,
+            "session_status": session.status,
+            "current_stop_index": session.current_stop_index,
         }
     )

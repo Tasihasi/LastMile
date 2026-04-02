@@ -1,17 +1,25 @@
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useDeliveryPlanner } from "./hooks/useDeliveryPlanner";
 import { useTheme } from "./hooks/useTheme";
 import { useSettings } from "./hooks/useSettings";
+import { useAuth } from "./hooks/useAuth";
 import { FileUpload } from "./components/FileUpload";
 import { AddressList } from "./components/AddressList";
 import { DeliveryMap } from "./components/DeliveryMap";
 import { StopDetail } from "./components/StopDetail";
 import { SettingsPanel } from "./components/SettingsPanel";
+import { LoginScreen } from "./components/LoginScreen";
+import { SessionList } from "./components/SessionList";
+import { PlannerDashboard } from "./components/PlannerDashboard";
+import { PlannerMapView } from "./components/PlannerMapView";
+import { shareSession } from "./api/client";
 import { formatDuration, formatDistance, formatTime, calcArrivalTimes } from "./utils/format";
 import "./App.css";
 
 function App() {
+  const { user, logout, isPlanner } = useAuth();
   const {
+    sessionId,
     stops,
     needsGeocoding,
     isUploading,
@@ -22,9 +30,14 @@ function App() {
     routeSegments,
     totalDistance,
     error,
+    sessionStatus,
+    currentStopIndex,
     uploadFile,
+    loadSession,
     geocode,
     optimize,
+    startDeliveryRoute,
+    markStop,
     reset,
   } = useDeliveryPlanner();
 
@@ -32,6 +45,11 @@ function App() {
   const { settings, update: updateSettings } = useSettings();
   const [selectedStopId, setSelectedStopId] = useState<number | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [showUpload, setShowUpload] = useState(false);
+  const [viewMode, setViewMode] = useState<"dashboard" | "map" | "live-map">(isPlanner ? "dashboard" : "map");
+  const [shareLoading, setShareLoading] = useState(false);
+  const [shareCopied, setShareCopied] = useState(false);
 
   const locatedCount = stops.filter(
     (s) => s.lat != null && s.lng != null
@@ -42,6 +60,11 @@ function App() {
   const canOptimize = !needsGeocoding && !isGeocoding && locatedCount >= 2;
   const isOptimized = stops.some((s) => s.sequence_order != null);
 
+  const selectStop = useCallback((id: number) => {
+    setSelectedStopId(id);
+    setSidebarOpen(false);
+  }, []);
+
   const selectedStop = selectedStopId != null
     ? stops.find((s) => s.id === selectedStopId) ?? null
     : null;
@@ -49,32 +72,69 @@ function App() {
   const hasDepot = settings.homeLat != null && settings.homeLng != null;
   const depot = hasDepot ? { lat: settings.homeLat!, lng: settings.homeLng!, address: settings.homeAddress } : null;
 
-  // Calculate arrival times based on settings + segments
   const arrivalTimes = useMemo(() => {
     if (!routeSegments) return null;
     return calcArrivalTimes(routeSegments, settings, stops.length, hasDepot);
   }, [routeSegments, settings, stops.length, hasDepot]);
 
-  // Finish time = return home time (if depot) or last stop arrival + dwell
   const finishTime = useMemo(() => {
     if (!arrivalTimes) return null;
     if (hasDepot) {
-      return arrivalTimes.get(-1) ?? null; // return home
+      return arrivalTimes.get(-1) ?? null;
     }
-    // No depot: last stop + dwell
     const lastOrder = stops.reduce((max, s) => Math.max(max, s.sequence_order ?? 0), 0);
     const lastArrival = arrivalTimes.get(lastOrder);
     if (!lastArrival) return null;
     return new Date(lastArrival.getTime() + settings.dwellMinutes * 60 * 1000);
   }, [arrivalTimes, hasDepot, stops, settings.dwellMinutes]);
 
-  // Total route time from start to finish
   const totalRouteTime = useMemo(() => {
     if (!arrivalTimes || !finishTime) return null;
     const startPoint = arrivalTimes.get(hasDepot ? 0 : 1);
     if (!startPoint) return null;
     return Math.round((finishTime.getTime() - startPoint.getTime()) / 1000);
   }, [arrivalTimes, finishTime, hasDepot]);
+
+  const handleShare = async () => {
+    if (!sessionId) return;
+    setShareLoading(true);
+    try {
+      const shareId = await shareSession(sessionId);
+      const url = `${window.location.origin}/shared/${shareId}`;
+      await navigator.clipboard.writeText(url);
+      setShareCopied(true);
+      setTimeout(() => setShareCopied(false), 2000);
+    } catch {
+      // fallback
+    } finally {
+      setShareLoading(false);
+    }
+  };
+
+  const handleStartOver = () => {
+    reset();
+    setShowUpload(false);
+    if (isPlanner) setViewMode("dashboard");
+  };
+
+  const handleNewRoute = () => {
+    reset();
+    setShowUpload(true);
+    setViewMode("map");
+  };
+
+  const handleSelectSession = (id: string) => {
+    loadSession(id);
+    setShowUpload(false);
+    setViewMode("map");
+  };
+
+  // Show session list when no active session and not uploading (biker only)
+  const showSessionList = !isPlanner && stops.length === 0 && !showUpload;
+
+  if (!user) {
+    return <LoginScreen />;
+  }
 
   return (
     <div className="app">
@@ -88,8 +148,30 @@ function App() {
           <h1>Route Planner</h1>
         </div>
         <div className="app-header-right">
-          {stops.length > 0 && (
-            <button className="btn btn-ghost" onClick={reset}>
+          {isPlanner && viewMode === "map" && (
+            <button className="btn btn-ghost" onClick={handleStartOver}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="15 18 9 12 15 6" />
+              </svg>
+              Dashboard
+            </button>
+          )}
+          {viewMode === "map" && stops.length > 0 && (
+            <button
+              className="sidebar-toggle"
+              onClick={() => setSidebarOpen(!sidebarOpen)}
+              aria-label="Toggle sidebar"
+              title="Toggle sidebar"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="3" y1="6" x2="21" y2="6" />
+                <line x1="3" y1="12" x2="21" y2="12" />
+                <line x1="3" y1="18" x2="21" y2="18" />
+              </svg>
+            </button>
+          )}
+          {!isPlanner && stops.length > 0 && (
+            <button className="btn btn-ghost btn-ghost--start-over" onClick={handleStartOver}>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <polyline points="1 4 1 10 7 10" />
                 <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
@@ -134,11 +216,29 @@ function App() {
               </svg>
             )}
           </button>
+          <button className="btn btn-ghost user-badge" onClick={logout} title="Sign out">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+              <polyline points="16 17 21 12 16 7" />
+              <line x1="21" y1="12" x2="9" y2="12" />
+            </svg>
+            <span className="user-badge-name">{user.username}</span>
+          </button>
         </div>
       </header>
 
+      {isPlanner && viewMode === "dashboard" ? (
+        <PlannerDashboard
+          onViewSession={handleSelectSession}
+          onOpenLiveMap={() => setViewMode("live-map")}
+        />
+      ) : isPlanner && viewMode === "live-map" ? (
+        <PlannerMapView onBack={() => setViewMode("dashboard")} onViewSession={handleSelectSession} />
+      ) : (
+      <>
       <div className="app-layout">
-        <aside className="sidebar">
+        {sidebarOpen && <div className="sidebar-overlay" onClick={() => setSidebarOpen(false)} />}
+        <aside className={`sidebar ${sidebarOpen || showSessionList || (showUpload && stops.length === 0) ? "sidebar--open" : ""}`}>
           <div className="sidebar-content">
             {error && (
               <div className="error-banner">
@@ -158,7 +258,12 @@ function App() {
               onClose={() => setSettingsOpen(false)}
             />
 
-            {stops.length === 0 ? (
+            {showSessionList ? (
+              <SessionList
+                onSelectSession={handleSelectSession}
+                onNewRoute={handleNewRoute}
+              />
+            ) : stops.length === 0 ? (
               <FileUpload onUpload={uploadFile} isUploading={isUploading} />
             ) : (
               <>
@@ -200,6 +305,27 @@ function App() {
                     <div className="route-summary-item">
                       <span className="route-summary-time">{settings.startTime} - {formatTime(finishTime)}</span>
                     </div>
+                    <button
+                      className="btn btn-ghost share-btn"
+                      onClick={handleShare}
+                      disabled={shareLoading}
+                      title="Copy share link"
+                    >
+                      {shareCopied ? (
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="20 6 9 17 4 12" />
+                        </svg>
+                      ) : (
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <circle cx="18" cy="5" r="3" />
+                          <circle cx="6" cy="12" r="3" />
+                          <circle cx="18" cy="19" r="3" />
+                          <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
+                          <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
+                        </svg>
+                      )}
+                      {shareCopied ? "Copied!" : "Share"}
+                    </button>
                   </div>
                 )}
 
@@ -208,8 +334,34 @@ function App() {
                   <GeocodeProgress progress={geocodeProgress} />
                 )}
 
+                {/* Route status banner */}
+                {sessionStatus === "in_progress" && (
+                  <div className="route-status-banner route-status-banner--active">
+                    <span className="route-status-dot" />
+                    Route in progress — {stops.filter(s => s.delivery_status !== "pending").length}/{stops.length} stops done
+                  </div>
+                )}
+                {sessionStatus === "finished" && (
+                  <div className="route-status-banner route-status-banner--finished">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+                    Route completed
+                  </div>
+                )}
+
                 {/* Action buttons */}
                 <div className="sidebar-actions">
+                  {/* Start Route — only for bikers with optimized, not-started routes */}
+                  {isOptimized && sessionStatus === "not_started" && !isPlanner && (
+                    <button
+                      className="btn btn-start-route"
+                      onClick={startDeliveryRoute}
+                    >
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <polygon points="5 3 19 12 5 21 5 3" />
+                      </svg>
+                      Start Route
+                    </button>
+                  )}
                   {needsGeocoding && (
                     <button
                       className="btn btn-primary"
@@ -263,11 +415,14 @@ function App() {
                 <AddressList
                   stops={stops}
                   selectedStopId={selectedStopId}
-                  onSelectStop={setSelectedStopId}
+                  onSelectStop={selectStop}
                   routeSegments={routeSegments}
                   arrivalTimes={arrivalTimes}
                   speedKmh={settings.speedKmh}
                   depot={depot}
+                  sessionStatus={sessionStatus}
+                  currentStopIndex={currentStopIndex}
+                  onMarkStop={markStop}
                 />
               </>
             )}
@@ -278,8 +433,10 @@ function App() {
           <DeliveryMap
             stops={stops}
             routeGeometry={routeGeometry}
-            onSelectStop={setSelectedStopId}
+            onSelectStop={selectStop}
             depot={depot}
+            sessionStatus={sessionStatus}
+            currentStopIndex={currentStopIndex}
           />
         </main>
       </div>
@@ -293,6 +450,8 @@ function App() {
           arrivalTimes={arrivalTimes}
           speedKmh={settings.speedKmh}
         />
+      )}
+      </>
       )}
     </div>
   );

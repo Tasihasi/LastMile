@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import { MapContainer, TileLayer, Marker, useMap } from "react-leaflet";
 import L from "leaflet";
-import type { DeliveryStop } from "../types";
+import type { DeliveryStop, SessionStatus } from "../types";
 import "leaflet/dist/leaflet.css";
 
 interface DepotInfo {
@@ -15,38 +15,71 @@ interface DeliveryMapProps {
   routeGeometry: GeoJSON.LineString | null;
   onSelectStop: (id: number) => void;
   depot: DepotInfo | null;
+  sessionStatus?: SessionStatus;
+  currentStopIndex?: number | null;
 }
 
-function createNumberedIcon(num: number, stop: DeliveryStop) {
-  const isOptimized = stop.sequence_order != null;
-  const color = isOptimized
-    ? "#6366f1"
-    : stop.geocode_status === "pending"
-      ? "#94a3b8"
-      : stop.geocode_status === "failed"
-        ? "#ef4444"
-        : "#10b981";
+function createNumberedIcon(num: number, stop: DeliveryStop, isCurrent: boolean) {
+  // Delivery status colors take priority when route is active
+  let color: string;
+  let opacity = "1";
+  let size = 30;
+  let checkmark = false;
+
+  if (stop.delivery_status === "delivered") {
+    color = "#10b981"; // green
+    opacity = "0.6";
+    size = 22;
+    checkmark = true;
+  } else if (stop.delivery_status === "not_received") {
+    color = "#ef4444"; // red
+    opacity = "0.6";
+    size = 22;
+    checkmark = true;
+  } else if (stop.delivery_status === "skipped") {
+    color = "#94a3b8"; // gray
+    opacity = "0.4";
+    size = 22;
+    checkmark = true;
+  } else if (isCurrent) {
+    color = "#6366f1"; // indigo
+    size = 36;
+  } else if (stop.sequence_order != null) {
+    color = "#6366f1";
+  } else if (stop.geocode_status === "pending") {
+    color = "#94a3b8";
+  } else if (stop.geocode_status === "failed") {
+    color = "#ef4444";
+  } else {
+    color = "#10b981";
+  }
+
+  const content = checkmark
+    ? `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`
+    : `${num}`;
+
+  const border = isCurrent ? `3px solid white; box-shadow: 0 0 0 3px ${color}66, 0 2px 8px rgba(0,0,0,0.3)` : "2.5px solid white; box-shadow: 0 2px 8px rgba(0,0,0,0.25)";
 
   return L.divIcon({
     className: "numbered-marker",
     html: `<div style="
       background: ${color};
       color: white;
-      width: 30px;
-      height: 30px;
-      border-radius: 8px;
+      width: ${size}px;
+      height: ${size}px;
+      border-radius: ${isCurrent ? "50%" : "8px"};
       display: flex;
       align-items: center;
       justify-content: center;
       font-weight: 700;
-      font-size: 12px;
+      font-size: ${isCurrent ? "14px" : "12px"};
       font-family: Inter, sans-serif;
-      border: 2.5px solid white;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+      border: ${border};
       cursor: pointer;
-    ">${num}</div>`,
-    iconSize: [30, 30],
-    iconAnchor: [15, 15],
+      opacity: ${opacity};
+    ">${content}</div>`,
+    iconSize: [size, size],
+    iconAnchor: [size / 2, size / 2],
   });
 }
 
@@ -123,7 +156,7 @@ function RouteLayer({ geometry }: { geometry: GeoJSON.LineString }) {
   return null;
 }
 
-export function DeliveryMap({ stops, routeGeometry, onSelectStop, depot }: DeliveryMapProps) {
+export function DeliveryMap({ stops, routeGeometry, onSelectStop, depot, sessionStatus, currentStopIndex }: DeliveryMapProps) {
   const located = stops.filter((s) => s.lat != null && s.lng != null);
 
   return (
@@ -144,19 +177,24 @@ export function DeliveryMap({ stops, routeGeometry, onSelectStop, depot }: Deliv
           icon={homeIcon}
         />
       )}
-      {located.map((stop, i) => (
-        <Marker
-          key={stop.id}
-          position={[stop.lat!, stop.lng!]}
-          icon={createNumberedIcon(
-            stop.sequence_order != null ? stop.sequence_order : i + 1,
-            stop
-          )}
-          eventHandlers={{
-            click: () => onSelectStop(stop.id),
-          }}
-        />
-      ))}
+      {located.map((stop, i) => {
+        const isCurrent = sessionStatus === "in_progress" && stop.sequence_order === currentStopIndex;
+        return (
+          <Marker
+            key={stop.id}
+            position={[stop.lat!, stop.lng!]}
+            icon={createNumberedIcon(
+              stop.sequence_order != null ? stop.sequence_order : i + 1,
+              stop,
+              isCurrent
+            )}
+            eventHandlers={{
+              click: () => onSelectStop(stop.id),
+            }}
+            zIndexOffset={isCurrent ? 1000 : 0}
+          />
+        );
+      })}
       {routeGeometry && <RouteLayer geometry={routeGeometry} />}
     </MapContainer>
   );
