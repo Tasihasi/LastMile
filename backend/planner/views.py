@@ -160,7 +160,11 @@ def upload_file(request):
         with contextlib.suppress(User.DoesNotExist, ValueError, TypeError):
             owner = User.objects.get(id=int(owner_id))
 
-    session = DeliverySession.objects.create(original_file=file, owner=owner)
+    # Auto-generate route name from filename
+    raw_name = file.name.rsplit(".", 1)[0] if "." in file.name else file.name
+    route_name = raw_name.replace("_", " ").replace("-", " ").strip().title()
+
+    session = DeliverySession.objects.create(original_file=file, owner=owner, name=route_name)
 
     stops = []
     for row in rows:
@@ -312,6 +316,12 @@ def optimize(request, session_id):
         route = get_route_details(ordered_stops, depot=depot)
     except Exception:
         route = None
+
+    # Persist totals on session for dashboard display
+    if route:
+        session.total_duration = route["total_duration"]
+        session.total_distance = route["total_distance"]
+        session.save(update_fields=["total_duration", "total_distance"])
 
     return Response(
         {

@@ -11,9 +11,12 @@ export interface AuthResponse {
 
 export interface SessionSummary {
   id: string;
+  name: string;
   created_at: string;
   owner_name: string | null;
   stop_count: number;
+  total_duration: number | null;
+  total_distance: number | null;
 }
 
 export interface SharedRouteResponse {

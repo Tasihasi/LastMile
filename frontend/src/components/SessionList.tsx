@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { SessionSummary } from "../types";
 import { listSessions } from "../api/client";
+import { formatDuration, formatDistance } from "../utils/format";
 
 interface SessionListProps {
   ownerId?: number;
@@ -63,9 +64,12 @@ export function SessionList({ ownerId, onSelectSession, onNewRoute }: SessionLis
                 onClick={() => onSelectSession(s.id)}
               >
                 <div className="session-list-item-info">
+                  <span className="session-list-item-name">{s.name || "Untitled Route"}</span>
                   <span className="session-list-item-date">{formatDate(s.created_at)}</span>
-                  {s.owner_name && (
-                    <span className="session-list-item-owner">{s.owner_name}</span>
+                  {s.total_duration != null && (
+                    <span className="session-list-item-duration">
+                      {formatDuration(s.total_duration)} / {formatDistance(s.total_distance ?? 0)}
+                    </span>
                   )}
                 </div>
                 <span className="session-list-item-count">

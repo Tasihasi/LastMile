@@ -21,11 +21,14 @@ class DeliverySession(models.Model):
     owner = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="sessions", null=True, blank=True
     )
+    name = models.CharField(max_length=255, blank=True, default="")
     original_file = models.FileField(upload_to="uploads/")
     created_at = models.DateTimeField(auto_now_add=True)
+    total_duration = models.FloatField(null=True, blank=True)  # seconds, set after optimization
+    total_distance = models.FloatField(null=True, blank=True)  # meters, set after optimization
 
     def __str__(self):
-        return f"Session {self.id} ({self.created_at:%Y-%m-%d %H:%M})"
+        return f"{self.name or 'Route'} ({self.created_at:%Y-%m-%d %H:%M})"
 
 
 class DeliveryStop(models.Model):

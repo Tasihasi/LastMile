@@ -1790,10 +1790,22 @@ body {
   gap: 2px;
 }
 
-.session-list-item-date {
+.session-list-item-name {
   font-size: 0.83rem;
-  font-weight: 550;
+  font-weight: 600;
   color: var(--color-text);
+}
+
+.session-list-item-date {
+  font-size: 0.72rem;
+  color: var(--color-text-muted);
+}
+
+.session-list-item-duration {
+  font-size: 0.72rem;
+  font-weight: 550;
+  color: var(--color-primary);
+  font-variant-numeric: tabular-nums;
 }
 
 .session-list-item-owner {
@@ -2056,15 +2068,31 @@ body {
   min-width: 0;
 }
 
-.session-card-date {
+.session-card-name {
   font-size: 0.8rem;
-  font-weight: 550;
+  font-weight: 600;
   color: var(--color-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.session-card-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .session-card-stops {
   font-size: 0.7rem;
   color: var(--color-text-muted);
+}
+
+.session-card-duration {
+  font-size: 0.68rem;
+  font-weight: 550;
+  color: var(--color-primary);
+  font-variant-numeric: tabular-nums;
 }
 
 .session-card-actions {

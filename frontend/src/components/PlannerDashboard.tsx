@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { SessionSummary, User } from "../types";
+import { formatDuration, formatDistance } from "../utils/format";
 import {
   listBikers,
   listSessions,
@@ -10,17 +11,6 @@ import {
 
 interface PlannerDashboardProps {
   onViewSession: (sessionId: string) => void;
-}
-
-function formatDate(iso: string): string {
-  const d = new Date(iso);
-  return d.toLocaleDateString([], {
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  });
 }
 
 // Drop zone identifier: biker id or "unassigned"
@@ -326,10 +316,17 @@ function SessionCard({
         </svg>
       </div>
       <div className="session-card-info" onClick={onView} role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === "Enter") onView(); }}>
-        <span className="session-card-date">{formatDate(session.created_at)}</span>
-        <span className="session-card-stops">
-          {session.stop_count} stop{session.stop_count !== 1 ? "s" : ""}
-        </span>
+        <span className="session-card-name">{session.name || "Untitled Route"}</span>
+        <div className="session-card-meta">
+          <span className="session-card-stops">
+            {session.stop_count} stop{session.stop_count !== 1 ? "s" : ""}
+          </span>
+          {session.total_duration != null && (
+            <span className="session-card-duration">
+              {formatDuration(session.total_duration)} / {formatDistance(session.total_distance ?? 0)}
+            </span>
+          )}
+        </div>
       </div>
       <div className="session-card-actions">
         {/* View */}

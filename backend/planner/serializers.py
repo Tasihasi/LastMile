@@ -46,7 +46,16 @@ class DeliverySessionSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = DeliverySession
-        fields = ["id", "created_at", "owner_name", "stops", "needs_geocoding"]
+        fields = [
+            "id",
+            "name",
+            "created_at",
+            "owner_name",
+            "stops",
+            "needs_geocoding",
+            "total_duration",
+            "total_distance",
+        ]
 
     def get_needs_geocoding(self, obj):
         return obj.stops.filter(geocode_status="pending").exists()
@@ -60,7 +69,7 @@ class SessionListSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = DeliverySession
-        fields = ["id", "created_at", "owner_name", "stop_count"]
+        fields = ["id", "name", "created_at", "owner_name", "stop_count", "total_duration", "total_distance"]
 
 
 class SharedRouteSerializer(serializers.ModelSerializer):
