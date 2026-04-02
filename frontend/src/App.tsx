@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useDeliveryPlanner } from "./hooks/useDeliveryPlanner";
 import { useTheme } from "./hooks/useTheme";
 import { useSettings } from "./hooks/useSettings";
@@ -17,6 +18,7 @@ import { formatDuration, formatDistance, formatTime, calcArrivalTimes } from "./
 import "./App.css";
 
 function App() {
+  const navigate = useNavigate();
   const { user, logout, isPlanner } = useAuth();
   const {
     sessionId,
@@ -145,7 +147,7 @@ function App() {
               <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5a2.5 2.5 0 110-5 2.5 2.5 0 010 5z" />
             </svg>
           </div>
-          <h1>Route Planner</h1>
+          <h1>LastMile</h1>
         </div>
         <div className="app-header-right">
           {isPlanner && viewMode === "map" && (
@@ -192,6 +194,18 @@ function App() {
               </svg>
             </button>
           )}
+          <button
+            className="theme-toggle"
+            onClick={() => navigate("/docs")}
+            aria-label="Help & Documentation"
+            title="Help & Documentation"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10" />
+              <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+              <line x1="12" y1="17" x2="12.01" y2="17" />
+            </svg>
+          </button>
           <button
             className="theme-toggle"
             onClick={toggleTheme}
