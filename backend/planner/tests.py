@@ -282,9 +282,12 @@ class PlannerManagementTest(TestCase):
         self.session.refresh_from_db()
         self.assertEqual(self.session.owner, biker2)
 
-    def test_assign_missing_owner_id(self):
+    def test_unassign_session(self):
+        """Sending no owner_id unassigns the session."""
         response = self.planner_client.patch(f"/api/sessions/{self.session.id}/assign/", {})
-        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.status_code, 200)
+        self.session.refresh_from_db()
+        self.assertIsNone(self.session.owner)
 
     def test_assign_user_not_found(self):
         response = self.planner_client.patch(
