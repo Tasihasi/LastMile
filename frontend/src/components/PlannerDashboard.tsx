@@ -122,13 +122,16 @@ export function PlannerDashboard({ onViewSession, onOpenLiveMap }: PlannerDashbo
   const activeSessions = sessions.filter((s) => s.status !== "finished");
   const activeCount = sessions.filter((s) => s.status === "in_progress").length;
 
-  // Group active sessions by owner
+  // Group active sessions by owner, in_progress always first
+  const statusPriority = (s: SessionSummary) => s.status === "in_progress" ? 0 : 1;
   const unassigned = activeSessions.filter((s) => !s.owner_name);
   const bikerSessions = new Map<string, SessionSummary[]>();
   for (const biker of bikers) {
     bikerSessions.set(
       biker.username,
-      activeSessions.filter((s) => s.owner_name === biker.username)
+      activeSessions
+        .filter((s) => s.owner_name === biker.username)
+        .sort((a, b) => statusPriority(a) - statusPriority(b))
     );
   }
 
