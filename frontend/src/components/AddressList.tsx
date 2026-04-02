@@ -21,20 +21,28 @@ function statusClass(s: DeliveryStop["geocode_status"]) {
   return `stop-status stop-status--${s}`;
 }
 
+function numberClass(stop: DeliveryStop) {
+  if (stop.sequence_order != null) return "stop-number stop-number--optimized";
+  return `stop-number stop-number--${stop.geocode_status}`;
+}
+
 export function AddressList({ stops }: AddressListProps) {
   if (stops.length === 0) return null;
 
   return (
     <div className="address-list">
-      <h3>Stops ({stops.length})</h3>
+      <div className="address-list-header">
+        <h3>Stops</h3>
+        <span className="address-list-count">{stops.length}</span>
+      </div>
       <ul>
         {stops.map((stop, i) => (
           <li key={stop.id} className="stop-item">
-            <span className="stop-number">
+            <span className={numberClass(stop)}>
               {stop.sequence_order != null ? stop.sequence_order : i + 1}
             </span>
             <div className="stop-info">
-              <strong>{stop.name}</strong>
+              <span className="stop-name">{stop.name}</span>
               {stop.raw_address && (
                 <span className="stop-address">{stop.raw_address}</span>
               )}

@@ -9,34 +9,36 @@ interface DeliveryMapProps {
   routeGeometry: GeoJSON.LineString | null;
 }
 
-function createNumberedIcon(num: number, status: DeliveryStop["geocode_status"]) {
-  const color =
-    status === "pending"
-      ? "#9ca3af"
-      : status === "failed"
+function createNumberedIcon(num: number, stop: DeliveryStop) {
+  const isOptimized = stop.sequence_order != null;
+  const color = isOptimized
+    ? "#6366f1"
+    : stop.geocode_status === "pending"
+      ? "#94a3b8"
+      : stop.geocode_status === "failed"
         ? "#ef4444"
-        : status === "skipped" || status === "success"
-          ? "#22c55e"
-          : "#3b82f6";
+        : "#10b981";
 
   return L.divIcon({
     className: "numbered-marker",
     html: `<div style="
       background: ${color};
       color: white;
-      width: 28px;
-      height: 28px;
-      border-radius: 50%;
+      width: 30px;
+      height: 30px;
+      border-radius: 8px;
       display: flex;
       align-items: center;
       justify-content: center;
-      font-weight: bold;
-      font-size: 13px;
-      border: 2px solid white;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+      font-weight: 700;
+      font-size: 12px;
+      font-family: Inter, sans-serif;
+      border: 2.5px solid white;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+      transition: transform 180ms ease;
     ">${num}</div>`,
-    iconSize: [28, 28],
-    iconAnchor: [14, 14],
+    iconSize: [30, 30],
+    iconAnchor: [15, 15],
   });
 }
 
@@ -53,7 +55,7 @@ function FitBounds({ stops }: { stops: DeliveryStop[] }) {
     const bounds = L.latLngBounds(
       located.map((s) => [s.lat!, s.lng!] as [number, number])
     );
-    map.fitBounds(bounds, { padding: [50, 50] });
+    map.fitBounds(bounds, { padding: [60, 60] });
   }, [stops, map]);
 
   return null;
@@ -70,7 +72,13 @@ function RouteLayer({ geometry }: { geometry: GeoJSON.LineString }) {
     const layer = L.geoJSON(
       { type: "Feature", geometry, properties: {} } as GeoJSON.Feature,
       {
-        style: { color: "#3b82f6", weight: 4, opacity: 0.7 },
+        style: {
+          color: "#6366f1",
+          weight: 4,
+          opacity: 0.8,
+          lineCap: "round",
+          lineJoin: "round",
+        },
       }
     );
     layer.addTo(map);
@@ -94,6 +102,7 @@ export function DeliveryMap({ stops, routeGeometry }: DeliveryMapProps) {
       center={[47.4979, 19.0402]}
       zoom={12}
       className="delivery-map"
+      zoomControl={false}
     >
       <TileLayer
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
@@ -106,13 +115,12 @@ export function DeliveryMap({ stops, routeGeometry }: DeliveryMapProps) {
           position={[stop.lat!, stop.lng!]}
           icon={createNumberedIcon(
             stop.sequence_order != null ? stop.sequence_order : i + 1,
-            stop.geocode_status
+            stop
           )}
         >
           <Popup>
             <strong>{stop.name}</strong>
-            {stop.raw_address && <br />}
-            {stop.raw_address}
+            {stop.raw_address && <span>{stop.raw_address}</span>}
           </Popup>
         </Marker>
       ))}
