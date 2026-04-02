@@ -3,16 +3,12 @@ End-to-end API tests — exercises every endpoint with real parameters.
 Tests the full request/response cycle including serialization, auth, and DB state.
 """
 
-import io
-
 from django.contrib.auth.models import User
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
-from rest_framework.authtoken.models import Token
 from rest_framework.test import APIClient
 
 from .models import DeliverySession, DeliveryStop, SharedRoute, UserProfile
-
 
 # ============================================
 # Helpers
@@ -45,9 +41,7 @@ def _upload_csv(client, csv_content, owner_id=None):
 
 def _make_optimized_session(owner, num_stops=3):
     """Create a session with geocoded, optimized stops."""
-    session = DeliverySession.objects.create(
-        owner=owner, name="Test Route", status="not_started"
-    )
+    session = DeliverySession.objects.create(owner=owner, name="Test Route", status="not_started")
     for i in range(num_stops):
         DeliveryStop.objects.create(
             session=session,
@@ -263,10 +257,20 @@ class SessionListingE2E(TestCase):
         resp = self.planner.get("/api/sessions/")
         session = resp.json()[0]
         expected_fields = [
-            "id", "name", "created_at", "owner_name", "stop_count",
-            "total_duration", "total_distance", "status", "started_at",
-            "finished_at", "current_stop_index", "delivered_count",
-            "not_received_count", "current_stop_name",
+            "id",
+            "name",
+            "created_at",
+            "owner_name",
+            "stop_count",
+            "total_duration",
+            "total_distance",
+            "status",
+            "started_at",
+            "finished_at",
+            "current_stop_index",
+            "delivered_count",
+            "not_received_count",
+            "current_stop_name",
         ]
         for field in expected_fields:
             self.assertIn(field, session, f"Missing field: {field}")
@@ -285,15 +289,23 @@ class GeocodeStatusE2E(TestCase):
         user = User.objects.get(username="geo_biker")
         self.session = DeliverySession.objects.create(owner=user, name="Geo Route")
         DeliveryStop.objects.create(
-            session=self.session, name="A", raw_address="Addr",
+            session=self.session,
+            name="A",
+            raw_address="Addr",
             geocode_status="pending",
         )
         DeliveryStop.objects.create(
-            session=self.session, name="B", lat=47.5, lng=19.08,
+            session=self.session,
+            name="B",
+            lat=47.5,
+            lng=19.08,
             geocode_status="skipped",
         )
         DeliveryStop.objects.create(
-            session=self.session, name="C", lat=47.51, lng=19.09,
+            session=self.session,
+            name="C",
+            lat=47.51,
+            lng=19.09,
             geocode_status="success",
         )
 
@@ -558,7 +570,10 @@ class SharingE2E(TestCase):
         user = User.objects.get(username="share_biker")
         self.session = DeliverySession.objects.create(owner=user, name="Share Me")
         DeliveryStop.objects.create(
-            session=self.session, name="A", lat=47.5, lng=19.08,
+            session=self.session,
+            name="A",
+            lat=47.5,
+            lng=19.08,
             geocode_status="skipped",
         )
 
@@ -621,10 +636,22 @@ class LiveTrackingE2E(TestCase):
     def test_active_sessions_response_shape(self):
         resp = self.planner.get("/api/sessions/active/")
         session = resp.json()[0]
-        for field in ["id", "name", "owner_name", "owner_id", "status",
-                       "started_at", "current_stop_index", "stop_count",
-                       "delivered_count", "current_stop_name",
-                       "total_duration", "total_distance", "route_geometry", "stops"]:
+        for field in [
+            "id",
+            "name",
+            "owner_name",
+            "owner_id",
+            "status",
+            "started_at",
+            "current_stop_index",
+            "stop_count",
+            "delivered_count",
+            "current_stop_name",
+            "total_duration",
+            "total_distance",
+            "route_geometry",
+            "stops",
+        ]:
             self.assertIn(field, session, f"Missing field: {field}")
 
     def test_active_sessions_biker_rejected(self):
