@@ -68,7 +68,7 @@
   --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.3);
   --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.4);
   --shadow-glow: 0 0 0 3px rgba(129, 140, 248, 0.2);
-  --map-filter: brightness(0.85) contrast(1.1) saturate(0.9);
+  --map-filter: brightness(0.7) contrast(1.2) saturate(0.3) hue-rotate(180deg) invert(1);
 }
 
 * {
@@ -194,11 +194,17 @@ body {
 .map-container {
   flex: 1;
   position: relative;
+  padding: 8px 8px 8px 0;
+  background: var(--color-bg);
 }
 
 .delivery-map {
   height: 100%;
   width: 100%;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--color-border);
 }
 
 /* ============================================
@@ -714,13 +720,26 @@ body {
   background: var(--color-surface) !important;
 }
 
+.leaflet-control-attribution {
+  border-radius: var(--radius-sm) !important;
+  font-size: 0.6rem !important;
+  padding: 2px 6px !important;
+}
+
 [data-theme="dark"] .leaflet-control-attribution {
-  background: rgba(30, 41, 59, 0.8) !important;
+  background: rgba(15, 23, 42, 0.85) !important;
   color: var(--color-text-muted) !important;
 }
 
 [data-theme="dark"] .leaflet-control-attribution a {
   color: var(--color-text-secondary) !important;
+}
+
+/* Ensure marker pane is not filtered */
+.delivery-map .leaflet-marker-pane,
+.delivery-map .leaflet-shadow-pane,
+.delivery-map .leaflet-popup-pane {
+  filter: none !important;
 }
 
 /* ============================================
@@ -925,7 +944,31 @@ body {
   max-width: calc(100vw - 32px);
   max-height: calc(100vh - 64px);
   overflow-y: auto;
+  overflow-x: hidden;
   animation: detailSlideUp 200ms ease;
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+
+.stop-detail:hover {
+  scrollbar-color: var(--color-border) transparent;
+}
+
+.stop-detail::-webkit-scrollbar {
+  width: 4px;
+}
+
+.stop-detail::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.stop-detail::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: var(--radius-full);
+}
+
+.stop-detail:hover::-webkit-scrollbar-thumb {
+  background: var(--color-border);
 }
 
 @keyframes detailSlideUp {
@@ -951,7 +994,7 @@ body {
 .stop-detail-close {
   width: 32px;
   height: 32px;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-md);
   border: none;
   background: transparent;
   color: var(--color-text-muted);
