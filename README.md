@@ -262,6 +262,16 @@ delivery_planner/
 | ORS Directions | Road-following route geometry | 2000 req/day | [openrouteservice.org](https://openrouteservice.org/dev/#/api-docs/v2/directions) |
 | OpenStreetMap Tiles | Map rendering | Fair use | [openstreetmap.org](https://wiki.openstreetmap.org/wiki/Tile_usage_policy) |
 
+## Documentation
+
+Full user guides and API reference are in the [`docs/`](docs/) folder:
+
+- [Getting Started](docs/getting-started.md) -- login, first route, basic workflow
+- [Biker Guide](docs/biker-guide.md) -- delivering, marking stops, map navigation
+- [Planner Guide](docs/planner-guide.md) -- dashboard, assigning routes, live tracking
+- [File Format Reference](docs/file-formats.md) -- CSV, XLSX, TXT, XML specs and examples
+- [API Reference](docs/api-reference.md) -- all REST endpoints
+
 ## License
 
 This project is for learning and portfolio purposes.
