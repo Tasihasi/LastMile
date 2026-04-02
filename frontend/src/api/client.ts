@@ -173,3 +173,16 @@ export async function listBikers(): Promise<User[]> {
   const { data } = await api.get<User[]>("/users/bikers/");
   return data;
 }
+
+export async function deleteSession(sessionId: string): Promise<void> {
+  await api.delete(`/sessions/${sessionId}/delete/`);
+}
+
+export async function assignSession(
+  sessionId: string,
+  ownerId: number
+): Promise<void> {
+  await api.patch(`/sessions/${sessionId}/assign/`, {
+    owner_id: ownerId,
+  });
+}

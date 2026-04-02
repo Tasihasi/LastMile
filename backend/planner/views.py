@@ -348,3 +348,50 @@ def get_shared_route(request, share_id):
         return Response({"error": "Shared route not found."}, status=status.HTTP_404_NOT_FOUND)
 
     return Response(SharedRouteSerializer(share).data)
+
+
+# ============================================
+# Session Management (planner only)
+# ============================================
+
+
+def _require_planner(request):
+    return hasattr(request.user, "profile") and request.user.profile.role == "planner"
+
+
+@api_view(["DELETE"])
+def delete_session(request, session_id):
+    if not _require_planner(request):
+        return Response({"error": "Planner access required."}, status=status.HTTP_403_FORBIDDEN)
+
+    try:
+        session = DeliverySession.objects.get(id=session_id)
+    except DeliverySession.DoesNotExist:
+        return Response({"error": "Session not found."}, status=status.HTTP_404_NOT_FOUND)
+
+    session.delete()
+    return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+@api_view(["PATCH"])
+def assign_session(request, session_id):
+    if not _require_planner(request):
+        return Response({"error": "Planner access required."}, status=status.HTTP_403_FORBIDDEN)
+
+    try:
+        session = DeliverySession.objects.get(id=session_id)
+    except DeliverySession.DoesNotExist:
+        return Response({"error": "Session not found."}, status=status.HTTP_404_NOT_FOUND)
+
+    owner_id = request.data.get("owner_id")
+    if owner_id is None:
+        return Response({"error": "owner_id is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        new_owner = User.objects.get(id=int(owner_id))
+    except (User.DoesNotExist, ValueError, TypeError):
+        return Response({"error": "User not found."}, status=status.HTTP_404_NOT_FOUND)
+
+    session.owner = new_owner
+    session.save(update_fields=["owner"])
+    return Response({"message": "Session reassigned.", "owner_name": new_owner.username})

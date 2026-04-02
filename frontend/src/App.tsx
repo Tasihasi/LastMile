@@ -10,10 +10,9 @@ import { StopDetail } from "./components/StopDetail";
 import { SettingsPanel } from "./components/SettingsPanel";
 import { LoginScreen } from "./components/LoginScreen";
 import { SessionList } from "./components/SessionList";
-import { BikerPicker } from "./components/BikerPicker";
+import { PlannerDashboard } from "./components/PlannerDashboard";
 import { shareSession } from "./api/client";
 import { formatDuration, formatDistance, formatTime, calcArrivalTimes } from "./utils/format";
-import type { User } from "./types";
 import "./App.css";
 
 function App() {
@@ -43,7 +42,7 @@ function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showUpload, setShowUpload] = useState(false);
-  const [selectedBikerId, setSelectedBikerId] = useState<number | null>(null);
+  const [viewMode, setViewMode] = useState<"dashboard" | "map">(isPlanner ? "dashboard" : "map");
   const [shareLoading, setShareLoading] = useState(false);
   const [shareCopied, setShareCopied] = useState(false);
 
@@ -110,20 +109,23 @@ function App() {
   const handleStartOver = () => {
     reset();
     setShowUpload(false);
+    if (isPlanner) setViewMode("dashboard");
   };
 
   const handleNewRoute = () => {
     reset();
     setShowUpload(true);
+    setViewMode("map");
   };
 
   const handleSelectSession = (id: string) => {
     loadSession(id);
     setShowUpload(false);
+    setViewMode("map");
   };
 
-  // Show session list when no active session and not uploading
-  const showSessionList = stops.length === 0 && !showUpload;
+  // Show session list when no active session and not uploading (biker only)
+  const showSessionList = !isPlanner && stops.length === 0 && !showUpload;
 
   if (!user) {
     return <LoginScreen />;
@@ -139,18 +141,17 @@ function App() {
             </svg>
           </div>
           <h1>Route Planner</h1>
-          {isPlanner && (
-            <BikerPicker
-              selectedBikerId={selectedBikerId}
-              onSelectBiker={(biker: User | null) => {
-                setSelectedBikerId(biker?.id ?? null);
-                handleStartOver();
-              }}
-            />
-          )}
         </div>
         <div className="app-header-right">
-          {stops.length > 0 && (
+          {isPlanner && viewMode === "map" && (
+            <button className="btn btn-ghost" onClick={handleStartOver}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="15 18 9 12 15 6" />
+              </svg>
+              Dashboard
+            </button>
+          )}
+          {viewMode === "map" && stops.length > 0 && (
             <button
               className="sidebar-toggle"
               onClick={() => setSidebarOpen(!sidebarOpen)}
@@ -164,7 +165,7 @@ function App() {
               </svg>
             </button>
           )}
-          {stops.length > 0 && (
+          {!isPlanner && stops.length > 0 && (
             <button className="btn btn-ghost btn-ghost--start-over" onClick={handleStartOver}>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <polyline points="1 4 1 10 7 10" />
@@ -221,9 +222,13 @@ function App() {
         </div>
       </header>
 
+      {isPlanner && viewMode === "dashboard" ? (
+        <PlannerDashboard onViewSession={handleSelectSession} />
+      ) : (
+      <>
       <div className="app-layout">
         {sidebarOpen && <div className="sidebar-overlay" onClick={() => setSidebarOpen(false)} />}
-        <aside className={`sidebar ${sidebarOpen || showSessionList || showUpload ? "sidebar--open" : ""}`}>
+        <aside className={`sidebar ${sidebarOpen || showSessionList || (showUpload && stops.length === 0) ? "sidebar--open" : ""}`}>
           <div className="sidebar-content">
             {error && (
               <div className="error-banner">
@@ -245,23 +250,9 @@ function App() {
 
             {showSessionList ? (
               <SessionList
-                ownerId={isPlanner ? (selectedBikerId ?? undefined) : undefined}
                 onSelectSession={handleSelectSession}
                 onNewRoute={handleNewRoute}
               />
-            ) : showUpload && stops.length === 0 ? (
-              <div>
-                <button className="btn btn-ghost" onClick={() => setShowUpload(false)} style={{ marginBottom: 8 }}>
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ width: 16, height: 16 }}>
-                    <polyline points="15 18 9 12 15 6" />
-                  </svg>
-                  Back to sessions
-                </button>
-                <FileUpload
-                  onUpload={(file) => uploadFile(file, isPlanner ? (selectedBikerId ?? undefined) : undefined)}
-                  isUploading={isUploading}
-                />
-              </div>
             ) : stops.length === 0 ? (
               <FileUpload onUpload={uploadFile} isUploading={isUploading} />
             ) : (
@@ -418,6 +409,8 @@ function App() {
           arrivalTimes={arrivalTimes}
           speedKmh={settings.speedKmh}
         />
+      )}
+      </>
       )}
     </div>
   );

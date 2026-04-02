@@ -17,6 +17,8 @@ urlpatterns = [
     path("sessions/<uuid:session_id>/geocode-status/", views.geocode_status, name="geocode-status"),
     path("sessions/<uuid:session_id>/optimize/", views.optimize, name="optimize"),
     path("sessions/<uuid:session_id>/share/", views.share_session, name="share-session"),
+    path("sessions/<uuid:session_id>/delete/", views.delete_session, name="delete-session"),
+    path("sessions/<uuid:session_id>/assign/", views.assign_session, name="assign-session"),
     # Public sharing
     path("shared/<uuid:share_id>/", views.get_shared_route, name="get-shared-route"),
 ]

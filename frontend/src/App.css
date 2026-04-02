@@ -1874,6 +1874,287 @@ body {
 }
 
 /* ============================================
+   Planner Dashboard
+   ============================================ */
+.dashboard {
+  flex: 1;
+  padding: 24px;
+  overflow-y: auto;
+  background: var(--color-bg);
+}
+
+.dashboard-loading {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100%;
+  flex: 1;
+}
+
+.dashboard-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+
+.dashboard-header h2 {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+  align-items: start;
+}
+
+.dashboard-column {
+  background: var(--color-surface);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-border);
+  overflow: hidden;
+}
+
+.dashboard-column-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.dashboard-column-biker {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dashboard-column-biker svg {
+  width: 20px;
+  height: 20px;
+  color: var(--color-primary);
+}
+
+.dashboard-column-title {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.dashboard-column-count {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  background: var(--color-bg);
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+}
+
+.dashboard-column-cards {
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 48px;
+}
+
+.dashboard-empty {
+  padding: 16px;
+  text-align: center;
+  font-size: 0.78rem;
+  color: var(--color-text-muted);
+}
+
+.dashboard-upload-btn {
+  width: 100%;
+  border-top: 1px solid var(--color-border);
+  border-radius: 0;
+  font-size: 0.78rem;
+  padding: 10px;
+  gap: 6px;
+}
+
+.dashboard-upload-btn svg {
+  width: 14px;
+  height: 14px;
+}
+
+.dashboard-no-data {
+  grid-column: 1 / -1;
+  text-align: center;
+  padding: 48px;
+  color: var(--color-text-secondary);
+  font-size: 0.85rem;
+}
+
+.dashboard-no-data p + p {
+  margin-top: 4px;
+  font-size: 0.78rem;
+  color: var(--color-text-muted);
+}
+
+/* Session Card */
+.session-card {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  background: var(--color-bg);
+  border-radius: var(--radius-md);
+  transition: all var(--transition);
+}
+
+.session-card:hover {
+  background: var(--color-primary-light);
+}
+
+.session-card-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  cursor: pointer;
+  flex: 1;
+  min-width: 0;
+}
+
+.session-card-date {
+  font-size: 0.8rem;
+  font-weight: 550;
+  color: var(--color-text);
+}
+
+.session-card-stops {
+  font-size: 0.7rem;
+  color: var(--color-text-muted);
+}
+
+.session-card-actions {
+  display: flex;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.session-card-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-sm);
+  border: none;
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition);
+}
+
+.session-card-btn:hover {
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+
+.session-card-btn--danger:hover {
+  background: var(--color-danger-bg);
+  color: var(--color-danger);
+}
+
+.session-card-btn svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* Assign dropdown */
+.session-card-assign-wrap {
+  position: relative;
+}
+
+.session-card-assign-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 800;
+}
+
+.session-card-assign-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  min-width: 140px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  z-index: 801;
+  overflow: hidden;
+  animation: fadeIn 100ms ease;
+}
+
+.session-card-assign-option {
+  display: block;
+  width: 100%;
+  padding: 8px 12px;
+  border: none;
+  background: transparent;
+  font-family: var(--font);
+  font-size: 0.8rem;
+  color: var(--color-text);
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--transition);
+}
+
+.session-card-assign-option:hover {
+  background: var(--color-surface-hover);
+}
+
+.session-card-assign-option--current {
+  color: var(--color-primary);
+  font-weight: 550;
+}
+
+/* Delete confirmation */
+.session-card-confirm {
+  position: absolute;
+  inset: 0;
+  background: var(--color-surface);
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  font-size: 0.78rem;
+  font-weight: 550;
+  color: var(--color-text);
+  animation: fadeIn 100ms ease;
+  border: 1px solid var(--color-danger-border);
+}
+
+.session-card-confirm-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.session-card-confirm-delete {
+  background: var(--color-danger);
+  color: white;
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 4px 10px;
+  font-family: var(--font);
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--transition);
+}
+
+.session-card-confirm-delete:hover {
+  background: #dc2626;
+}
+
+/* ============================================
    Mobile Sidebar Toggle (hidden on desktop)
    ============================================ */
 .sidebar-toggle {
@@ -1925,6 +2206,15 @@ body {
    Responsive -- Mobile (≤768px)
    ============================================ */
 @media (max-width: 768px) {
+  /* Dashboard responsive */
+  .dashboard {
+    padding: 16px;
+  }
+
+  .dashboard-grid {
+    grid-template-columns: 1fr;
+  }
+
   /* Show hamburger toggle */
   .sidebar-toggle {
     display: flex;
