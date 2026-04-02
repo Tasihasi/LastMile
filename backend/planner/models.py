@@ -19,9 +19,7 @@ class DeliveryStop(models.Model):
         FAILED = "failed", "Failed"
         SKIPPED = "skipped", "Skipped"
 
-    session = models.ForeignKey(
-        DeliverySession, on_delete=models.CASCADE, related_name="stops"
-    )
+    session = models.ForeignKey(DeliverySession, on_delete=models.CASCADE, related_name="stops")
     name = models.CharField(max_length=255)
     raw_address = models.CharField(max_length=500, blank=True, default="")
     lat = models.FloatField(null=True, blank=True)

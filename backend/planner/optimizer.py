@@ -1,7 +1,6 @@
 import requests
 from django.conf import settings
 
-
 ORS_BASE = "https://api.openrouteservice.org"
 
 
@@ -23,10 +22,7 @@ def optimize_route(stops) -> list[int]:
     first = stops[0]
 
     body = {
-        "jobs": [
-            {"id": stop.id, "location": [stop.lng, stop.lat]}
-            for stop in stops
-        ],
+        "jobs": [{"id": stop.id, "location": [stop.lng, stop.lat]} for stop in stops],
         "vehicles": [
             {
                 "id": 1,

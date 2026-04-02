@@ -98,10 +98,15 @@ def _geocode_stream(session_id):
 
         stop.save()
 
-        yield json.dumps({
-            "stop": DeliveryStopSerializer(stop).data,
-            "progress": {"current": i + 1, "total": total},
-        }) + "\n"
+        yield (
+            json.dumps(
+                {
+                    "stop": DeliveryStopSerializer(stop).data,
+                    "progress": {"current": i + 1, "total": total},
+                }
+            )
+            + "\n"
+        )
 
 
 @api_view(["POST"])
@@ -141,13 +146,15 @@ def geocode_status(request, session_id):
     success = stops.filter(geocode_status="success").count()
     failed = stops.filter(geocode_status="failed").count()
 
-    return Response({
-        "total": total,
-        "pending": pending,
-        "success": success,
-        "failed": failed,
-        "stops": DeliveryStopSerializer(stops, many=True).data,
-    })
+    return Response(
+        {
+            "total": total,
+            "pending": pending,
+            "success": success,
+            "failed": failed,
+            "stops": DeliveryStopSerializer(stops, many=True).data,
+        }
+    )
 
 
 @api_view(["POST"])
@@ -160,9 +167,7 @@ def optimize(request, session_id):
             status=status.HTTP_404_NOT_FOUND,
         )
 
-    located_stops = list(
-        session.stops.filter(lat__isnull=False, lng__isnull=False)
-    )
+    located_stops = list(session.stops.filter(lat__isnull=False, lng__isnull=False))
 
     if len(located_stops) < 2:
         return Response(
@@ -192,7 +197,9 @@ def optimize(request, session_id):
     except Exception:
         geometry = None
 
-    return Response({
-        "optimized_stops": DeliveryStopSerializer(ordered_stops, many=True).data,
-        "route_geometry": geometry,
-    })
+    return Response(
+        {
+            "optimized_stops": DeliveryStopSerializer(ordered_stops, many=True).data,
+            "route_geometry": geometry,
+        }
+    )

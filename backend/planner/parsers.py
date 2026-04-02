@@ -78,7 +78,7 @@ def parse_xlsx(file) -> list[dict]:
     headers = [_normalize_header(str(h or "")) for h in next(rows_iter)]
     rows = []
     for row_values in rows_iter:
-        row_dict = dict(zip(headers, row_values))
+        row_dict = dict(zip(headers, row_values, strict=False))
         rows.append(_normalize_row(row_dict))
 
     wb.close()
@@ -121,6 +121,7 @@ EXTENSION_MAP = {
 def parse_file(file, filename: str) -> list[dict]:
     """Parse an uploaded file based on its extension. Returns list of normalized stop dicts."""
     import os
+
     ext = os.path.splitext(filename)[1].lower()
     parser = EXTENSION_MAP.get(ext)
     if parser is None:
