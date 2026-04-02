@@ -1,0 +1,24 @@
+<deliveries>
+  <stop>
+    <name>Westend City Center</name>
+    <address>Vaci ut 1-3 Budapest</address>
+  </stop>
+  <stop>
+    <name>Szimpla Kert</name>
+    <address>Kazinczy utca 14 Budapest</address>
+  </stop>
+  <stop>
+    <name>Gellert Thermal Bath</name>
+    <lat>47.4833</lat>
+    <lng>19.0531</lng>
+  </stop>
+  <stop>
+    <name>Central Market Hall</name>
+    <address>Vasarcsarnok utca 1-3 Budapest</address>
+  </stop>
+  <stop>
+    <name>Buda Castle</name>
+    <lat>47.4961</lat>
+    <lng>19.0398</lng>
+  </stop>
+</deliveries>

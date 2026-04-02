@@ -1,0 +1,6 @@
+name	address	lat	lng
+Westend City Center	Vaci ut 1-3 Budapest
+Szimpla Kert	Kazinczy utca 14 Budapest
+Gellert Thermal Bath		47.4833	19.0531
+Central Market Hall	Vasarcsarnok utca 1-3 Budapest
+Buda Castle		47.4961	19.0398

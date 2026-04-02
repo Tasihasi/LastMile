@@ -1,0 +1,112 @@
+import { useState, useCallback } from "react";
+import type { DeliveryStop, SessionResponse } from "../types";
+import {
+  uploadFile as apiUpload,
+  geocodeStops as apiGeocode,
+  optimizeRoute as apiOptimize,
+} from "../api/client";
+
+export function useDeliveryPlanner() {
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [stops, setStops] = useState<DeliveryStop[]>([]);
+  const [needsGeocoding, setNeedsGeocoding] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const [isGeocoding, setIsGeocoding] = useState(false);
+  const [geocodeProgress, setGeocodeProgress] = useState<string>("");
+  const [isOptimizing, setIsOptimizing] = useState(false);
+  const [routeGeometry, setRouteGeometry] = useState<GeoJSON.LineString | null>(
+    null
+  );
+  const [error, setError] = useState<string | null>(null);
+
+  const uploadFile = useCallback(async (file: File) => {
+    setIsUploading(true);
+    setError(null);
+    try {
+      const session: SessionResponse = await apiUpload(file);
+      setSessionId(session.id);
+      setStops(session.stops);
+      setNeedsGeocoding(session.needs_geocoding);
+      setRouteGeometry(null);
+    } catch (err: unknown) {
+      if (err && typeof err === "object" && "response" in err) {
+        const axiosErr = err as { response?: { data?: { error?: string } } };
+        setError(axiosErr.response?.data?.error || "Upload failed.");
+      } else {
+        setError("Upload failed.");
+      }
+    } finally {
+      setIsUploading(false);
+    }
+  }, []);
+
+  const geocode = useCallback(async () => {
+    if (!sessionId) return;
+    setIsGeocoding(true);
+    setError(null);
+    setGeocodeProgress("");
+
+    try {
+      await apiGeocode(sessionId, ({ stop, progress }) => {
+        setGeocodeProgress(`Geocoding ${progress.current}/${progress.total}...`);
+        setStops((prev) =>
+          prev.map((s) => (s.id === stop.id ? stop : s))
+        );
+      });
+      setNeedsGeocoding(false);
+      setGeocodeProgress("");
+    } catch {
+      setError("Geocoding failed. Please try again.");
+    } finally {
+      setIsGeocoding(false);
+    }
+  }, [sessionId]);
+
+  const optimize = useCallback(async () => {
+    if (!sessionId) return;
+    setIsOptimizing(true);
+    setError(null);
+
+    try {
+      const result = await apiOptimize(sessionId);
+      setStops(result.optimized_stops);
+      setRouteGeometry(result.route_geometry);
+    } catch (err: unknown) {
+      if (err && typeof err === "object" && "response" in err) {
+        const axiosErr = err as { response?: { data?: { error?: string } } };
+        setError(axiosErr.response?.data?.error || "Optimization failed.");
+      } else {
+        setError("Optimization failed.");
+      }
+    } finally {
+      setIsOptimizing(false);
+    }
+  }, [sessionId]);
+
+  const reset = useCallback(() => {
+    setSessionId(null);
+    setStops([]);
+    setNeedsGeocoding(false);
+    setIsGeocoding(false);
+    setGeocodeProgress("");
+    setIsOptimizing(false);
+    setRouteGeometry(null);
+    setError(null);
+  }, []);
+
+  return {
+    sessionId,
+    stops,
+    needsGeocoding,
+    isUploading,
+    isGeocoding,
+    geocodeProgress,
+    isOptimizing,
+    routeGeometry,
+    error,
+    uploadFile,
+    geocode,
+    optimize,
+    reset,
+  };
+}
