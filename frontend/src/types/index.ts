@@ -53,9 +53,13 @@ export interface DeliveryStop {
 
 export interface SessionResponse {
   id: string;
+  name: string;
   created_at: string;
+  owner_name: string | null;
   stops: DeliveryStop[];
   needs_geocoding: boolean;
+  total_duration: number | null;
+  total_distance: number | null;
   status: SessionStatus;
   started_at: string | null;
   finished_at: string | null;

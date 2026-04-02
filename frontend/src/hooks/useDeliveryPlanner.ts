@@ -64,8 +64,8 @@ export function useDeliveryPlanner() {
       setCurrentStopIndex(session.current_stop_index);
       setRouteGeometry(session.route_geometry ?? null);
       setRouteSegments(session.route_segments ?? null);
-      setTotalDuration(null);
-      setTotalDistance(null);
+      setTotalDuration(session.total_duration ?? null);
+      setTotalDistance(session.total_distance ?? null);
     } catch {
       setError("Failed to load session.");
     }

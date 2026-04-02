@@ -9,6 +9,7 @@ import {
   renameSession,
   uploadFile as apiUpload,
 } from "../api/client";
+import { FinishedRouteDetail } from "./FinishedRouteDetail";
 
 interface PlannerDashboardProps {
   onViewSession: (sessionId: string) => void;
@@ -28,6 +29,7 @@ export function PlannerDashboard({ onViewSession, onOpenLiveMap }: PlannerDashbo
   const [uploadTarget, setUploadTarget] = useState<number | undefined>();
   const [dragOverTarget, setDragOverTarget] = useState<DropTarget | null>(null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [finishedDetailId, setFinishedDetailId] = useState<string | null>(null);
 
   const [refreshKey, setRefreshKey] = useState(0);
   const refresh = useCallback(() => setRefreshKey((k) => k + 1), []);
@@ -306,7 +308,7 @@ export function PlannerDashboard({ onViewSession, onOpenLiveMap }: PlannerDashbo
                 isDragging={draggingId === s.id}
                 onDragStart={() => handleDragStart(s.id)}
                 onDragEnd={handleDragEnd}
-                onView={() => onViewSession(s.id)}
+                onView={() => setFinishedDetailId(s.id)}
                 onAssignOpen={() => setAssignDropdown(assignDropdown === s.id ? null : s.id)}
                 onAssign={(ownerId) => handleAssign(s.id, ownerId)}
                 onDeleteConfirm={() => setConfirmDelete(s.id)}
@@ -317,6 +319,15 @@ export function PlannerDashboard({ onViewSession, onOpenLiveMap }: PlannerDashbo
             ))}
           </div>
         </div>
+      )}
+
+      {/* Finished Route Detail Panel */}
+      {finishedDetailId && (
+        <FinishedRouteDetail
+          sessionId={finishedDetailId}
+          onClose={() => setFinishedDetailId(null)}
+          onViewMap={(id) => { setFinishedDetailId(null); onViewSession(id); }}
+        />
       )}
     </div>
   );
