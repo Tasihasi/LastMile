@@ -1,6 +1,6 @@
-# Delivery Route Planner
+# LastMile
 
-A web application for planning optimized bicycle delivery routes. Upload a list of delivery addresses, see them on a map, and get an optimized route that follows real roads.
+A delivery route planner for bicycle couriers. Upload a list of delivery addresses, see them on a map, and get an optimized route that follows real roads.
 
 Built as a learning project to explore geospatial APIs, file parsing, and real-time streaming.
 
