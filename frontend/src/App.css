@@ -2932,3 +2932,20 @@ body {
   color: var(--color-text-muted);
   font-size: 0.72rem;
 }
+
+.planner-map-popup-btn {
+  margin-top: 6px;
+  padding: 4px 12px;
+  background: var(--color-primary);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--transition);
+}
+
+.planner-map-popup-btn:hover {
+  background: var(--color-primary-hover);
+}

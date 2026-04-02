@@ -233,7 +233,7 @@ function App() {
           onOpenLiveMap={() => setViewMode("live-map")}
         />
       ) : isPlanner && viewMode === "live-map" ? (
-        <PlannerMapView onBack={() => setViewMode("dashboard")} />
+        <PlannerMapView onBack={() => setViewMode("dashboard")} onViewSession={handleSelectSession} />
       ) : (
       <>
       <div className="app-layout">

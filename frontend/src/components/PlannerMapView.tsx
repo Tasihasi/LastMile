@@ -23,9 +23,10 @@ function getColor(index: number): string {
 
 interface PlannerMapViewProps {
   onBack: () => void;
+  onViewSession: (sessionId: string) => void;
 }
 
-export function PlannerMapView({ onBack }: PlannerMapViewProps) {
+export function PlannerMapView({ onBack, onViewSession }: PlannerMapViewProps) {
   const [sessions, setSessions] = useState<ActiveSession[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -113,7 +114,7 @@ export function PlannerMapView({ onBack }: PlannerMapViewProps) {
           {sessions.map((session) => {
             const color = session.owner_id ? colorMap.get(session.owner_id) ?? "#6366f1" : "#6366f1";
             return (
-              <SessionLayer key={session.id} session={session} color={color} />
+              <SessionLayer key={session.id} session={session} color={color} onViewSession={onViewSession} />
             );
           })}
         </MapContainer>
@@ -167,7 +168,7 @@ function FitAllBounds({ sessions }: { sessions: ActiveSession[] }) {
 }
 
 // Renders a single session's route line, stop markers, and current-stop marker
-function SessionLayer({ session, color }: { session: ActiveSession; color: string }) {
+function SessionLayer({ session, color, onViewSession }: { session: ActiveSession; color: string; onViewSession: (id: string) => void }) {
   const map = useMap();
   const routeLayerRef = useRef<L.GeoJSON | null>(null);
 
@@ -243,6 +244,12 @@ function SessionLayer({ session, color }: { session: ActiveSession; color: strin
                   Route: {formatDuration(session.total_duration)} / {formatDistance(session.total_distance ?? 0)}
                 </span>
               )}
+              <button
+                className="planner-map-popup-btn"
+                onClick={() => onViewSession(session.id)}
+              >
+                View Route
+              </button>
             </div>
           </Popup>
         </Marker>
