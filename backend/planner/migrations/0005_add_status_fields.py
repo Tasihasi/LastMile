@@ -4,35 +4,47 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('planner', '0004_deliverysession_name_deliverysession_total_distance_and_more'),
+        ("planner", "0004_deliverysession_name_deliverysession_total_distance_and_more"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='deliverysession',
-            name='current_stop_index',
+            model_name="deliverysession",
+            name="current_stop_index",
             field=models.IntegerField(blank=True, null=True),
         ),
         migrations.AddField(
-            model_name='deliverysession',
-            name='finished_at',
+            model_name="deliverysession",
+            name="finished_at",
             field=models.DateTimeField(blank=True, null=True),
         ),
         migrations.AddField(
-            model_name='deliverysession',
-            name='started_at',
+            model_name="deliverysession",
+            name="started_at",
             field=models.DateTimeField(blank=True, null=True),
         ),
         migrations.AddField(
-            model_name='deliverysession',
-            name='status',
-            field=models.CharField(choices=[('not_started', 'Not Started'), ('in_progress', 'In Progress'), ('finished', 'Finished')], default='not_started', max_length=20),
+            model_name="deliverysession",
+            name="status",
+            field=models.CharField(
+                choices=[("not_started", "Not Started"), ("in_progress", "In Progress"), ("finished", "Finished")],
+                default="not_started",
+                max_length=20,
+            ),
         ),
         migrations.AddField(
-            model_name='deliverystop',
-            name='delivery_status',
-            field=models.CharField(choices=[('pending', 'Pending'), ('delivered', 'Delivered'), ('not_received', 'Not Received'), ('skipped', 'Skipped')], default='pending', max_length=20),
+            model_name="deliverystop",
+            name="delivery_status",
+            field=models.CharField(
+                choices=[
+                    ("pending", "Pending"),
+                    ("delivered", "Delivered"),
+                    ("not_received", "Not Received"),
+                    ("skipped", "Skipped"),
+                ],
+                default="pending",
+                max_length=20,
+            ),
         ),
     ]

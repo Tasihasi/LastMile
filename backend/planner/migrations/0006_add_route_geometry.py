@@ -4,15 +4,14 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('planner', '0005_add_status_fields'),
+        ("planner", "0005_add_status_fields"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='deliverysession',
-            name='route_geometry',
+            model_name="deliverysession",
+            name="route_geometry",
             field=models.JSONField(blank=True, null=True),
         ),
     ]

@@ -105,7 +105,9 @@ class Command(BaseCommand):
                 owner=owner,
                 name=route_name,
                 original_file=ContentFile(csv_content.encode(), name=f"{route_name.replace(' ', '_')}.csv"),
-                total_duration=random.uniform(3600, 10800) if route_status != "not_started" else random.uniform(3600, 10800),
+                total_duration=random.uniform(3600, 10800)
+                if route_status != "not_started"
+                else random.uniform(3600, 10800),
                 total_distance=random.uniform(15000, 50000),
                 route_geometry=geometry,
                 status=route_status,
@@ -150,8 +152,6 @@ class Command(BaseCommand):
 
             status_label = {"not_started": "[PENDING]", "in_progress": "[ACTIVE]", "finished": "[DONE]"}
             owner_name = owner.username if owner else "Unassigned"
-            self.stdout.write(
-                f"  {status_label[route_status]} {route_name} ({stop_count} stops) -> {owner_name}"
-            )
+            self.stdout.write(f"  {status_label[route_status]} {route_name} ({stop_count} stops) -> {owner_name}")
 
         self.stdout.write(self.style.SUCCESS(f"\nCreated {len(route_defs)} test routes for {len(bikers)} bikers"))

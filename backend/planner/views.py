@@ -492,9 +492,7 @@ def update_stop_status(request, session_id, stop_id):
 
     # Auto-advance current_stop_index to next pending stop
     next_stop = (
-        session.stops.filter(sequence_order__isnull=False, delivery_status="pending")
-        .order_by("sequence_order")
-        .first()
+        session.stops.filter(sequence_order__isnull=False, delivery_status="pending").order_by("sequence_order").first()
     )
 
     if next_stop:
@@ -507,8 +505,10 @@ def update_stop_status(request, session_id, stop_id):
         session.current_stop_index = None
         session.save(update_fields=["status", "finished_at", "current_stop_index"])
 
-    return Response({
-        "stop": DeliveryStopSerializer(stop).data,
-        "session_status": session.status,
-        "current_stop_index": session.current_stop_index,
-    })
+    return Response(
+        {
+            "stop": DeliveryStopSerializer(stop).data,
+            "session_status": session.status,
+            "current_stop_index": session.current_stop_index,
+        }
+    )

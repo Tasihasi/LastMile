@@ -80,10 +80,20 @@ class SessionListSerializer(serializers.ModelSerializer):
     class Meta:
         model = DeliverySession
         fields = [
-            "id", "name", "created_at", "owner_name", "stop_count",
-            "total_duration", "total_distance", "status", "started_at",
-            "finished_at", "current_stop_index", "delivered_count",
-            "not_received_count", "current_stop_name",
+            "id",
+            "name",
+            "created_at",
+            "owner_name",
+            "stop_count",
+            "total_duration",
+            "total_distance",
+            "status",
+            "started_at",
+            "finished_at",
+            "current_stop_index",
+            "delivered_count",
+            "not_received_count",
+            "current_stop_name",
         ]
 
     def get_delivered_count(self, obj):
@@ -120,11 +130,20 @@ class ActiveSessionSerializer(serializers.ModelSerializer):
     class Meta:
         model = DeliverySession
         fields = [
-            "id", "name", "owner_name", "owner_id", "status",
-            "started_at", "current_stop_index", "stop_count",
-            "delivered_count", "current_stop_name",
-            "total_duration", "total_distance",
-            "route_geometry", "stops",
+            "id",
+            "name",
+            "owner_name",
+            "owner_id",
+            "status",
+            "started_at",
+            "current_stop_index",
+            "stop_count",
+            "delivered_count",
+            "current_stop_name",
+            "total_duration",
+            "total_distance",
+            "route_geometry",
+            "stops",
         ]
 
     def get_delivered_count(self, obj):
