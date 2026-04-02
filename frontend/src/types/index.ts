@@ -60,6 +60,8 @@ export interface SessionResponse {
   started_at: string | null;
   finished_at: string | null;
   current_stop_index: number | null;
+  route_geometry: GeoJSON.LineString | null;
+  route_segments: RouteSegment[] | null;
 }
 
 export interface RouteSegment {

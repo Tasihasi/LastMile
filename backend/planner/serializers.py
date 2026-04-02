@@ -60,6 +60,8 @@ class DeliverySessionSerializer(serializers.ModelSerializer):
             "started_at",
             "finished_at",
             "current_stop_index",
+            "route_geometry",
+            "route_segments",
         ]
 
     def get_needs_geocoding(self, obj):

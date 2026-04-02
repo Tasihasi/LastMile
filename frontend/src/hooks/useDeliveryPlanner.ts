@@ -62,8 +62,8 @@ export function useDeliveryPlanner() {
       setNeedsGeocoding(session.needs_geocoding);
       setSessionStatus(session.status);
       setCurrentStopIndex(session.current_stop_index);
-      setRouteGeometry(null);
-      setRouteSegments(null);
+      setRouteGeometry(session.route_geometry ?? null);
+      setRouteSegments(session.route_segments ?? null);
       setTotalDuration(null);
       setTotalDistance(null);
     } catch {

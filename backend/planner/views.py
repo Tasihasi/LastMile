@@ -329,12 +329,13 @@ def optimize(request, session_id):
     except Exception:
         route = None
 
-    # Persist totals and geometry on session for dashboard/aggregate map
+    # Persist totals, geometry, and segments on session
     if route:
         session.total_duration = route["total_duration"]
         session.total_distance = route["total_distance"]
         session.route_geometry = route["geometry"]
-        session.save(update_fields=["total_duration", "total_distance", "route_geometry"])
+        session.route_segments = route["segments"]
+        session.save(update_fields=["total_duration", "total_distance", "route_geometry", "route_segments"])
 
     return Response(
         {
