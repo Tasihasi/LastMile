@@ -172,7 +172,7 @@ function App() {
               </svg>
             </button>
           )}
-          {!isPlanner && stops.length > 0 && (
+          {!isPlanner && stops.length > 0 && sessionStatus === "not_started" && (
             <button className="btn btn-ghost btn-ghost--start-over" onClick={handleStartOver}>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <polyline points="1 4 1 10 7 10" />
@@ -398,7 +398,7 @@ function App() {
                       )}
                     </button>
                   )}
-                  {canOptimize && (
+                  {canOptimize && !isOptimized && (
                     <button
                       className="btn btn-primary"
                       onClick={() => optimize(

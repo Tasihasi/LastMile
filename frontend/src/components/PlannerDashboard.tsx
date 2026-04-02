@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { SessionSummary, User } from "../types";
-import { formatDuration, formatDistance } from "../utils/format";
+import { formatDuration, formatDistance, formatTime } from "../utils/format";
+import { useSettings } from "../hooks/useSettings";
 import {
   listBikers,
   listSessions,
@@ -30,6 +31,9 @@ export function PlannerDashboard({ onViewSession, onOpenLiveMap }: PlannerDashbo
   const [dragOverTarget, setDragOverTarget] = useState<DropTarget | null>(null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [finishedDetailId, setFinishedDetailId] = useState<string | null>(null);
+
+  const { settings } = useSettings();
+  const [bikerFilter, setBikerFilter] = useState<"active" | "inactive" | "all">("active");
 
   const [refreshKey, setRefreshKey] = useState(0);
   const refresh = useCallback(() => setRefreshKey((k) => k + 1), []);
@@ -137,6 +141,16 @@ export function PlannerDashboard({ onViewSession, onOpenLiveMap }: PlannerDashbo
     );
   }
 
+  // Filter bikers based on activity filter
+  const activeBikerNames = new Set(
+    sessions.filter((s) => s.status === "in_progress").map((s) => s.owner_name)
+  );
+  const filteredBikers = bikers.filter((b) => {
+    if (bikerFilter === "active") return activeBikerNames.has(b.username);
+    if (bikerFilter === "inactive") return !activeBikerNames.has(b.username);
+    return true; // "all"
+  });
+
   if (loading) {
     return (
       <div className="dashboard-loading">
@@ -158,6 +172,17 @@ export function PlannerDashboard({ onViewSession, onOpenLiveMap }: PlannerDashbo
       <div className="dashboard-header">
         <h2>Route Management</h2>
         <div className="dashboard-header-actions">
+          <div className="dashboard-filter">
+            {(["active", "inactive", "all"] as const).map((f) => (
+              <button
+                key={f}
+                className={`dashboard-filter-btn ${bikerFilter === f ? "dashboard-filter-btn--active" : ""}`}
+                onClick={() => setBikerFilter(f)}
+              >
+                {f === "active" ? "Active" : f === "inactive" ? "Inactive" : "All"} Bikers
+              </button>
+            ))}
+          </div>
           {onOpenLiveMap && activeCount > 0 && (
             <button className="btn btn-live-map btn-sm" onClick={onOpenLiveMap}>
               <span className="btn-live-dot" />
@@ -197,6 +222,7 @@ export function PlannerDashboard({ onViewSession, onOpenLiveMap }: PlannerDashbo
                     assignDropdown={assignDropdown}
                     confirmDelete={confirmDelete}
                     isDragging={draggingId === s.id}
+                    dwellMinutes={settings.dwellMinutes}
                     onDragStart={() => handleDragStart(s.id)}
                     onDragEnd={handleDragEnd}
                     onView={() => onViewSession(s.id)}
@@ -215,7 +241,7 @@ export function PlannerDashboard({ onViewSession, onOpenLiveMap }: PlannerDashbo
 
         {/* Right: Bikers stacked vertically */}
         <div className="dashboard-bikers">
-          {bikers.map((biker) => {
+          {filteredBikers.map((biker) => {
             const bikerRoutes = bikerSessions.get(biker.username) ?? [];
             const isDropTarget = dragOverTarget === biker.id;
             return (
@@ -246,6 +272,7 @@ export function PlannerDashboard({ onViewSession, onOpenLiveMap }: PlannerDashbo
                       assignDropdown={assignDropdown}
                       confirmDelete={confirmDelete}
                       isDragging={draggingId === s.id}
+                      dwellMinutes={settings.dwellMinutes}
                       onDragStart={() => handleDragStart(s.id)}
                       onDragEnd={handleDragEnd}
                       onView={() => onViewSession(s.id)}
@@ -277,10 +304,16 @@ export function PlannerDashboard({ onViewSession, onOpenLiveMap }: PlannerDashbo
             );
           })}
 
-          {bikers.length === 0 && unassigned.length === 0 && (
+          {filteredBikers.length === 0 && (
             <div className="dashboard-no-data">
-              <p>No bikers or routes yet.</p>
-              <p>Bikers will appear here after they sign in.</p>
+              {bikers.length === 0 ? (
+                <>
+                  <p>No bikers or routes yet.</p>
+                  <p>Bikers will appear here after they sign in.</p>
+                </>
+              ) : (
+                <p>No {bikerFilter === "active" ? "active" : "inactive"} bikers right now.</p>
+              )}
             </div>
           )}
         </div>
@@ -306,6 +339,7 @@ export function PlannerDashboard({ onViewSession, onOpenLiveMap }: PlannerDashbo
                 assignDropdown={assignDropdown}
                 confirmDelete={confirmDelete}
                 isDragging={draggingId === s.id}
+                dwellMinutes={settings.dwellMinutes}
                 onDragStart={() => handleDragStart(s.id)}
                 onDragEnd={handleDragEnd}
                 onView={() => setFinishedDetailId(s.id)}
@@ -339,6 +373,7 @@ interface SessionCardProps {
   assignDropdown: string | null;
   confirmDelete: string | null;
   isDragging: boolean;
+  dwellMinutes: number;
   onDragStart: () => void;
   onDragEnd: () => void;
   onView: () => void;
@@ -356,6 +391,7 @@ function SessionCard({
   assignDropdown,
   confirmDelete,
   isDragging,
+  dwellMinutes,
   onDragStart,
   onDragEnd,
   onView,
@@ -458,6 +494,20 @@ function SessionCard({
             <span className="session-card-progress-text">Heading to: {session.current_stop_name}</span>
           </div>
         )}
+        {session.status === "in_progress" && session.started_at && session.total_duration != null && (() => {
+          const startMs = new Date(session.started_at).getTime();
+          const totalSec = session.total_duration + session.stop_count * dwellMinutes * 60;
+          const eta = new Date(startMs + totalSec * 1000);
+          return (
+            <div className="session-card-eta">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10" />
+                <polyline points="12 6 12 12 16 14" />
+              </svg>
+              <span>Back by ~{formatTime(eta)}</span>
+            </div>
+          );
+        })()}
         {session.status === "finished" && session.not_received_count > 0 && (
           <div className="session-card-progress session-card-progress--warning">
             <span className="session-card-progress-text">{session.not_received_count} not received</span>
