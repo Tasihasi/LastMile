@@ -535,6 +535,48 @@ class OptimizerTest(TestCase):
         self.assertEqual(result, [42])
 
 
+class OptimizeAPIKeyTest(TestCase):
+    """Test that missing or invalid ORS_API_KEY gives clear user-facing errors."""
+
+    def setUp(self):
+        self.user, self.client = _make_biker("ors_biker")
+        self.session = _make_optimized_session(self.user, num_stops=3)
+
+    @patch("planner.views.django_settings")
+    def test_optimize_missing_api_key(self, mock_settings):
+        mock_settings.ORS_API_KEY = ""
+        response = self.client.post(f"/api/sessions/{self.session.id}/optimize/")
+        self.assertEqual(response.status_code, 503)
+        error = response.json()["error"]
+        self.assertIn("ORS_API_KEY", error)
+        self.assertIn("not configured", error)
+
+    @patch("planner.views.optimize_route")
+    def test_optimize_invalid_api_key(self, mock_optimize):
+        mock_response = MagicMock()
+        mock_response.status_code = 403
+        import requests
+
+        mock_optimize.side_effect = requests.HTTPError("403 Forbidden", response=mock_response)
+        response = self.client.post(f"/api/sessions/{self.session.id}/optimize/")
+        self.assertEqual(response.status_code, 502)
+        error = response.json()["error"]
+        self.assertIn("ORS_API_KEY", error)
+        self.assertIn("invalid or expired", error)
+
+    @patch("planner.views.optimize_route")
+    def test_optimize_unauthorized_api_key(self, mock_optimize):
+        mock_response = MagicMock()
+        mock_response.status_code = 401
+        import requests
+
+        mock_optimize.side_effect = requests.HTTPError("401 Unauthorized", response=mock_response)
+        response = self.client.post(f"/api/sessions/{self.session.id}/optimize/")
+        self.assertEqual(response.status_code, 502)
+        error = response.json()["error"]
+        self.assertIn("ORS_API_KEY", error)
+
+
 # ============================================
 # Priority 7: Serializer Computed Field Tests
 # ============================================
