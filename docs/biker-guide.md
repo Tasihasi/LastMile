@@ -19,6 +19,8 @@ Tapping it:
 - Highlights the first stop as your current destination
 - Shows a progress banner: "Route in progress -- X/Y stops done"
 
+> **Note:** Once a route is started or finished, the **Start Route** button disappears. A started route cannot be restarted. The **Start Over** button in the header is also hidden during active and finished routes to prevent accidentally navigating away.
+
 ## Delivering Stops
 
 Your current stop is highlighted on both the map and the sidebar:
@@ -62,10 +64,17 @@ Click any stop in the sidebar or tap a marker on the map to see details:
 - Arrival time estimate
 - Travel time from previous stop
 - Address and coordinates
-- Product code, recipient name, phone number
+- Product code, recipient name, phone number (if included in the upload file)
 - Geocoding status
 
 The phone number is tappable (opens dialer) and has a copy button.
+
+### Phone number in sidebar
+
+If stops have phone numbers, they also appear directly in the sidebar stop list (no need to open the detail popup). Each phone number shows:
+- A phone icon
+- A clickable link (opens dialer)
+- A copy-to-clipboard button
 
 ## Uploading Your Own Route
 
