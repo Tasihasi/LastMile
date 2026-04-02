@@ -435,6 +435,8 @@ function App() {
             routeGeometry={routeGeometry}
             onSelectStop={selectStop}
             depot={depot}
+            sessionStatus={sessionStatus}
+            currentStopIndex={currentStopIndex}
           />
         </main>
       </div>
