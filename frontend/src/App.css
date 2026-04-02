@@ -151,12 +151,19 @@ body {
   background: var(--color-surface);
   border-right: 1px solid var(--color-border);
   overflow-y: auto;
+  overflow-x: hidden;
   display: flex;
   flex-direction: column;
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+
+.sidebar:hover {
+  scrollbar-color: var(--color-border) transparent;
 }
 
 .sidebar::-webkit-scrollbar {
-  width: 6px;
+  width: 5px;
 }
 
 .sidebar::-webkit-scrollbar-track {
@@ -164,15 +171,20 @@ body {
 }
 
 .sidebar::-webkit-scrollbar-thumb {
-  background: var(--color-border);
+  background: transparent;
   border-radius: var(--radius-full);
+  transition: background 0.2s;
+}
+
+.sidebar:hover::-webkit-scrollbar-thumb {
+  background: var(--color-border);
 }
 
 .sidebar-content {
-  padding: 20px;
+  padding: 16px;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 12px;
   flex: 1;
 }
 
@@ -535,7 +547,7 @@ body {
   background: var(--color-danger-bg);
   color: var(--color-danger-text);
   padding: 12px 14px;
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-lg);
   font-size: 0.83rem;
   font-weight: 500;
   line-height: 1.5;
@@ -590,7 +602,7 @@ body {
   gap: 4px;
   padding: 4px;
   background: var(--color-bg);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-lg);
 }
 
 .stat-item {
@@ -749,7 +761,7 @@ body {
 .theme-toggle {
   width: 36px;
   height: 36px;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-md);
   border: none;
   background: transparent;
   color: var(--color-text-secondary);
@@ -790,7 +802,7 @@ body {
   gap: 16px;
   padding: 12px 14px;
   background: var(--color-primary-light);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-lg);
   border: 1px solid var(--color-primary-subtle);
 }
 
@@ -843,7 +855,7 @@ body {
   gap: 12px;
   padding: 10px 12px;
   background: var(--color-primary-light);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-lg);
   border: 1px solid var(--color-primary-subtle);
 }
 
@@ -1072,7 +1084,7 @@ body {
    ============================================ */
 .settings-panel {
   background: var(--color-bg);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-lg);
   border: 1px solid var(--color-border);
   overflow: hidden;
   animation: fadeIn 150ms ease;
@@ -1082,7 +1094,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 14px;
+  padding: 14px 16px;
   border-bottom: 1px solid var(--color-border);
 }
 
@@ -1093,7 +1105,7 @@ body {
 }
 
 .settings-body {
-  padding: 14px;
+  padding: 16px;
   display: flex;
   flex-direction: column;
   gap: 16px;
@@ -1126,13 +1138,13 @@ body {
 .setting-input {
   font-family: var(--font);
   font-size: 0.85rem;
-  padding: 6px 10px;
+  padding: 8px 12px;
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-md);
   background: var(--color-surface);
   color: var(--color-text);
   outline: none;
-  transition: border-color var(--transition);
+  transition: border-color var(--transition), box-shadow var(--transition);
 }
 
 .setting-input:focus {
@@ -1272,10 +1284,10 @@ body {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 10px;
+  padding: 10px 12px;
   background: var(--color-success-bg);
   border: 1px solid var(--color-success);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-lg);
 }
 
 .home-set-info {
