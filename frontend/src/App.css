@@ -1,5 +1,5 @@
 /* ============================================
-   Design tokens
+   Design tokens -- Light (default)
    ============================================ */
 :root {
   --color-bg: #f8fafc;
@@ -20,6 +20,7 @@
   --color-danger: #ef4444;
   --color-danger-bg: #fef2f2;
   --color-danger-text: #991b1b;
+  --color-danger-border: #fecaca;
   --color-warning-bg: #fffbeb;
   --color-warning-text: #92400e;
   --color-accent: #8b5cf6;
@@ -34,6 +35,40 @@
   --shadow-glow: 0 0 0 3px rgba(99, 102, 241, 0.15);
   --transition: 180ms ease;
   --font: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --map-filter: none;
+}
+
+/* ============================================
+   Design tokens -- Dark
+   ============================================ */
+[data-theme="dark"] {
+  --color-bg: #0f172a;
+  --color-surface: #1e293b;
+  --color-surface-hover: #334155;
+  --color-border: #334155;
+  --color-border-light: #1e293b;
+  --color-text: #f1f5f9;
+  --color-text-secondary: #94a3b8;
+  --color-text-muted: #64748b;
+  --color-primary: #818cf8;
+  --color-primary-hover: #6366f1;
+  --color-primary-light: rgba(99, 102, 241, 0.12);
+  --color-primary-subtle: #3730a3;
+  --color-success: #34d399;
+  --color-success-bg: rgba(16, 185, 129, 0.12);
+  --color-success-text: #6ee7b7;
+  --color-danger: #f87171;
+  --color-danger-bg: rgba(239, 68, 68, 0.12);
+  --color-danger-text: #fca5a5;
+  --color-danger-border: rgba(239, 68, 68, 0.2);
+  --color-warning-bg: rgba(245, 158, 11, 0.12);
+  --color-warning-text: #fcd34d;
+  --color-accent: #a78bfa;
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.2);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.4);
+  --shadow-glow: 0 0 0 3px rgba(129, 140, 248, 0.2);
+  --map-filter: brightness(0.85) contrast(1.1) saturate(0.9);
 }
 
 * {
@@ -504,7 +539,7 @@ body {
   font-size: 0.83rem;
   font-weight: 500;
   line-height: 1.5;
-  border: 1px solid #fecaca;
+  border: 1px solid var(--color-danger-border);
 }
 
 .error-banner svg {
@@ -653,6 +688,29 @@ body {
   box-shadow: var(--shadow-md) !important;
 }
 
+/* Dark mode: tint map tiles, style popups */
+.delivery-map .leaflet-tile-pane {
+  filter: var(--map-filter);
+}
+
+[data-theme="dark"] .leaflet-popup-content-wrapper {
+  background: var(--color-surface) !important;
+  color: var(--color-text) !important;
+}
+
+[data-theme="dark"] .leaflet-popup-tip {
+  background: var(--color-surface) !important;
+}
+
+[data-theme="dark"] .leaflet-control-attribution {
+  background: rgba(30, 41, 59, 0.8) !important;
+  color: var(--color-text-muted) !important;
+}
+
+[data-theme="dark"] .leaflet-control-attribution a {
+  color: var(--color-text-secondary) !important;
+}
+
 /* ============================================
    Animations
    ============================================ */
@@ -683,4 +741,43 @@ body {
 
 .error-banner {
   animation: fadeIn 200ms ease;
+}
+
+/* ============================================
+   Theme Toggle
+   ============================================ */
+.theme-toggle {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-sm);
+  border: none;
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition);
+  flex-shrink: 0;
+}
+
+.theme-toggle:hover {
+  background: var(--color-surface-hover);
+  color: var(--color-text);
+}
+
+.theme-toggle svg {
+  width: 18px;
+  height: 18px;
+  transition: transform 300ms ease;
+}
+
+.theme-toggle:hover svg {
+  transform: rotate(15deg);
+}
+
+.app-header-right {
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
