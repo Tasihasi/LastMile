@@ -1,9 +1,9 @@
-import { useState } from "react";
 import type { DeliveryStop } from "../types";
-import { StopDetail } from "./StopDetail";
 
 interface AddressListProps {
   stops: DeliveryStop[];
+  selectedStopId: number | null;
+  onSelectStop: (id: number) => void;
 }
 
 function statusLabel(s: DeliveryStop["geocode_status"]) {
@@ -28,14 +28,8 @@ function numberClass(stop: DeliveryStop) {
   return `stop-number stop-number--${stop.geocode_status}`;
 }
 
-export function AddressList({ stops }: AddressListProps) {
-  const [selectedId, setSelectedId] = useState<number | null>(null);
-
+export function AddressList({ stops, selectedStopId, onSelectStop }: AddressListProps) {
   if (stops.length === 0) return null;
-
-  const selectedStop = selectedId != null
-    ? stops.find((s) => s.id === selectedId) ?? null
-    : null;
 
   return (
     <div className="address-list">
@@ -47,11 +41,11 @@ export function AddressList({ stops }: AddressListProps) {
         {stops.map((stop, i) => (
           <li
             key={stop.id}
-            className={`stop-item ${selectedId === stop.id ? "stop-item--active" : ""}`}
-            onClick={() => setSelectedId(stop.id)}
+            className={`stop-item ${selectedStopId === stop.id ? "stop-item--active" : ""}`}
+            onClick={() => onSelectStop(stop.id)}
             role="button"
             tabIndex={0}
-            onKeyDown={(e) => { if (e.key === "Enter") setSelectedId(stop.id); }}
+            onKeyDown={(e) => { if (e.key === "Enter") onSelectStop(stop.id); }}
           >
             <span className={numberClass(stop)}>
               {stop.sequence_order != null ? stop.sequence_order : i + 1}
@@ -79,13 +73,6 @@ export function AddressList({ stops }: AddressListProps) {
           </li>
         ))}
       </ul>
-
-      {selectedStop && (
-        <StopDetail
-          stop={selectedStop}
-          onClose={() => setSelectedId(null)}
-        />
-      )}
     </div>
   );
 }

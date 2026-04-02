@@ -1,8 +1,10 @@
+import { useState } from "react";
 import { useDeliveryPlanner } from "./hooks/useDeliveryPlanner";
 import { useTheme } from "./hooks/useTheme";
 import { FileUpload } from "./components/FileUpload";
 import { AddressList } from "./components/AddressList";
 import { DeliveryMap } from "./components/DeliveryMap";
+import { StopDetail } from "./components/StopDetail";
 import "./App.css";
 
 function App() {
@@ -22,6 +24,7 @@ function App() {
   } = useDeliveryPlanner();
 
   const { theme, toggle: toggleTheme } = useTheme();
+  const [selectedStopId, setSelectedStopId] = useState<number | null>(null);
 
   const locatedCount = stops.filter(
     (s) => s.lat != null && s.lng != null
@@ -31,6 +34,10 @@ function App() {
   ).length;
   const canOptimize = !needsGeocoding && !isGeocoding && locatedCount >= 2;
   const isOptimized = stops.some((s) => s.sequence_order != null);
+
+  const selectedStop = selectedStopId != null
+    ? stops.find((s) => s.id === selectedStopId) ?? null
+    : null;
 
   return (
     <div className="app">
@@ -169,16 +176,31 @@ function App() {
                   )}
                 </div>
 
-                <AddressList stops={stops} />
+                <AddressList
+                  stops={stops}
+                  selectedStopId={selectedStopId}
+                  onSelectStop={setSelectedStopId}
+                />
               </>
             )}
           </div>
         </aside>
 
         <main className="map-container">
-          <DeliveryMap stops={stops} routeGeometry={routeGeometry} />
+          <DeliveryMap
+            stops={stops}
+            routeGeometry={routeGeometry}
+            onSelectStop={setSelectedStopId}
+          />
         </main>
       </div>
+
+      {selectedStop && (
+        <StopDetail
+          stop={selectedStop}
+          onClose={() => setSelectedStopId(null)}
+        />
+      )}
     </div>
   );
 }

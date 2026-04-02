@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet";
+import { MapContainer, TileLayer, Marker, useMap } from "react-leaflet";
 import L from "leaflet";
 import type { DeliveryStop } from "../types";
 import "leaflet/dist/leaflet.css";
@@ -7,6 +7,7 @@ import "leaflet/dist/leaflet.css";
 interface DeliveryMapProps {
   stops: DeliveryStop[];
   routeGeometry: GeoJSON.LineString | null;
+  onSelectStop: (id: number) => void;
 }
 
 function createNumberedIcon(num: number, stop: DeliveryStop) {
@@ -35,7 +36,7 @@ function createNumberedIcon(num: number, stop: DeliveryStop) {
       font-family: Inter, sans-serif;
       border: 2.5px solid white;
       box-shadow: 0 2px 8px rgba(0,0,0,0.25);
-      transition: transform 180ms ease;
+      cursor: pointer;
     ">${num}</div>`,
     iconSize: [30, 30],
     iconAnchor: [15, 15],
@@ -94,7 +95,7 @@ function RouteLayer({ geometry }: { geometry: GeoJSON.LineString }) {
   return null;
 }
 
-export function DeliveryMap({ stops, routeGeometry }: DeliveryMapProps) {
+export function DeliveryMap({ stops, routeGeometry, onSelectStop }: DeliveryMapProps) {
   const located = stops.filter((s) => s.lat != null && s.lng != null);
 
   return (
@@ -117,15 +118,10 @@ export function DeliveryMap({ stops, routeGeometry }: DeliveryMapProps) {
             stop.sequence_order != null ? stop.sequence_order : i + 1,
             stop
           )}
-        >
-          <Popup>
-            <strong>{stop.name}</strong>
-            {stop.raw_address && <span>{stop.raw_address}</span>}
-            {stop.product_code && <span className="popup-meta">Code: {stop.product_code}</span>}
-            {stop.recipient_name && <span className="popup-meta">To: {stop.recipient_name}</span>}
-            {stop.recipient_phone && <span className="popup-meta">Tel: {stop.recipient_phone}</span>}
-          </Popup>
-        </Marker>
+          eventHandlers={{
+            click: () => onSelectStop(stop.id),
+          }}
+        />
       ))}
       {routeGeometry && <RouteLayer geometry={routeGeometry} />}
     </MapContainer>
