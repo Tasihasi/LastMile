@@ -2217,6 +2217,12 @@ body {
   font-weight: 550;
 }
 
+.session-card-assign-option--unassign {
+  border-top: 1px solid var(--color-border);
+  color: var(--color-text-secondary);
+  font-style: italic;
+}
+
 /* Delete confirmation */
 .session-card-confirm {
   position: absolute;

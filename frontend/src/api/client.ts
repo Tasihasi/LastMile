@@ -212,7 +212,7 @@ export async function deleteSession(sessionId: string): Promise<void> {
 
 export async function assignSession(
   sessionId: string,
-  ownerId: number
+  ownerId: number | null
 ): Promise<void> {
   await api.patch(`/sessions/${sessionId}/assign/`, {
     owner_id: ownerId,

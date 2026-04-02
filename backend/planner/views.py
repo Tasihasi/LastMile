@@ -432,8 +432,11 @@ def assign_session(request, session_id):
         return Response({"error": "Session not found."}, status=status.HTTP_404_NOT_FOUND)
 
     owner_id = request.data.get("owner_id")
+
     if owner_id is None:
-        return Response({"error": "owner_id is required."}, status=status.HTTP_400_BAD_REQUEST)
+        session.owner = None
+        session.save(update_fields=["owner"])
+        return Response({"message": "Session unassigned.", "owner_name": None})
 
     try:
         new_owner = User.objects.get(id=int(owner_id))
