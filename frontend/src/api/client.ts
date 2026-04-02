@@ -219,6 +219,17 @@ export async function assignSession(
   });
 }
 
+export async function renameSession(
+  sessionId: string,
+  name: string
+): Promise<{ name: string }> {
+  const { data } = await api.patch<{ name: string }>(
+    `/sessions/${sessionId}/rename/`,
+    { name }
+  );
+  return data;
+}
+
 // ============================================
 // Route Lifecycle
 // ============================================
