@@ -1,10 +1,26 @@
 import uuid
 
+from django.conf import settings
 from django.db import models
+
+
+class UserProfile(models.Model):
+    class Role(models.TextChoices):
+        BIKER = "biker", "Biker"
+        PLANNER = "planner", "Planner"
+
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="profile")
+    role = models.CharField(max_length=10, choices=Role.choices, default=Role.BIKER)
+
+    def __str__(self):
+        return f"{self.user.username} ({self.role})"
 
 
 class DeliverySession(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="sessions", null=True, blank=True
+    )
     original_file = models.FileField(upload_to="uploads/")
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -40,3 +56,12 @@ class DeliveryStop(models.Model):
 
     def __str__(self):
         return f"{self.name} ({self.geocode_status})"
+
+
+class SharedRoute(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    session = models.ForeignKey(DeliverySession, on_delete=models.CASCADE, related_name="shares")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Share {self.id} -> Session {self.session_id}"

@@ -1,5 +1,12 @@
 import axios from "axios";
-import type { SessionResponse, OptimizeResponse } from "../types";
+import type {
+  AuthResponse,
+  OptimizeResponse,
+  SessionResponse,
+  SessionSummary,
+  SharedRouteResponse,
+  User,
+} from "../types";
 
 const API_BASE = "http://localhost:8000/api";
 
@@ -7,15 +14,68 @@ const api = axios.create({
   baseURL: API_BASE,
 });
 
-export async function uploadFile(file: File): Promise<SessionResponse> {
+// Auth interceptor — attach token to every request
+api.interceptors.request.use((config) => {
+  const token = localStorage.getItem("auth-token");
+  if (token) {
+    config.headers.Authorization = `Token ${token}`;
+  }
+  return config;
+});
+
+// ============================================
+// Auth
+// ============================================
+
+export async function login(
+  username: string,
+  role: "biker" | "planner"
+): Promise<AuthResponse> {
+  const { data } = await api.post<AuthResponse>("/auth/login/", {
+    username,
+    role,
+  });
+  return data;
+}
+
+export async function getMe(): Promise<User> {
+  const { data } = await api.get<User>("/auth/me/");
+  return data;
+}
+
+export async function logout(): Promise<void> {
+  await api.post("/auth/logout/");
+}
+
+// ============================================
+// Sessions
+// ============================================
+
+export async function listSessions(
+  ownerId?: number
+): Promise<SessionSummary[]> {
+  const params = ownerId ? { owner_id: ownerId } : {};
+  const { data } = await api.get<SessionSummary[]>("/sessions/", { params });
+  return data;
+}
+
+export async function uploadFile(
+  file: File,
+  ownerId?: number
+): Promise<SessionResponse> {
   const formData = new FormData();
   formData.append("file", file);
+  if (ownerId) formData.append("owner_id", String(ownerId));
   const { data } = await api.post<SessionResponse>("/upload/", formData);
   return data;
 }
 
-export async function getSession(sessionId: string): Promise<SessionResponse> {
-  const { data } = await api.get<SessionResponse>(`/sessions/${sessionId}/`);
+export async function getSession(
+  sessionId: string
+): Promise<SessionResponse> {
+  const { data } = await api.get<SessionResponse>(
+    `/sessions/${sessionId}/`
+  );
   return data;
 }
 
@@ -31,6 +91,10 @@ export async function optimizeRoute(
   return data;
 }
 
+// ============================================
+// Geocoding (NDJSON stream)
+// ============================================
+
 export interface GeocodeProgress {
   stop: import("../types").DeliveryStop;
   progress: { current: number; total: number };
@@ -40,9 +104,14 @@ export async function geocodeStops(
   sessionId: string,
   onProgress: (data: GeocodeProgress) => void
 ): Promise<void> {
-  const response = await fetch(`${API_BASE}/sessions/${sessionId}/geocode/`, {
-    method: "POST",
-  });
+  const token = localStorage.getItem("auth-token");
+  const headers: Record<string, string> = {};
+  if (token) headers["Authorization"] = `Token ${token}`;
+
+  const response = await fetch(
+    `${API_BASE}/sessions/${sessionId}/geocode/`,
+    { method: "POST", headers }
+  );
 
   if (!response.ok) {
     throw new Error("Geocoding request failed");
@@ -72,4 +141,35 @@ export async function geocodeStops(
     const data: GeocodeProgress = JSON.parse(buffer);
     onProgress(data);
   }
+}
+
+// ============================================
+// Sharing
+// ============================================
+
+export async function shareSession(
+  sessionId: string
+): Promise<string> {
+  const { data } = await api.post<{ share_id: string }>(
+    `/sessions/${sessionId}/share/`
+  );
+  return data.share_id;
+}
+
+export async function getSharedRoute(
+  shareId: string
+): Promise<SharedRouteResponse> {
+  const { data } = await api.get<SharedRouteResponse>(
+    `/shared/${shareId}/`
+  );
+  return data;
+}
+
+// ============================================
+// Planner
+// ============================================
+
+export async function listBikers(): Promise<User[]> {
+  const { data } = await api.get<User[]>("/users/bikers/");
+  return data;
 }

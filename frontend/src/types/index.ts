@@ -1,3 +1,27 @@
+export interface User {
+  id: number;
+  username: string;
+  role: "biker" | "planner";
+}
+
+export interface AuthResponse {
+  token: string;
+  user: User;
+}
+
+export interface SessionSummary {
+  id: string;
+  created_at: string;
+  owner_name: string | null;
+  stop_count: number;
+}
+
+export interface SharedRouteResponse {
+  id: string;
+  session: SessionResponse;
+  created_at: string;
+}
+
 export interface DeliveryStop {
   id: number;
   name: string;

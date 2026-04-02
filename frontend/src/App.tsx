@@ -2,16 +2,24 @@ import { useCallback, useMemo, useState } from "react";
 import { useDeliveryPlanner } from "./hooks/useDeliveryPlanner";
 import { useTheme } from "./hooks/useTheme";
 import { useSettings } from "./hooks/useSettings";
+import { useAuth } from "./hooks/useAuth";
 import { FileUpload } from "./components/FileUpload";
 import { AddressList } from "./components/AddressList";
 import { DeliveryMap } from "./components/DeliveryMap";
 import { StopDetail } from "./components/StopDetail";
 import { SettingsPanel } from "./components/SettingsPanel";
+import { LoginScreen } from "./components/LoginScreen";
+import { SessionList } from "./components/SessionList";
+import { BikerPicker } from "./components/BikerPicker";
+import { shareSession } from "./api/client";
 import { formatDuration, formatDistance, formatTime, calcArrivalTimes } from "./utils/format";
+import type { User } from "./types";
 import "./App.css";
 
 function App() {
+  const { user, logout, isPlanner } = useAuth();
   const {
+    sessionId,
     stops,
     needsGeocoding,
     isUploading,
@@ -23,6 +31,7 @@ function App() {
     totalDistance,
     error,
     uploadFile,
+    loadSession,
     geocode,
     optimize,
     reset,
@@ -33,6 +42,10 @@ function App() {
   const [selectedStopId, setSelectedStopId] = useState<number | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [showUpload, setShowUpload] = useState(false);
+  const [selectedBikerId, setSelectedBikerId] = useState<number | null>(null);
+  const [shareLoading, setShareLoading] = useState(false);
+  const [shareCopied, setShareCopied] = useState(false);
 
   const locatedCount = stops.filter(
     (s) => s.lat != null && s.lng != null
@@ -45,7 +58,7 @@ function App() {
 
   const selectStop = useCallback((id: number) => {
     setSelectedStopId(id);
-    setSidebarOpen(false); // close sidebar drawer on mobile
+    setSidebarOpen(false);
   }, []);
 
   const selectedStop = selectedStopId != null
@@ -55,32 +68,66 @@ function App() {
   const hasDepot = settings.homeLat != null && settings.homeLng != null;
   const depot = hasDepot ? { lat: settings.homeLat!, lng: settings.homeLng!, address: settings.homeAddress } : null;
 
-  // Calculate arrival times based on settings + segments
   const arrivalTimes = useMemo(() => {
     if (!routeSegments) return null;
     return calcArrivalTimes(routeSegments, settings, stops.length, hasDepot);
   }, [routeSegments, settings, stops.length, hasDepot]);
 
-  // Finish time = return home time (if depot) or last stop arrival + dwell
   const finishTime = useMemo(() => {
     if (!arrivalTimes) return null;
     if (hasDepot) {
-      return arrivalTimes.get(-1) ?? null; // return home
+      return arrivalTimes.get(-1) ?? null;
     }
-    // No depot: last stop + dwell
     const lastOrder = stops.reduce((max, s) => Math.max(max, s.sequence_order ?? 0), 0);
     const lastArrival = arrivalTimes.get(lastOrder);
     if (!lastArrival) return null;
     return new Date(lastArrival.getTime() + settings.dwellMinutes * 60 * 1000);
   }, [arrivalTimes, hasDepot, stops, settings.dwellMinutes]);
 
-  // Total route time from start to finish
   const totalRouteTime = useMemo(() => {
     if (!arrivalTimes || !finishTime) return null;
     const startPoint = arrivalTimes.get(hasDepot ? 0 : 1);
     if (!startPoint) return null;
     return Math.round((finishTime.getTime() - startPoint.getTime()) / 1000);
   }, [arrivalTimes, finishTime, hasDepot]);
+
+  const handleShare = async () => {
+    if (!sessionId) return;
+    setShareLoading(true);
+    try {
+      const shareId = await shareSession(sessionId);
+      const url = `${window.location.origin}/shared/${shareId}`;
+      await navigator.clipboard.writeText(url);
+      setShareCopied(true);
+      setTimeout(() => setShareCopied(false), 2000);
+    } catch {
+      // fallback
+    } finally {
+      setShareLoading(false);
+    }
+  };
+
+  const handleStartOver = () => {
+    reset();
+    setShowUpload(false);
+  };
+
+  const handleNewRoute = () => {
+    reset();
+    setShowUpload(true);
+  };
+
+  const handleSelectSession = (id: string) => {
+    loadSession(id);
+    setShowUpload(false);
+  };
+
+  // Show session list when no active session and not uploading
+  const showSessionList = stops.length === 0 && !showUpload;
+
+  if (!user) {
+    return <LoginScreen />;
+  }
 
   return (
     <div className="app">
@@ -92,6 +139,15 @@ function App() {
             </svg>
           </div>
           <h1>Route Planner</h1>
+          {isPlanner && (
+            <BikerPicker
+              selectedBikerId={selectedBikerId}
+              onSelectBiker={(biker: User | null) => {
+                setSelectedBikerId(biker?.id ?? null);
+                handleStartOver();
+              }}
+            />
+          )}
         </div>
         <div className="app-header-right">
           {stops.length > 0 && (
@@ -109,7 +165,7 @@ function App() {
             </button>
           )}
           {stops.length > 0 && (
-            <button className="btn btn-ghost btn-ghost--start-over" onClick={reset}>
+            <button className="btn btn-ghost btn-ghost--start-over" onClick={handleStartOver}>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <polyline points="1 4 1 10 7 10" />
                 <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
@@ -154,12 +210,20 @@ function App() {
               </svg>
             )}
           </button>
+          <button className="btn btn-ghost user-badge" onClick={logout} title="Sign out">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+              <polyline points="16 17 21 12 16 7" />
+              <line x1="21" y1="12" x2="9" y2="12" />
+            </svg>
+            <span className="user-badge-name">{user.username}</span>
+          </button>
         </div>
       </header>
 
       <div className="app-layout">
         {sidebarOpen && <div className="sidebar-overlay" onClick={() => setSidebarOpen(false)} />}
-        <aside className={`sidebar ${sidebarOpen || stops.length === 0 ? "sidebar--open" : ""}`}>
+        <aside className={`sidebar ${sidebarOpen || showSessionList || showUpload ? "sidebar--open" : ""}`}>
           <div className="sidebar-content">
             {error && (
               <div className="error-banner">
@@ -179,7 +243,26 @@ function App() {
               onClose={() => setSettingsOpen(false)}
             />
 
-            {stops.length === 0 ? (
+            {showSessionList ? (
+              <SessionList
+                ownerId={isPlanner ? (selectedBikerId ?? undefined) : undefined}
+                onSelectSession={handleSelectSession}
+                onNewRoute={handleNewRoute}
+              />
+            ) : showUpload && stops.length === 0 ? (
+              <div>
+                <button className="btn btn-ghost" onClick={() => setShowUpload(false)} style={{ marginBottom: 8 }}>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ width: 16, height: 16 }}>
+                    <polyline points="15 18 9 12 15 6" />
+                  </svg>
+                  Back to sessions
+                </button>
+                <FileUpload
+                  onUpload={(file) => uploadFile(file, isPlanner ? (selectedBikerId ?? undefined) : undefined)}
+                  isUploading={isUploading}
+                />
+              </div>
+            ) : stops.length === 0 ? (
               <FileUpload onUpload={uploadFile} isUploading={isUploading} />
             ) : (
               <>
@@ -221,6 +304,27 @@ function App() {
                     <div className="route-summary-item">
                       <span className="route-summary-time">{settings.startTime} - {formatTime(finishTime)}</span>
                     </div>
+                    <button
+                      className="btn btn-ghost share-btn"
+                      onClick={handleShare}
+                      disabled={shareLoading}
+                      title="Copy share link"
+                    >
+                      {shareCopied ? (
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="20 6 9 17 4 12" />
+                        </svg>
+                      ) : (
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <circle cx="18" cy="5" r="3" />
+                          <circle cx="6" cy="12" r="3" />
+                          <circle cx="18" cy="19" r="3" />
+                          <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
+                          <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
+                        </svg>
+                      )}
+                      {shareCopied ? "Copied!" : "Share"}
+                    </button>
                   </div>
                 )}
 

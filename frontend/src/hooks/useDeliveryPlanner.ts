@@ -2,6 +2,7 @@ import { useState, useCallback } from "react";
 import type { DeliveryStop, RouteSegment, SessionResponse } from "../types";
 import {
   uploadFile as apiUpload,
+  getSession as apiGetSession,
   geocodeStops as apiGeocode,
   optimizeRoute as apiOptimize,
 } from "../api/client";
@@ -22,11 +23,11 @@ export function useDeliveryPlanner() {
   const [totalDistance, setTotalDistance] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const uploadFile = useCallback(async (file: File) => {
+  const uploadFile = useCallback(async (file: File, ownerId?: number) => {
     setIsUploading(true);
     setError(null);
     try {
-      const session: SessionResponse = await apiUpload(file);
+      const session: SessionResponse = await apiUpload(file, ownerId);
       setSessionId(session.id);
       setStops(session.stops);
       setNeedsGeocoding(session.needs_geocoding);
@@ -43,6 +44,22 @@ export function useDeliveryPlanner() {
       }
     } finally {
       setIsUploading(false);
+    }
+  }, []);
+
+  const loadSession = useCallback(async (id: string) => {
+    setError(null);
+    try {
+      const session = await apiGetSession(id);
+      setSessionId(session.id);
+      setStops(session.stops);
+      setNeedsGeocoding(session.needs_geocoding);
+      setRouteGeometry(null);
+      setRouteSegments(null);
+      setTotalDuration(null);
+      setTotalDistance(null);
+    } catch {
+      setError("Failed to load session.");
     }
   }, []);
 
@@ -120,6 +137,7 @@ export function useDeliveryPlanner() {
     totalDistance,
     error,
     uploadFile,
+    loadSession,
     geocode,
     optimize,
     reset,
