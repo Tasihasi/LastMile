@@ -1,5 +1,5 @@
 import { useState, useCallback } from "react";
-import type { DeliveryStop, SessionResponse } from "../types";
+import type { DeliveryStop, RouteSegment, SessionResponse } from "../types";
 import {
   uploadFile as apiUpload,
   geocodeStops as apiGeocode,
@@ -17,6 +17,9 @@ export function useDeliveryPlanner() {
   const [routeGeometry, setRouteGeometry] = useState<GeoJSON.LineString | null>(
     null
   );
+  const [routeSegments, setRouteSegments] = useState<RouteSegment[] | null>(null);
+  const [totalDuration, setTotalDuration] = useState<number | null>(null);
+  const [totalDistance, setTotalDistance] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const uploadFile = useCallback(async (file: File) => {
@@ -28,6 +31,9 @@ export function useDeliveryPlanner() {
       setStops(session.stops);
       setNeedsGeocoding(session.needs_geocoding);
       setRouteGeometry(null);
+      setRouteSegments(null);
+      setTotalDuration(null);
+      setTotalDistance(null);
     } catch (err: unknown) {
       if (err && typeof err === "object" && "response" in err) {
         const axiosErr = err as { response?: { data?: { error?: string } } };
@@ -71,6 +77,9 @@ export function useDeliveryPlanner() {
       const result = await apiOptimize(sessionId);
       setStops(result.optimized_stops);
       setRouteGeometry(result.route_geometry);
+      setRouteSegments(result.route_segments);
+      setTotalDuration(result.total_duration);
+      setTotalDistance(result.total_distance);
     } catch (err: unknown) {
       if (err && typeof err === "object" && "response" in err) {
         const axiosErr = err as { response?: { data?: { error?: string } } };
@@ -91,6 +100,9 @@ export function useDeliveryPlanner() {
     setGeocodeProgress("");
     setIsOptimizing(false);
     setRouteGeometry(null);
+    setRouteSegments(null);
+    setTotalDuration(null);
+    setTotalDistance(null);
     setError(null);
   }, []);
 
@@ -103,6 +115,9 @@ export function useDeliveryPlanner() {
     geocodeProgress,
     isOptimizing,
     routeGeometry,
+    routeSegments,
+    totalDuration,
+    totalDistance,
     error,
     uploadFile,
     geocode,

@@ -19,7 +19,17 @@ export interface SessionResponse {
   needs_geocoding: boolean;
 }
 
+export interface RouteSegment {
+  from_index: number;
+  to_index: number;
+  duration: number; // seconds
+  distance: number; // meters
+}
+
 export interface OptimizeResponse {
   optimized_stops: DeliveryStop[];
   route_geometry: GeoJSON.LineString | null;
+  route_segments: RouteSegment[] | null;
+  total_duration: number | null; // seconds
+  total_distance: number | null; // meters
 }

@@ -8,7 +8,7 @@ from rest_framework.response import Response
 
 from .geocoder import geocode_address
 from .models import DeliverySession, DeliveryStop
-from .optimizer import get_route_geometry, optimize_route
+from .optimizer import get_route_details, optimize_route
 from .parsers import parse_file
 from .serializers import DeliverySessionSerializer, DeliveryStopSerializer
 
@@ -193,16 +193,19 @@ def optimize(request, session_id):
         stop.sequence_order = order
         stop.save(update_fields=["sequence_order"])
 
-    # Get the route geometry along real roads
+    # Get the route geometry and timing along real roads
     ordered_stops = [id_to_stop[sid] for sid in ordered_ids]
     try:
-        geometry = get_route_geometry(ordered_stops)
+        route = get_route_details(ordered_stops)
     except Exception:
-        geometry = None
+        route = None
 
     return Response(
         {
             "optimized_stops": DeliveryStopSerializer(ordered_stops, many=True).data,
-            "route_geometry": geometry,
+            "route_geometry": route["geometry"] if route else None,
+            "route_segments": route["segments"] if route else None,
+            "total_duration": route["total_duration"] if route else None,
+            "total_distance": route["total_distance"] if route else None,
         }
     )

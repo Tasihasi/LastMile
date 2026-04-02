@@ -50,10 +50,10 @@ def optimize_route(stops) -> list[int]:
     return ordered_ids
 
 
-def get_route_geometry(ordered_stops) -> dict | None:
+def get_route_details(ordered_stops) -> dict | None:
     """
-    Call ORS directions to get the actual road route as GeoJSON.
-    Returns GeoJSON LineString geometry or None.
+    Call ORS directions to get route geometry and segment durations/distances.
+    Returns {geometry, segments, total_duration, total_distance} or None.
     """
     if len(ordered_stops) < 2:
         return None
@@ -69,4 +69,27 @@ def get_route_geometry(ordered_stops) -> dict | None:
     response.raise_for_status()
     data = response.json()
 
-    return data["features"][0]["geometry"]
+    feature = data["features"][0]
+    geometry = feature["geometry"]
+    segments = feature["properties"]["segments"]
+
+    route_segments = []
+    for i, seg in enumerate(segments):
+        route_segments.append(
+            {
+                "from_index": i,
+                "to_index": i + 1,
+                "duration": round(seg["duration"]),
+                "distance": round(seg["distance"]),
+            }
+        )
+
+    total_duration = round(sum(s["duration"] for s in segments))
+    total_distance = round(sum(s["distance"] for s in segments))
+
+    return {
+        "geometry": geometry,
+        "segments": route_segments,
+        "total_duration": total_duration,
+        "total_distance": total_distance,
+    }

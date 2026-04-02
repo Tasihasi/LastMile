@@ -1,9 +1,12 @@
 import { useState } from "react";
-import type { DeliveryStop } from "../types";
+import type { DeliveryStop, RouteSegment } from "../types";
+import { formatDuration, formatDistance } from "../utils/format";
 
 interface StopDetailProps {
   stop: DeliveryStop;
   onClose: () => void;
+  routeSegments: RouteSegment[] | null;
+  stops: DeliveryStop[];
 }
 
 function CopyButton({ text }: { text: string }) {
@@ -38,8 +41,20 @@ function CopyButton({ text }: { text: string }) {
   );
 }
 
-export function StopDetail({ stop, onClose }: StopDetailProps) {
+export function StopDetail({ stop, onClose, routeSegments, stops }: StopDetailProps) {
   const hasDetails = stop.product_code || stop.recipient_name || stop.recipient_phone;
+
+  // Find the segment leading to this stop (from the previous stop)
+  let segmentToHere: RouteSegment | null = null;
+  let fromStopName: string | null = null;
+  if (routeSegments && stop.sequence_order != null && stop.sequence_order > 1) {
+    const segIndex = stop.sequence_order - 2; // segment[0] connects stop 1 -> stop 2
+    if (segIndex >= 0 && segIndex < routeSegments.length) {
+      segmentToHere = routeSegments[segIndex];
+      const prevStop = stops.find((s) => s.sequence_order === stop.sequence_order! - 1);
+      if (prevStop) fromStopName = prevStop.name;
+    }
+  }
 
   return (
     <div className="stop-detail-overlay" onClick={onClose}>
@@ -55,6 +70,33 @@ export function StopDetail({ stop, onClose }: StopDetailProps) {
         </div>
 
         <div className="stop-detail-body">
+          {/* Travel info from previous stop */}
+          {segmentToHere && (
+            <>
+              <div className="detail-travel">
+                <div className="detail-travel-row">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="10" />
+                    <polyline points="12 6 12 12 16 14" />
+                  </svg>
+                  <span>{formatDuration(segmentToHere.duration)}</span>
+                </div>
+                <div className="detail-travel-row">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M18 6L6 18M6 6l12 12" opacity="0" />
+                    <circle cx="12" cy="12" r="1" fill="currentColor" />
+                    <path d="M5 12h14" />
+                  </svg>
+                  <span>{formatDistance(segmentToHere.distance)}</span>
+                </div>
+                {fromStopName && (
+                  <span className="detail-travel-from">from {fromStopName}</span>
+                )}
+              </div>
+              <div className="detail-divider" />
+            </>
+          )}
+
           {stop.raw_address && (
             <div className="detail-row">
               <span className="detail-label">Address</span>
