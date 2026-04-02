@@ -19,6 +19,8 @@ urlpatterns = [
     path("sessions/<uuid:session_id>/share/", views.share_session, name="share-session"),
     path("sessions/<uuid:session_id>/delete/", views.delete_session, name="delete-session"),
     path("sessions/<uuid:session_id>/assign/", views.assign_session, name="assign-session"),
+    path("sessions/<uuid:session_id>/start/", views.start_route, name="start-route"),
+    path("sessions/<uuid:session_id>/stops/<int:stop_id>/status/", views.update_stop_status, name="update-stop-status"),
     # Public sharing
     path("shared/<uuid:share_id>/", views.get_shared_route, name="get-shared-route"),
 ]

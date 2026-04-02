@@ -36,6 +36,7 @@ class DeliveryStopSerializer(serializers.ModelSerializer):
             "geocode_status",
             "geocode_error",
             "sequence_order",
+            "delivery_status",
         ]
 
 
@@ -55,6 +56,10 @@ class DeliverySessionSerializer(serializers.ModelSerializer):
             "needs_geocoding",
             "total_duration",
             "total_distance",
+            "status",
+            "started_at",
+            "finished_at",
+            "current_stop_index",
         ]
 
     def get_needs_geocoding(self, obj):
@@ -66,10 +71,30 @@ class SessionListSerializer(serializers.ModelSerializer):
 
     stop_count = serializers.IntegerField(source="stops.count", read_only=True)
     owner_name = serializers.CharField(source="owner.username", read_only=True, default=None)
+    delivered_count = serializers.SerializerMethodField()
+    not_received_count = serializers.SerializerMethodField()
+    current_stop_name = serializers.SerializerMethodField()
 
     class Meta:
         model = DeliverySession
-        fields = ["id", "name", "created_at", "owner_name", "stop_count", "total_duration", "total_distance"]
+        fields = [
+            "id", "name", "created_at", "owner_name", "stop_count",
+            "total_duration", "total_distance", "status", "started_at",
+            "finished_at", "current_stop_index", "delivered_count",
+            "not_received_count", "current_stop_name",
+        ]
+
+    def get_delivered_count(self, obj):
+        return obj.stops.filter(delivery_status="delivered").count()
+
+    def get_not_received_count(self, obj):
+        return obj.stops.filter(delivery_status="not_received").count()
+
+    def get_current_stop_name(self, obj):
+        if obj.current_stop_index is None:
+            return None
+        stop = obj.stops.filter(sequence_order=obj.current_stop_index).first()
+        return stop.name if stop else None
 
 
 class SharedRouteSerializer(serializers.ModelSerializer):

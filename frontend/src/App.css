@@ -2475,3 +2475,286 @@ body {
     font-size: 1rem;
   }
 }
+
+/* ============================================
+   Route Status Banner (sidebar)
+   ============================================ */
+.route-status-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: var(--radius-md);
+  font-size: 0.82rem;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.route-status-banner--active {
+  background: var(--color-primary-light);
+  color: var(--color-primary);
+}
+
+.route-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-primary);
+  animation: pulse-dot 1.5s ease-in-out infinite;
+  flex-shrink: 0;
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(0.8); }
+}
+
+.route-status-banner--finished {
+  background: var(--color-success-bg);
+  color: var(--color-success-text);
+}
+
+.route-status-banner--finished svg {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+
+/* ============================================
+   Start Route Button
+   ============================================ */
+.btn-start-route {
+  background: var(--color-success) !important;
+  color: #fff !important;
+  font-weight: 600;
+  font-size: 0.95rem;
+  padding: 12px 20px;
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: center;
+  border: none;
+  cursor: pointer;
+  transition: background var(--transition), transform var(--transition);
+}
+
+.btn-start-route:hover {
+  background: #059669 !important;
+  transform: translateY(-1px);
+}
+
+.btn-start-route svg {
+  width: 18px;
+  height: 18px;
+}
+
+/* ============================================
+   Stop Item — Current & Completed States
+   ============================================ */
+.stop-item--current {
+  background: var(--color-primary-light) !important;
+  border: 2px solid var(--color-primary) !important;
+  border-radius: var(--radius-md);
+}
+
+.stop-item--completed {
+  opacity: 0.65;
+}
+
+.stop-number--done {
+  background: var(--color-success) !important;
+  color: #fff !important;
+}
+
+.stop-number--done svg {
+  width: 14px;
+  height: 14px;
+}
+
+.stop-number--current {
+  background: var(--color-primary) !important;
+  color: #fff !important;
+  animation: pulse-dot 1.5s ease-in-out infinite;
+}
+
+.stop-current-label {
+  font-weight: 700;
+  color: var(--color-primary);
+  margin-right: 2px;
+}
+
+/* ============================================
+   Delivery Status Badges
+   ============================================ */
+.delivery-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  font-size: 0.7rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.delivery-badge--delivered {
+  background: var(--color-success-bg);
+  color: var(--color-success-text);
+}
+
+.delivery-badge--not-received {
+  background: var(--color-danger-bg);
+  color: var(--color-danger-text);
+}
+
+.delivery-badge--skipped {
+  background: var(--color-warning-bg);
+  color: var(--color-warning-text);
+}
+
+/* ============================================
+   Stop Action Buttons (mark delivered, etc.)
+   ============================================ */
+.stop-actions {
+  display: flex;
+  gap: 6px;
+  padding: 6px 0 6px 36px;
+}
+
+.stop-action-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  font-size: 0.72rem;
+  font-weight: 600;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.stop-action-btn svg {
+  width: 13px;
+  height: 13px;
+}
+
+.stop-action-btn--delivered:hover {
+  background: var(--color-success-bg);
+  color: var(--color-success-text);
+  border-color: var(--color-success);
+}
+
+.stop-action-btn--not-received:hover {
+  background: var(--color-danger-bg);
+  color: var(--color-danger-text);
+  border-color: var(--color-danger);
+}
+
+.stop-action-btn--skipped:hover {
+  background: var(--color-warning-bg);
+  color: var(--color-warning-text);
+  border-color: currentColor;
+}
+
+/* ============================================
+   Session Card — Status Badges & Progress
+   ============================================ */
+.session-card-name-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.session-card-status {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 7px;
+  border-radius: var(--radius-full);
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.session-card-status--active {
+  background: var(--color-primary-light);
+  color: var(--color-primary);
+}
+
+.session-card-status--finished {
+  background: var(--color-success-bg);
+  color: var(--color-success-text);
+}
+
+.session-card-progress {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 3px;
+}
+
+.session-card-progress-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-primary);
+  animation: pulse-dot 1.5s ease-in-out infinite;
+  flex-shrink: 0;
+}
+
+.session-card-progress-text {
+  font-size: 0.72rem;
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.session-card-progress--warning .session-card-progress-text {
+  color: var(--color-danger);
+}
+
+/* ============================================
+   Dashboard — Finished Routes Bin
+   ============================================ */
+.dashboard-finished {
+  margin-top: 16px;
+  padding: 16px;
+  background: var(--color-surface);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-border);
+}
+
+.dashboard-finished-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--color-border-light);
+}
+
+.dashboard-finished-header svg {
+  width: 18px;
+  height: 18px;
+  color: var(--color-success);
+  flex-shrink: 0;
+}
+
+.dashboard-finished-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 8px;
+}
+
+.dashboard-finished .session-card {
+  opacity: 0.75;
+}
+
+.dashboard-finished .session-card:hover {
+  opacity: 1;
+}

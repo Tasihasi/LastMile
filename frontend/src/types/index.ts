@@ -9,6 +9,8 @@ export interface AuthResponse {
   user: User;
 }
 
+export type SessionStatus = "not_started" | "in_progress" | "finished";
+
 export interface SessionSummary {
   id: string;
   name: string;
@@ -17,6 +19,13 @@ export interface SessionSummary {
   stop_count: number;
   total_duration: number | null;
   total_distance: number | null;
+  status: SessionStatus;
+  started_at: string | null;
+  finished_at: string | null;
+  current_stop_index: number | null;
+  delivered_count: number;
+  not_received_count: number;
+  current_stop_name: string | null;
 }
 
 export interface SharedRouteResponse {
@@ -24,6 +33,8 @@ export interface SharedRouteResponse {
   session: SessionResponse;
   created_at: string;
 }
+
+export type DeliveryStopStatus = "pending" | "delivered" | "not_received" | "skipped";
 
 export interface DeliveryStop {
   id: number;
@@ -37,6 +48,7 @@ export interface DeliveryStop {
   geocode_status: "pending" | "success" | "failed" | "skipped";
   geocode_error: string;
   sequence_order: number | null;
+  delivery_status: DeliveryStopStatus;
 }
 
 export interface SessionResponse {
@@ -44,6 +56,10 @@ export interface SessionResponse {
   created_at: string;
   stops: DeliveryStop[];
   needs_geocoding: boolean;
+  status: SessionStatus;
+  started_at: string | null;
+  finished_at: string | null;
+  current_stop_index: number | null;
 }
 
 export interface RouteSegment {

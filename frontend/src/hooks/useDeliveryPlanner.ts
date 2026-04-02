@@ -1,10 +1,12 @@
 import { useState, useCallback } from "react";
-import type { DeliveryStop, RouteSegment, SessionResponse } from "../types";
+import type { DeliveryStop, DeliveryStopStatus, RouteSegment, SessionResponse, SessionStatus } from "../types";
 import {
   uploadFile as apiUpload,
   getSession as apiGetSession,
   geocodeStops as apiGeocode,
   optimizeRoute as apiOptimize,
+  startRoute as apiStartRoute,
+  updateStopStatus as apiUpdateStopStatus,
 } from "../api/client";
 
 export function useDeliveryPlanner() {
@@ -22,6 +24,8 @@ export function useDeliveryPlanner() {
   const [totalDuration, setTotalDuration] = useState<number | null>(null);
   const [totalDistance, setTotalDistance] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [sessionStatus, setSessionStatus] = useState<SessionStatus>("not_started");
+  const [currentStopIndex, setCurrentStopIndex] = useState<number | null>(null);
 
   const uploadFile = useCallback(async (file: File, ownerId?: number) => {
     setIsUploading(true);
@@ -31,6 +35,8 @@ export function useDeliveryPlanner() {
       setSessionId(session.id);
       setStops(session.stops);
       setNeedsGeocoding(session.needs_geocoding);
+      setSessionStatus(session.status);
+      setCurrentStopIndex(session.current_stop_index);
       setRouteGeometry(null);
       setRouteSegments(null);
       setTotalDuration(null);
@@ -54,6 +60,8 @@ export function useDeliveryPlanner() {
       setSessionId(session.id);
       setStops(session.stops);
       setNeedsGeocoding(session.needs_geocoding);
+      setSessionStatus(session.status);
+      setCurrentStopIndex(session.current_stop_index);
       setRouteGeometry(null);
       setRouteSegments(null);
       setTotalDuration(null);
@@ -109,6 +117,31 @@ export function useDeliveryPlanner() {
     }
   }, [sessionId]);
 
+  const startDeliveryRoute = useCallback(async () => {
+    if (!sessionId) return;
+    setError(null);
+    try {
+      const result = await apiStartRoute(sessionId);
+      setSessionStatus(result.status);
+      setCurrentStopIndex(result.current_stop_index);
+    } catch {
+      setError("Failed to start route.");
+    }
+  }, [sessionId]);
+
+  const markStop = useCallback(async (stopId: number, deliveryStatus: DeliveryStopStatus) => {
+    if (!sessionId) return;
+    setError(null);
+    try {
+      const result = await apiUpdateStopStatus(sessionId, stopId, deliveryStatus);
+      setStops((prev) => prev.map((s) => (s.id === result.stop.id ? result.stop : s)));
+      setSessionStatus(result.session_status as SessionStatus);
+      setCurrentStopIndex(result.current_stop_index);
+    } catch {
+      setError("Failed to update stop.");
+    }
+  }, [sessionId]);
+
   const reset = useCallback(() => {
     setSessionId(null);
     setStops([]);
@@ -120,6 +153,8 @@ export function useDeliveryPlanner() {
     setRouteSegments(null);
     setTotalDuration(null);
     setTotalDistance(null);
+    setSessionStatus("not_started");
+    setCurrentStopIndex(null);
     setError(null);
   }, []);
 
@@ -136,10 +171,14 @@ export function useDeliveryPlanner() {
     totalDuration,
     totalDistance,
     error,
+    sessionStatus,
+    currentStopIndex,
     uploadFile,
     loadSession,
     geocode,
     optimize,
+    startDeliveryRoute,
+    markStop,
     reset,
   };
 }

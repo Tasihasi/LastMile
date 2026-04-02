@@ -29,10 +29,14 @@ function App() {
     routeSegments,
     totalDistance,
     error,
+    sessionStatus,
+    currentStopIndex,
     uploadFile,
     loadSession,
     geocode,
     optimize,
+    startDeliveryRoute,
+    markStop,
     reset,
   } = useDeliveryPlanner();
 
@@ -324,8 +328,34 @@ function App() {
                   <GeocodeProgress progress={geocodeProgress} />
                 )}
 
+                {/* Route status banner */}
+                {sessionStatus === "in_progress" && (
+                  <div className="route-status-banner route-status-banner--active">
+                    <span className="route-status-dot" />
+                    Route in progress — {stops.filter(s => s.delivery_status !== "pending").length}/{stops.length} stops done
+                  </div>
+                )}
+                {sessionStatus === "finished" && (
+                  <div className="route-status-banner route-status-banner--finished">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+                    Route completed
+                  </div>
+                )}
+
                 {/* Action buttons */}
                 <div className="sidebar-actions">
+                  {/* Start Route — only for bikers with optimized, not-started routes */}
+                  {isOptimized && sessionStatus === "not_started" && !isPlanner && (
+                    <button
+                      className="btn btn-start-route"
+                      onClick={startDeliveryRoute}
+                    >
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <polygon points="5 3 19 12 5 21 5 3" />
+                      </svg>
+                      Start Route
+                    </button>
+                  )}
                   {needsGeocoding && (
                     <button
                       className="btn btn-primary"
@@ -384,6 +414,9 @@ function App() {
                   arrivalTimes={arrivalTimes}
                   speedKmh={settings.speedKmh}
                   depot={depot}
+                  sessionStatus={sessionStatus}
+                  currentStopIndex={currentStopIndex}
+                  onMarkStop={markStop}
                 />
               </>
             )}

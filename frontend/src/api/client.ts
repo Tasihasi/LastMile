@@ -1,6 +1,7 @@
 import axios from "axios";
 import type {
   AuthResponse,
+  DeliveryStopStatus,
   OptimizeResponse,
   SessionResponse,
   SessionSummary,
@@ -185,4 +186,33 @@ export async function assignSession(
   await api.patch(`/sessions/${sessionId}/assign/`, {
     owner_id: ownerId,
   });
+}
+
+// ============================================
+// Route Lifecycle
+// ============================================
+
+export async function startRoute(
+  sessionId: string
+): Promise<SessionSummary> {
+  const { data } = await api.patch<SessionSummary>(
+    `/sessions/${sessionId}/start/`
+  );
+  return data;
+}
+
+export async function updateStopStatus(
+  sessionId: string,
+  stopId: number,
+  status: DeliveryStopStatus
+): Promise<{
+  stop: import("../types").DeliveryStop;
+  session_status: string;
+  current_stop_index: number | null;
+}> {
+  const { data } = await api.patch(
+    `/sessions/${sessionId}/stops/${stopId}/status/`,
+    { status }
+  );
+  return data;
 }

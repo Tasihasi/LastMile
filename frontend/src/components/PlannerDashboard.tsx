@@ -108,13 +108,17 @@ export function PlannerDashboard({ onViewSession }: PlannerDashboardProps) {
     await handleAssign(draggingId, target);
   };
 
-  // Group sessions by owner
-  const unassigned = sessions.filter((s) => !s.owner_name);
+  // Separate finished routes
+  const finishedSessions = sessions.filter((s) => s.status === "finished");
+  const activeSessions = sessions.filter((s) => s.status !== "finished");
+
+  // Group active sessions by owner
+  const unassigned = activeSessions.filter((s) => !s.owner_name);
   const bikerSessions = new Map<string, SessionSummary[]>();
   for (const biker of bikers) {
     bikerSessions.set(
       biker.username,
-      sessions.filter((s) => s.owner_name === biker.username)
+      activeSessions.filter((s) => s.owner_name === biker.username)
     );
   }
 
@@ -257,6 +261,39 @@ export function PlannerDashboard({ onViewSession }: PlannerDashboardProps) {
         </div>
 
       </div>
+
+      {/* Finished Routes Bin */}
+      {finishedSessions.length > 0 && (
+        <div className="dashboard-finished">
+          <div className="dashboard-finished-header">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="20 6 9 17 4 12" />
+            </svg>
+            <span className="dashboard-column-title">Finished Routes</span>
+            <span className="dashboard-column-count">{finishedSessions.length}</span>
+          </div>
+          <div className="dashboard-finished-cards">
+            {finishedSessions.map((s) => (
+              <SessionCard
+                key={s.id}
+                session={s}
+                bikers={bikers}
+                assignDropdown={assignDropdown}
+                confirmDelete={confirmDelete}
+                isDragging={draggingId === s.id}
+                onDragStart={() => handleDragStart(s.id)}
+                onDragEnd={handleDragEnd}
+                onView={() => onViewSession(s.id)}
+                onAssignOpen={() => setAssignDropdown(assignDropdown === s.id ? null : s.id)}
+                onAssign={(ownerId) => handleAssign(s.id, ownerId)}
+                onDeleteConfirm={() => setConfirmDelete(s.id)}
+                onDeleteCancel={() => setConfirmDelete(null)}
+                onDelete={() => handleDelete(s.id)}
+              />
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -316,10 +353,21 @@ function SessionCard({
         </svg>
       </div>
       <div className="session-card-info" onClick={onView} role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === "Enter") onView(); }}>
-        <span className="session-card-name">{session.name || "Untitled Route"}</span>
+        <div className="session-card-name-row">
+          <span className="session-card-name">{session.name || "Untitled Route"}</span>
+          {session.status === "in_progress" && (
+            <span className="session-card-status session-card-status--active">In Progress</span>
+          )}
+          {session.status === "finished" && (
+            <span className="session-card-status session-card-status--finished">Done</span>
+          )}
+        </div>
         <div className="session-card-meta">
           <span className="session-card-stops">
-            {session.stop_count} stop{session.stop_count !== 1 ? "s" : ""}
+            {session.status === "in_progress" || session.status === "finished"
+              ? `${session.delivered_count + session.not_received_count}/${session.stop_count} stops`
+              : `${session.stop_count} stop${session.stop_count !== 1 ? "s" : ""}`
+            }
           </span>
           {session.total_duration != null && (
             <span className="session-card-duration">
@@ -327,6 +375,17 @@ function SessionCard({
             </span>
           )}
         </div>
+        {session.status === "in_progress" && session.current_stop_name && (
+          <div className="session-card-progress">
+            <span className="session-card-progress-dot" />
+            <span className="session-card-progress-text">Heading to: {session.current_stop_name}</span>
+          </div>
+        )}
+        {session.status === "finished" && session.not_received_count > 0 && (
+          <div className="session-card-progress session-card-progress--warning">
+            <span className="session-card-progress-text">{session.not_received_count} not received</span>
+          </div>
+        )}
       </div>
       <div className="session-card-actions">
         {/* View */}
