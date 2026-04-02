@@ -119,7 +119,36 @@ export function PlannerDashboard({ onViewSession }: PlannerDashboardProps) {
       </div>
 
       <div className="dashboard-layout">
-        {/* Left: Bikers stacked vertically */}
+        {/* Left: Unassigned routes */}
+        {unassigned.length > 0 && (
+          <div className="dashboard-unassigned">
+            <div className="dashboard-column">
+              <div className="dashboard-column-header">
+                <span className="dashboard-column-title">Unassigned</span>
+                <span className="dashboard-column-count">{unassigned.length}</span>
+              </div>
+              <div className="dashboard-column-cards">
+                {unassigned.map((s) => (
+                  <SessionCard
+                    key={s.id}
+                    session={s}
+                    bikers={bikers}
+                    assignDropdown={assignDropdown}
+                    confirmDelete={confirmDelete}
+                    onView={() => onViewSession(s.id)}
+                    onAssignOpen={() => setAssignDropdown(assignDropdown === s.id ? null : s.id)}
+                    onAssign={(ownerId) => handleAssign(s.id, ownerId)}
+                    onDeleteConfirm={() => setConfirmDelete(s.id)}
+                    onDeleteCancel={() => setConfirmDelete(null)}
+                    onDelete={() => handleDelete(s.id)}
+                  />
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Right: Bikers stacked vertically */}
         <div className="dashboard-bikers">
           {bikers.map((biker) => {
             const bikerRoutes = bikerSessions.get(biker.username) ?? [];
@@ -178,34 +207,6 @@ export function PlannerDashboard({ onViewSession }: PlannerDashboardProps) {
           )}
         </div>
 
-        {/* Right: Unassigned routes */}
-        {unassigned.length > 0 && (
-          <div className="dashboard-unassigned">
-            <div className="dashboard-column">
-              <div className="dashboard-column-header">
-                <span className="dashboard-column-title">Unassigned</span>
-                <span className="dashboard-column-count">{unassigned.length}</span>
-              </div>
-              <div className="dashboard-column-cards">
-                {unassigned.map((s) => (
-                  <SessionCard
-                    key={s.id}
-                    session={s}
-                    bikers={bikers}
-                    assignDropdown={assignDropdown}
-                    confirmDelete={confirmDelete}
-                    onView={() => onViewSession(s.id)}
-                    onAssignOpen={() => setAssignDropdown(assignDropdown === s.id ? null : s.id)}
-                    onAssign={(ownerId) => handleAssign(s.id, ownerId)}
-                    onDeleteConfirm={() => setConfirmDelete(s.id)}
-                    onDeleteCancel={() => setConfirmDelete(null)}
-                    onDelete={() => handleDelete(s.id)}
-                  />
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );
