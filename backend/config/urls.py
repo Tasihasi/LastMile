@@ -15,10 +15,29 @@ Including another URLconf
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
 
+import os
+
 from django.contrib import admin
-from django.urls import include, path
+from django.http import HttpResponse
+from django.urls import include, path, re_path
 
 urlpatterns = [
     path("admin/", admin.site.urls),
     path("api/", include("planner.urls")),
 ]
+
+# In production, serve the React SPA for all non-API routes
+_index_html = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+    os.pardir,
+    "frontend",
+    "dist",
+    "index.html",
+)
+if os.path.isfile(_index_html):
+
+    def _spa_view(request):
+        with open(_index_html) as f:
+            return HttpResponse(f.read(), content_type="text/html")
+
+    urlpatterns += [re_path(r"^(?!api/|admin/).*$", _spa_view)]
