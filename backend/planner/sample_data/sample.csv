@@ -1,6 +1,6 @@
-name,address,lat,lng
-Westend City Center,Vaci ut 1-3 Budapest,,
-Szimpla Kert,Kazinczy utca 14 Budapest,,
-Gellert Thermal Bath,,47.4833,19.0531
-Central Market Hall,Vasarcsarnok utca 1-3 Budapest,,
-Buda Castle,,47.4961,19.0398
+name,address,lat,lng,product_code,recipient_name,recipient_phone
+Westend City Center,Vaci ut 1-3 Budapest,,,PKG-2001,Kovacs Bela,+36 30 111 2222
+Szimpla Kert,Kazinczy utca 14 Budapest,,,PKG-2002,Nagy Anna,+36 20 333 4444
+Gellert Thermal Bath,,47.4833,19.0531,PKG-2003,Toth Maria,+36 70 555 6666
+Central Market Hall,Vasarcsarnok utca 1-3 Budapest,,,PKG-2004,Szabo Peter,+36 30 777 8888
+Buda Castle,,47.4961,19.0398,PKG-2005,Kiss Gabor,+36 20 999 0000

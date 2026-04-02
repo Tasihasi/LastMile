@@ -2,23 +2,38 @@
   <stop>
     <name>Westend City Center</name>
     <address>Vaci ut 1-3 Budapest</address>
+    <product_code>PKG-2001</product_code>
+    <recipient_name>Kovacs Bela</recipient_name>
+    <recipient_phone>+36 30 111 2222</recipient_phone>
   </stop>
   <stop>
     <name>Szimpla Kert</name>
     <address>Kazinczy utca 14 Budapest</address>
+    <product_code>PKG-2002</product_code>
+    <recipient_name>Nagy Anna</recipient_name>
+    <recipient_phone>+36 20 333 4444</recipient_phone>
   </stop>
   <stop>
     <name>Gellert Thermal Bath</name>
     <lat>47.4833</lat>
     <lng>19.0531</lng>
+    <product_code>PKG-2003</product_code>
+    <recipient_name>Toth Maria</recipient_name>
+    <recipient_phone>+36 70 555 6666</recipient_phone>
   </stop>
   <stop>
     <name>Central Market Hall</name>
     <address>Vasarcsarnok utca 1-3 Budapest</address>
+    <product_code>PKG-2004</product_code>
+    <recipient_name>Szabo Peter</recipient_name>
+    <recipient_phone>+36 30 777 8888</recipient_phone>
   </stop>
   <stop>
     <name>Buda Castle</name>
     <lat>47.4961</lat>
     <lng>19.0398</lng>
+    <product_code>PKG-2005</product_code>
+    <recipient_name>Kiss Gabor</recipient_name>
+    <recipient_phone>+36 20 999 0000</recipient_phone>
   </stop>
 </deliveries>

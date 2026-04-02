@@ -121,6 +121,9 @@ export function DeliveryMap({ stops, routeGeometry }: DeliveryMapProps) {
           <Popup>
             <strong>{stop.name}</strong>
             {stop.raw_address && <span>{stop.raw_address}</span>}
+            {stop.product_code && <span className="popup-meta">Code: {stop.product_code}</span>}
+            {stop.recipient_name && <span className="popup-meta">To: {stop.recipient_name}</span>}
+            {stop.recipient_phone && <span className="popup-meta">Tel: {stop.recipient_phone}</span>}
           </Popup>
         </Marker>
       ))}

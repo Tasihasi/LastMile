@@ -22,6 +22,9 @@ class DeliveryStop(models.Model):
     session = models.ForeignKey(DeliverySession, on_delete=models.CASCADE, related_name="stops")
     name = models.CharField(max_length=255)
     raw_address = models.CharField(max_length=500, blank=True, default="")
+    product_code = models.CharField(max_length=100, blank=True, default="")
+    recipient_name = models.CharField(max_length=255, blank=True, default="")
+    recipient_phone = models.CharField(max_length=50, blank=True, default="")
     lat = models.FloatField(null=True, blank=True)
     lng = models.FloatField(null=True, blank=True)
     geocode_status = models.CharField(

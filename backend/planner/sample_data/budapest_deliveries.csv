@@ -1,13 +1,13 @@
-name,address,lat,lng
-Depot - Keleti Station,,47.5003,19.0841
-Pizza King Astoria,Karoly korut 3 Budapest,,
-Spar Blaha Lujza,Rakoczi ut 12 Budapest,,
-Office Tower Westend,Vaci ut 1-3 Budapest,,
-Cafe Szimpla,Kazinczy utca 14 Budapest,,
-Residence Gozsdu,Kiraly utca 13 Budapest,,
-Hospital Szent Rokus,Gyulai Pal utca 2 Budapest,,
-University BME,,47.4734,19.0598
-Restaurant Matyas Pince,Marcius 15 ter 7 Budapest,,
-Hotel Gellert,,47.4833,19.0531
-Bookstore Irany,Vamhaz korut 1 Budapest,,
-Gym FitLife Corvin,Futyo utca 37 Budapest,,
+name,address,lat,lng,product_code,recipient_name,recipient_phone
+Depot - Keleti Station,,47.5003,19.0841,,,
+Pizza King Astoria,Karoly korut 3 Budapest,,,PKG-1041,Kovacs Bela,+36 30 123 4567
+Spar Blaha Lujza,Rakoczi ut 12 Budapest,,,PKG-1042,Nagy Anna,+36 20 234 5678
+Office Tower Westend,Vaci ut 1-3 Budapest,,,PKG-1043,Szabo Peter,+36 70 345 6789
+Cafe Szimpla,Kazinczy utca 14 Budapest,,,PKG-1044,Toth Maria,+36 30 456 7890
+Residence Gozsdu,Kiraly utca 13 Budapest,,,PKG-1045,Horvath Janos,+36 20 567 8901
+Hospital Szent Rokus,Gyulai Pal utca 2 Budapest,,,PKG-1046,Varga Ildiko,+36 70 678 9012
+University BME,,47.4734,19.0598,PKG-1047,Kiss Gabor,+36 30 789 0123
+Restaurant Matyas Pince,Marcius 15 ter 7 Budapest,,,PKG-1048,Molnar Eva,+36 20 890 1234
+Hotel Gellert,,47.4833,19.0531,PKG-1049,Farkas Zoltan,+36 70 901 2345
+Bookstore Irany,Vamhaz korut 1 Budapest,,,PKG-1050,Balogh Rita,+36 30 012 3456
+Gym FitLife Corvin,Futyo utca 37 Budapest,,,PKG-1051,Nemeth Laszlo,+36 20 123 4567

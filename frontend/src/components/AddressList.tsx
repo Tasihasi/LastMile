@@ -1,4 +1,6 @@
+import { useState } from "react";
 import type { DeliveryStop } from "../types";
+import { StopDetail } from "./StopDetail";
 
 interface AddressListProps {
   stops: DeliveryStop[];
@@ -27,7 +29,13 @@ function numberClass(stop: DeliveryStop) {
 }
 
 export function AddressList({ stops }: AddressListProps) {
+  const [selectedId, setSelectedId] = useState<number | null>(null);
+
   if (stops.length === 0) return null;
+
+  const selectedStop = selectedId != null
+    ? stops.find((s) => s.id === selectedId) ?? null
+    : null;
 
   return (
     <div className="address-list">
@@ -37,16 +45,26 @@ export function AddressList({ stops }: AddressListProps) {
       </div>
       <ul>
         {stops.map((stop, i) => (
-          <li key={stop.id} className="stop-item">
+          <li
+            key={stop.id}
+            className={`stop-item ${selectedId === stop.id ? "stop-item--active" : ""}`}
+            onClick={() => setSelectedId(stop.id)}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => { if (e.key === "Enter") setSelectedId(stop.id); }}
+          >
             <span className={numberClass(stop)}>
               {stop.sequence_order != null ? stop.sequence_order : i + 1}
             </span>
             <div className="stop-info">
               <span className="stop-name">{stop.name}</span>
+              {stop.recipient_name && (
+                <span className="stop-recipient">{stop.recipient_name}</span>
+              )}
               {stop.raw_address && (
                 <span className="stop-address">{stop.raw_address}</span>
               )}
-              {stop.lat != null && stop.lng != null && (
+              {!stop.raw_address && stop.lat != null && stop.lng != null && (
                 <span className="stop-coords">
                   {stop.lat.toFixed(4)}, {stop.lng.toFixed(4)}
                 </span>
@@ -61,6 +79,13 @@ export function AddressList({ stops }: AddressListProps) {
           </li>
         ))}
       </ul>
+
+      {selectedStop && (
+        <StopDetail
+          stop={selectedStop}
+          onClose={() => setSelectedId(null)}
+        />
+      )}
     </div>
   );
 }

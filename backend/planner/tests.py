@@ -50,6 +50,22 @@ class ParserCSVTest(TestCase):
         self.assertEqual(len(rows), 1)
         self.assertEqual(rows[0]["name"], "Shop A")
 
+    def test_parse_csv_with_delivery_details(self):
+        content = b"name,address,lat,lng,product_code,recipient_name,recipient_phone\nShop A,Main St,,,PKG-001,John Doe,+36 30 123 4567\n"
+        rows = parse_csv(io.BytesIO(content))
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["product_code"], "PKG-001")
+        self.assertEqual(rows[0]["recipient_name"], "John Doe")
+        self.assertEqual(rows[0]["recipient_phone"], "+36 30 123 4567")
+
+    def test_parse_csv_optional_delivery_details(self):
+        content = b"name,address\nShop A,Main St\n"
+        rows = parse_csv(io.BytesIO(content))
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["product_code"], "")
+        self.assertEqual(rows[0]["recipient_name"], "")
+        self.assertEqual(rows[0]["recipient_phone"], "")
+
 
 class ParserTXTTest(TestCase):
     def test_parse_txt_tab_delimited(self):
@@ -131,6 +147,18 @@ class UploadAPITest(TestCase):
         f = SimpleUploadedFile("data.pdf", b"fake", content_type="application/pdf")
         response = self.client.post("/api/upload/", {"file": f}, format="multipart")
         self.assertEqual(response.status_code, 400)
+
+    def test_upload_csv_with_delivery_details(self):
+        content = (
+            b"name,address,product_code,recipient_name,recipient_phone\nShop A,Main St,PKG-001,John Doe,+36301234567\n"
+        )
+        f = SimpleUploadedFile("stops.csv", content, content_type="text/csv")
+        response = self.client.post("/api/upload/", {"file": f}, format="multipart")
+        self.assertEqual(response.status_code, 201)
+        stop = response.json()["stops"][0]
+        self.assertEqual(stop["product_code"], "PKG-001")
+        self.assertEqual(stop["recipient_name"], "John Doe")
+        self.assertEqual(stop["recipient_phone"], "+36301234567")
 
     def test_upload_empty_file(self):
         f = SimpleUploadedFile("stops.csv", b"name,address\n", content_type="text/csv")

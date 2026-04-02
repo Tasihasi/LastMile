@@ -6,9 +6,12 @@ from openpyxl import load_workbook
 
 
 def _normalize_row(row: dict) -> dict:
-    """Normalize a parsed row into {name, address, lat, lng}."""
+    """Normalize a parsed row into {name, address, lat, lng, product_code, recipient_name, recipient_phone}."""
     name = (row.get("name") or "").strip()
     address = (row.get("address") or "").strip()
+    product_code = (row.get("product_code") or "").strip()
+    recipient_name = (row.get("recipient_name") or "").strip()
+    recipient_phone = (row.get("recipient_phone") or row.get("phone") or "").strip()
     lat = row.get("lat")
     lng = row.get("lng")
 
@@ -31,6 +34,9 @@ def _normalize_row(row: dict) -> dict:
     return {
         "name": name,
         "address": address,
+        "product_code": product_code,
+        "recipient_name": recipient_name,
+        "recipient_phone": recipient_phone,
         "lat": lat,
         "lng": lng,
     }
@@ -94,6 +100,9 @@ def parse_xml(file) -> list[dict]:
         row = {
             "name": (stop.findtext("name") or "").strip(),
             "address": (stop.findtext("address") or "").strip(),
+            "product_code": (stop.findtext("product_code") or "").strip(),
+            "recipient_name": (stop.findtext("recipient_name") or "").strip(),
+            "recipient_phone": (stop.findtext("recipient_phone") or stop.findtext("phone") or "").strip(),
             "lat": (stop.findtext("lat") or "").strip(),
             "lng": (stop.findtext("lng") or "").strip(),
         }

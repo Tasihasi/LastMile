@@ -2,6 +2,9 @@ export interface DeliveryStop {
   id: number;
   name: string;
   raw_address: string;
+  product_code: string;
+  recipient_name: string;
+  recipient_phone: string;
   lat: number | null;
   lng: number | null;
   geocode_status: "pending" | "success" | "failed" | "skipped";
