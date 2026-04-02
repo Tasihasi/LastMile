@@ -35,6 +35,7 @@ _index_html = os.path.join(
     "index.html",
 )
 if os.path.isfile(_index_html):
+
     def _spa_view(request):
         with open(_index_html) as f:
             return HttpResponse(f.read(), content_type="text/html")
