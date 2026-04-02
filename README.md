@@ -9,6 +9,16 @@ Built as a learning project to explore geospatial APIs, file parsing, and real-t
 ![Tech Stack](https://img.shields.io/badge/TypeScript-3178C6?style=flat&logo=typescript&logoColor=white)
 ![Tech Stack](https://img.shields.io/badge/Leaflet-199900?style=flat&logo=leaflet&logoColor=white)
 
+## Documentation
+
+Full user guides and API reference are in the [`docs/`](docs/) folder:
+
+- [Getting Started](docs/getting-started.md) -- login, first route, basic workflow
+- [Biker Guide](docs/biker-guide.md) -- delivering, marking stops, map navigation
+- [Planner Guide](docs/planner-guide.md) -- dashboard, assigning routes, live tracking
+- [File Format Reference](docs/file-formats.md) -- CSV, XLSX, TXT, XML specs and examples
+- [API Reference](docs/api-reference.md) -- all REST endpoints
+
 ## Features
 
 - **Multi-format file upload** -- CSV, XLSX, TXT (tab-delimited), XML
@@ -261,16 +271,6 @@ delivery_planner/
 | ORS Optimization | Optimal stop order (VROOM) | 2000 req/day | [openrouteservice.org](https://openrouteservice.org/dev/#/api-docs/optimization) |
 | ORS Directions | Road-following route geometry | 2000 req/day | [openrouteservice.org](https://openrouteservice.org/dev/#/api-docs/v2/directions) |
 | OpenStreetMap Tiles | Map rendering | Fair use | [openstreetmap.org](https://wiki.openstreetmap.org/wiki/Tile_usage_policy) |
-
-## Documentation
-
-Full user guides and API reference are in the [`docs/`](docs/) folder:
-
-- [Getting Started](docs/getting-started.md) -- login, first route, basic workflow
-- [Biker Guide](docs/biker-guide.md) -- delivering, marking stops, map navigation
-- [Planner Guide](docs/planner-guide.md) -- dashboard, assigning routes, live tracking
-- [File Format Reference](docs/file-formats.md) -- CSV, XLSX, TXT, XML specs and examples
-- [API Reference](docs/api-reference.md) -- all REST endpoints
 
 ## License
 
