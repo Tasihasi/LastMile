@@ -1,11 +1,13 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useDeliveryPlanner } from "./hooks/useDeliveryPlanner";
 import { useTheme } from "./hooks/useTheme";
+import { useSettings } from "./hooks/useSettings";
 import { FileUpload } from "./components/FileUpload";
 import { AddressList } from "./components/AddressList";
 import { DeliveryMap } from "./components/DeliveryMap";
 import { StopDetail } from "./components/StopDetail";
-import { formatDuration, formatDistance } from "./utils/format";
+import { SettingsPanel } from "./components/SettingsPanel";
+import { formatDuration, formatDistance, formatTime, calcArrivalTimes } from "./utils/format";
 import "./App.css";
 
 function App() {
@@ -18,7 +20,6 @@ function App() {
     isOptimizing,
     routeGeometry,
     routeSegments,
-    totalDuration,
     totalDistance,
     error,
     uploadFile,
@@ -28,7 +29,9 @@ function App() {
   } = useDeliveryPlanner();
 
   const { theme, toggle: toggleTheme } = useTheme();
+  const { settings, update: updateSettings } = useSettings();
   const [selectedStopId, setSelectedStopId] = useState<number | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   const locatedCount = stops.filter(
     (s) => s.lat != null && s.lng != null
@@ -42,6 +45,30 @@ function App() {
   const selectedStop = selectedStopId != null
     ? stops.find((s) => s.id === selectedStopId) ?? null
     : null;
+
+  // Calculate arrival times based on settings + segments
+  const arrivalTimes = useMemo(() => {
+    if (!routeSegments) return null;
+    return calcArrivalTimes(routeSegments, settings, stops.length);
+  }, [routeSegments, settings, stops.length]);
+
+  // Total route time including dwell
+  const totalRouteTime = useMemo(() => {
+    if (!arrivalTimes || arrivalTimes.size < 2) return null;
+    const first = arrivalTimes.get(1);
+    const last = arrivalTimes.get(arrivalTimes.size);
+    if (!first || !last) return null;
+    // Add dwell at last stop
+    return Math.round((last.getTime() - first.getTime()) / 1000) + settings.dwellMinutes * 60;
+  }, [arrivalTimes, settings.dwellMinutes]);
+
+  // Estimated finish time
+  const finishTime = useMemo(() => {
+    if (!arrivalTimes || arrivalTimes.size < 1) return null;
+    const last = arrivalTimes.get(arrivalTimes.size);
+    if (!last) return null;
+    return new Date(last.getTime() + settings.dwellMinutes * 60 * 1000);
+  }, [arrivalTimes, settings.dwellMinutes]);
 
   return (
     <div className="app">
@@ -62,6 +89,19 @@ function App() {
                 <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
               </svg>
               Start Over
+            </button>
+          )}
+          {stops.length > 0 && (
+            <button
+              className={`theme-toggle ${settingsOpen ? "theme-toggle--active" : ""}`}
+              onClick={() => setSettingsOpen(!settingsOpen)}
+              aria-label="Route settings"
+              title="Route settings"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="3" />
+                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+              </svg>
             </button>
           )}
           <button
@@ -105,6 +145,13 @@ function App() {
               </div>
             )}
 
+            <SettingsPanel
+              settings={settings}
+              onUpdate={updateSettings}
+              isOpen={settingsOpen}
+              onClose={() => setSettingsOpen(false)}
+            />
+
             {stops.length === 0 ? (
               <FileUpload onUpload={uploadFile} isUploading={isUploading} />
             ) : (
@@ -128,14 +175,14 @@ function App() {
                 </div>
 
                 {/* Route summary after optimization */}
-                {totalDuration != null && totalDistance != null && (
+                {totalRouteTime != null && totalDistance != null && finishTime && (
                   <div className="route-summary">
                     <div className="route-summary-item">
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                         <circle cx="12" cy="12" r="10" />
                         <polyline points="12 6 12 12 16 14" />
                       </svg>
-                      <span>{formatDuration(totalDuration)}</span>
+                      <span>{formatDuration(totalRouteTime)}</span>
                     </div>
                     <div className="route-summary-item">
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -143,6 +190,9 @@ function App() {
                         <circle cx="12" cy="10" r="3" />
                       </svg>
                       <span>{formatDistance(totalDistance)}</span>
+                    </div>
+                    <div className="route-summary-item">
+                      <span className="route-summary-time">{settings.startTime} - {formatTime(finishTime)}</span>
                     </div>
                   </div>
                 )}
@@ -205,6 +255,8 @@ function App() {
                   selectedStopId={selectedStopId}
                   onSelectStop={setSelectedStopId}
                   routeSegments={routeSegments}
+                  arrivalTimes={arrivalTimes}
+                  speedKmh={settings.speedKmh}
                 />
               </>
             )}
@@ -226,6 +278,8 @@ function App() {
           onClose={() => setSelectedStopId(null)}
           routeSegments={routeSegments}
           stops={stops}
+          arrivalTimes={arrivalTimes}
+          speedKmh={settings.speedKmh}
         />
       )}
     </div>

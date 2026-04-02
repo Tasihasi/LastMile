@@ -1,12 +1,14 @@
 import { useState } from "react";
 import type { DeliveryStop, RouteSegment } from "../types";
-import { formatDuration, formatDistance } from "../utils/format";
+import { formatDuration, formatDistance, formatTime, travelSeconds } from "../utils/format";
 
 interface StopDetailProps {
   stop: DeliveryStop;
   onClose: () => void;
   routeSegments: RouteSegment[] | null;
   stops: DeliveryStop[];
+  arrivalTimes: Map<number, Date> | null;
+  speedKmh: number;
 }
 
 function CopyButton({ text }: { text: string }) {
@@ -41,20 +43,24 @@ function CopyButton({ text }: { text: string }) {
   );
 }
 
-export function StopDetail({ stop, onClose, routeSegments, stops }: StopDetailProps) {
+export function StopDetail({ stop, onClose, routeSegments, stops, arrivalTimes, speedKmh }: StopDetailProps) {
   const hasDetails = stop.product_code || stop.recipient_name || stop.recipient_phone;
 
-  // Find the segment leading to this stop (from the previous stop)
+  // Find the segment leading to this stop
   let segmentToHere: RouteSegment | null = null;
   let fromStopName: string | null = null;
   if (routeSegments && stop.sequence_order != null && stop.sequence_order > 1) {
-    const segIndex = stop.sequence_order - 2; // segment[0] connects stop 1 -> stop 2
+    const segIndex = stop.sequence_order - 2;
     if (segIndex >= 0 && segIndex < routeSegments.length) {
       segmentToHere = routeSegments[segIndex];
       const prevStop = stops.find((s) => s.sequence_order === stop.sequence_order! - 1);
       if (prevStop) fromStopName = prevStop.name;
     }
   }
+
+  const arrival = stop.sequence_order != null && arrivalTimes
+    ? arrivalTimes.get(stop.sequence_order) ?? null
+    : null;
 
   return (
     <div className="stop-detail-overlay" onClick={onClose}>
@@ -70,6 +76,14 @@ export function StopDetail({ stop, onClose, routeSegments, stops }: StopDetailPr
         </div>
 
         <div className="stop-detail-body">
+          {/* Arrival time */}
+          {arrival && (
+            <div className="detail-arrival">
+              <span className="detail-arrival-time">{formatTime(arrival)}</span>
+              <span className="detail-arrival-label">Expected arrival</span>
+            </div>
+          )}
+
           {/* Travel info from previous stop */}
           {segmentToHere && (
             <>
@@ -79,7 +93,7 @@ export function StopDetail({ stop, onClose, routeSegments, stops }: StopDetailPr
                     <circle cx="12" cy="12" r="10" />
                     <polyline points="12 6 12 12 16 14" />
                   </svg>
-                  <span>{formatDuration(segmentToHere.duration)}</span>
+                  <span>{formatDuration(travelSeconds(segmentToHere.distance, speedKmh))}</span>
                 </div>
                 <div className="detail-travel-row">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
