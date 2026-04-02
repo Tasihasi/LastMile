@@ -1881,6 +1881,29 @@ body {
   padding: 24px;
   overflow-y: auto;
   background: var(--color-bg);
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+
+.dashboard:hover {
+  scrollbar-color: var(--color-border) transparent;
+}
+
+.dashboard::-webkit-scrollbar {
+  width: 5px;
+}
+
+.dashboard::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.dashboard::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: var(--radius-full);
+}
+
+.dashboard:hover::-webkit-scrollbar-thumb {
+  background: var(--color-border);
 }
 
 .dashboard-loading {
