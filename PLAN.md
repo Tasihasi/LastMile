@@ -120,8 +120,8 @@ Real-time visibility for planners — see all bikers on one map with ETAs. Requi
 | 1.7 CSS | Done | All status UI styles |
 | 1.8 Tests | Partial | Backend lint + Django check pass. Full test suite hangs (env issue, not code) |
 | 1.9 Test data | Done | 9 routes across 3 bikers via seed_test_data command |
-| 2.1 Live position | Not started | Design decisions needed first |
-| 2.2 Aggregate endpoint | Not started | |
-| 2.3 Planner aggregate map | Not started | |
-| 2.4 Dashboard integration | Not started | |
-| 2.5 Design decisions | Not started | |
+| 2.1 Live position | Done | Polling-based (30s interval), stop-based tracking via current_stop_index |
+| 2.2 Aggregate endpoint | Done | GET /api/sessions/active/ with stops, geometry, progress |
+| 2.3 Planner aggregate map | Done | PlannerMapView with colored routes, biker markers, popups, legend |
+| 2.4 Dashboard integration | Done | Live Map button on dashboard, 3 view modes |
+| 2.5 Design decisions | Done | Polling (not WS), stop-based (not GPS), 30s interval |

@@ -10,6 +10,7 @@ urlpatterns = [
     # Planner
     path("users/bikers/", views.list_bikers, name="list-bikers"),
     # Sessions
+    path("sessions/active/", views.active_sessions, name="active-sessions"),
     path("sessions/", views.list_sessions, name="list-sessions"),
     path("upload/", views.upload_file, name="upload-file"),
     path("sessions/<uuid:session_id>/", views.get_session, name="get-session"),

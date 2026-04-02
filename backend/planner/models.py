@@ -31,6 +31,7 @@ class DeliverySession(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     total_duration = models.FloatField(null=True, blank=True)  # seconds, set after optimization
     total_distance = models.FloatField(null=True, blank=True)  # meters, set after optimization
+    route_geometry = models.JSONField(null=True, blank=True)  # GeoJSON LineString, set after optimization
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.NOT_STARTED)
     started_at = models.DateTimeField(null=True, blank=True)
     finished_at = models.DateTimeField(null=True, blank=True)

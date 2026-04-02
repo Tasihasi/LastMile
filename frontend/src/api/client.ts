@@ -175,6 +175,37 @@ export async function listBikers(): Promise<User[]> {
   return data;
 }
 
+export async function getActiveSessions(): Promise<ActiveSession[]> {
+  const { data } = await api.get<ActiveSession[]>("/sessions/active/");
+  return data;
+}
+
+export interface ActiveSessionStop {
+  id: number;
+  name: string;
+  lat: number | null;
+  lng: number | null;
+  sequence_order: number | null;
+  delivery_status: import("../types").DeliveryStopStatus;
+}
+
+export interface ActiveSession {
+  id: string;
+  name: string;
+  owner_name: string | null;
+  owner_id: number | null;
+  status: string;
+  started_at: string | null;
+  current_stop_index: number | null;
+  stop_count: number;
+  delivered_count: number;
+  current_stop_name: string | null;
+  total_duration: number | null;
+  total_distance: number | null;
+  route_geometry: GeoJSON.LineString | null;
+  stops: ActiveSessionStop[];
+}
+
 export async function deleteSession(sessionId: string): Promise<void> {
   await api.delete(`/sessions/${sessionId}/delete/`);
 }

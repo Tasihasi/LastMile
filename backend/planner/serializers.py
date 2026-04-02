@@ -97,6 +97,44 @@ class SessionListSerializer(serializers.ModelSerializer):
         return stop.name if stop else None
 
 
+class ActiveSessionStopSerializer(serializers.ModelSerializer):
+    """Minimal stop data for aggregate map — just coords, name, sequence, status."""
+
+    class Meta:
+        model = DeliveryStop
+        fields = ["id", "name", "lat", "lng", "sequence_order", "delivery_status"]
+
+
+class ActiveSessionSerializer(serializers.ModelSerializer):
+    """Session data for the planner aggregate map."""
+
+    stops = ActiveSessionStopSerializer(many=True, read_only=True)
+    owner_name = serializers.CharField(source="owner.username", read_only=True, default=None)
+    owner_id = serializers.IntegerField(source="owner.id", read_only=True, default=None)
+    delivered_count = serializers.SerializerMethodField()
+    stop_count = serializers.IntegerField(source="stops.count", read_only=True)
+    current_stop_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = DeliverySession
+        fields = [
+            "id", "name", "owner_name", "owner_id", "status",
+            "started_at", "current_stop_index", "stop_count",
+            "delivered_count", "current_stop_name",
+            "total_duration", "total_distance",
+            "route_geometry", "stops",
+        ]
+
+    def get_delivered_count(self, obj):
+        return obj.stops.filter(delivery_status__in=["delivered", "not_received", "skipped"]).count()
+
+    def get_current_stop_name(self, obj):
+        if obj.current_stop_index is None:
+            return None
+        stop = obj.stops.filter(sequence_order=obj.current_stop_index).first()
+        return stop.name if stop else None
+
+
 class SharedRouteSerializer(serializers.ModelSerializer):
     session = DeliverySessionSerializer(read_only=True)
 

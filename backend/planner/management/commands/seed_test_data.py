@@ -94,6 +94,12 @@ class Command(BaseCommand):
             for sname, saddr, slat, slng in route_stops_data:
                 csv_content += f"{sname},{saddr},{slat},{slng}\n"
 
+            # Generate straight-line geometry from stop coordinates (no ORS needed)
+            geometry = {
+                "type": "LineString",
+                "coordinates": [[slng, slat] for _, _, slat, slng in route_stops_data],
+            }
+
             session = DeliverySession.objects.create(
                 id=uuid.uuid4(),
                 owner=owner,
@@ -101,6 +107,7 @@ class Command(BaseCommand):
                 original_file=ContentFile(csv_content.encode(), name=f"{route_name.replace(' ', '_')}.csv"),
                 total_duration=random.uniform(3600, 10800) if route_status != "not_started" else random.uniform(3600, 10800),
                 total_distance=random.uniform(15000, 50000),
+                route_geometry=geometry,
                 status=route_status,
                 started_at=timezone.now() if route_status in ("in_progress", "finished") else None,
                 finished_at=timezone.now() if route_status == "finished" else None,

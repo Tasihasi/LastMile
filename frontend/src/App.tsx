@@ -11,6 +11,7 @@ import { SettingsPanel } from "./components/SettingsPanel";
 import { LoginScreen } from "./components/LoginScreen";
 import { SessionList } from "./components/SessionList";
 import { PlannerDashboard } from "./components/PlannerDashboard";
+import { PlannerMapView } from "./components/PlannerMapView";
 import { shareSession } from "./api/client";
 import { formatDuration, formatDistance, formatTime, calcArrivalTimes } from "./utils/format";
 import "./App.css";
@@ -46,7 +47,7 @@ function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showUpload, setShowUpload] = useState(false);
-  const [viewMode, setViewMode] = useState<"dashboard" | "map">(isPlanner ? "dashboard" : "map");
+  const [viewMode, setViewMode] = useState<"dashboard" | "map" | "live-map">(isPlanner ? "dashboard" : "map");
   const [shareLoading, setShareLoading] = useState(false);
   const [shareCopied, setShareCopied] = useState(false);
 
@@ -227,7 +228,12 @@ function App() {
       </header>
 
       {isPlanner && viewMode === "dashboard" ? (
-        <PlannerDashboard onViewSession={handleSelectSession} />
+        <PlannerDashboard
+          onViewSession={handleSelectSession}
+          onOpenLiveMap={() => setViewMode("live-map")}
+        />
+      ) : isPlanner && viewMode === "live-map" ? (
+        <PlannerMapView onBack={() => setViewMode("dashboard")} />
       ) : (
       <>
       <div className="app-layout">

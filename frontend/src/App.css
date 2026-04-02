@@ -2758,3 +2758,162 @@ body {
 .dashboard-finished .session-card:hover {
   opacity: 1;
 }
+
+/* ============================================
+   Dashboard Header — Actions Row
+   ============================================ */
+.dashboard-header-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+/* ============================================
+   Live Map Button
+   ============================================ */
+.btn-live-map {
+  background: var(--color-surface) !important;
+  color: var(--color-primary) !important;
+  border: 1.5px solid var(--color-primary) !important;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: var(--radius-full);
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.btn-live-map:hover {
+  background: var(--color-primary-light) !important;
+}
+
+.btn-live-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-success);
+  animation: pulse-dot 1.5s ease-in-out infinite;
+  flex-shrink: 0;
+}
+
+/* ============================================
+   Planner Map View — Aggregate Map
+   ============================================ */
+.planner-map-view {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 52px);
+  overflow: hidden;
+}
+
+.planner-map-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+  flex-shrink: 0;
+}
+
+.planner-map-header h3 {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--color-text);
+  margin: 0;
+  flex: 1;
+}
+
+.planner-map-container {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+}
+
+.planner-map-loading,
+.planner-map-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: calc(100vh - 52px);
+  gap: 16px;
+  color: var(--color-text-secondary);
+}
+
+/* Legend overlay */
+.planner-map-legend {
+  position: absolute;
+  bottom: 16px;
+  left: 16px;
+  z-index: 1000;
+  background: var(--color-surface);
+  border-radius: var(--radius-md);
+  padding: 10px 14px;
+  box-shadow: var(--shadow-lg);
+  border: 1px solid var(--color-border);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-width: 220px;
+}
+
+.planner-map-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.8rem;
+}
+
+.planner-map-legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.planner-map-legend-name {
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.planner-map-legend-stats {
+  color: var(--color-text-muted);
+  font-size: 0.72rem;
+  margin-left: auto;
+}
+
+/* Popup styles */
+.planner-map-popup {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-family: var(--font);
+  font-size: 0.82rem;
+}
+
+.planner-map-popup strong {
+  font-size: 0.9rem;
+  color: var(--color-text);
+}
+
+.planner-map-popup-route {
+  color: var(--color-text-secondary);
+  font-size: 0.75rem;
+}
+
+.planner-map-popup-heading {
+  color: var(--color-primary);
+  font-weight: 600;
+}
+
+.planner-map-popup-progress {
+  color: var(--color-text-secondary);
+}
+
+.planner-map-popup-eta {
+  color: var(--color-text-muted);
+  font-size: 0.72rem;
+}

@@ -11,12 +11,13 @@ import {
 
 interface PlannerDashboardProps {
   onViewSession: (sessionId: string) => void;
+  onOpenLiveMap?: () => void;
 }
 
 // Drop zone identifier: biker id or "unassigned"
 type DropTarget = number | "unassigned";
 
-export function PlannerDashboard({ onViewSession }: PlannerDashboardProps) {
+export function PlannerDashboard({ onViewSession, onOpenLiveMap }: PlannerDashboardProps) {
   const [bikers, setBikers] = useState<User[]>([]);
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
   const [loading, setLoading] = useState(true);
@@ -111,6 +112,7 @@ export function PlannerDashboard({ onViewSession }: PlannerDashboardProps) {
   // Separate finished routes
   const finishedSessions = sessions.filter((s) => s.status === "finished");
   const activeSessions = sessions.filter((s) => s.status !== "finished");
+  const activeCount = sessions.filter((s) => s.status === "in_progress").length;
 
   // Group active sessions by owner
   const unassigned = activeSessions.filter((s) => !s.owner_name);
@@ -142,13 +144,21 @@ export function PlannerDashboard({ onViewSession }: PlannerDashboardProps) {
 
       <div className="dashboard-header">
         <h2>Route Management</h2>
-        <button className="btn btn-primary btn-sm" onClick={() => handleUploadClick()}>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <line x1="12" y1="5" x2="12" y2="19" />
-            <line x1="5" y1="12" x2="19" y2="12" />
-          </svg>
-          Upload Route
-        </button>
+        <div className="dashboard-header-actions">
+          {onOpenLiveMap && activeCount > 0 && (
+            <button className="btn btn-live-map btn-sm" onClick={onOpenLiveMap}>
+              <span className="btn-live-dot" />
+              Live Map ({activeCount})
+            </button>
+          )}
+          <button className="btn btn-primary btn-sm" onClick={() => handleUploadClick()}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="12" y1="5" x2="12" y2="19" />
+              <line x1="5" y1="12" x2="19" y2="12" />
+            </svg>
+            Upload Route
+          </button>
+        </div>
       </div>
 
       <div className="dashboard-layout">

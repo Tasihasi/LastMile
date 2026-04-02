@@ -16,6 +16,7 @@ from .models import DeliverySession, DeliveryStop, SharedRoute, UserProfile
 from .optimizer import get_route_details, optimize_route
 from .parsers import parse_file
 from .serializers import (
+    ActiveSessionSerializer,
     DeliverySessionSerializer,
     DeliveryStopSerializer,
     SessionListSerializer,
@@ -106,6 +107,16 @@ def list_bikers(request):
 
     bikers = User.objects.filter(profile__role="biker").select_related("profile")
     return Response(UserSerializer(bikers, many=True).data)
+
+
+@api_view(["GET"])
+def active_sessions(request):
+    """All in-progress sessions with stops and route geometry for aggregate map."""
+    if not _require_planner(request):
+        return Response({"error": "Planner access required."}, status=status.HTTP_403_FORBIDDEN)
+
+    qs = DeliverySession.objects.filter(status="in_progress").select_related("owner").prefetch_related("stops")
+    return Response(ActiveSessionSerializer(qs, many=True).data)
 
 
 @api_view(["GET"])
@@ -318,11 +329,12 @@ def optimize(request, session_id):
     except Exception:
         route = None
 
-    # Persist totals on session for dashboard display
+    # Persist totals and geometry on session for dashboard/aggregate map
     if route:
         session.total_duration = route["total_duration"]
         session.total_distance = route["total_distance"]
-        session.save(update_fields=["total_duration", "total_distance"])
+        session.route_geometry = route["geometry"]
+        session.save(update_fields=["total_duration", "total_distance", "route_geometry"])
 
     return Response(
         {
