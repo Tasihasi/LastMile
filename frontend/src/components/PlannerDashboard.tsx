@@ -118,52 +118,76 @@ export function PlannerDashboard({ onViewSession }: PlannerDashboardProps) {
         </button>
       </div>
 
-      <div className="dashboard-grid">
-        {/* Unassigned column */}
-        {unassigned.length > 0 && (
-          <div className="dashboard-column">
-            <div className="dashboard-column-header">
-              <span className="dashboard-column-title">Unassigned</span>
-              <span className="dashboard-column-count">{unassigned.length}</span>
-            </div>
-            <div className="dashboard-column-cards">
-              {unassigned.map((s) => (
-                <SessionCard
-                  key={s.id}
-                  session={s}
-                  bikers={bikers}
-                  assignDropdown={assignDropdown}
-                  confirmDelete={confirmDelete}
-                  onView={() => onViewSession(s.id)}
-                  onAssignOpen={() => setAssignDropdown(assignDropdown === s.id ? null : s.id)}
-                  onAssign={(ownerId) => handleAssign(s.id, ownerId)}
-                  onDeleteConfirm={() => setConfirmDelete(s.id)}
-                  onDeleteCancel={() => setConfirmDelete(null)}
-                  onDelete={() => handleDelete(s.id)}
-                />
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Biker columns */}
-        {bikers.map((biker) => {
-          const bikerRoutes = bikerSessions.get(biker.username) ?? [];
-          return (
-            <div className="dashboard-column" key={biker.id}>
-              <div className="dashboard-column-header">
-                <div className="dashboard-column-biker">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                    <circle cx="18.5" cy="17.5" r="3.5" />
-                    <circle cx="5.5" cy="17.5" r="3.5" />
-                    <path d="M15 6a1 1 0 1 0 0-2 1 1 0 0 0 0 2zm-3 11.5V14l-3-3 4-3 2 3h2" />
-                  </svg>
-                  <span className="dashboard-column-title">{biker.username}</span>
+      <div className="dashboard-layout">
+        {/* Left: Bikers stacked vertically */}
+        <div className="dashboard-bikers">
+          {bikers.map((biker) => {
+            const bikerRoutes = bikerSessions.get(biker.username) ?? [];
+            return (
+              <div className="dashboard-column" key={biker.id}>
+                <div className="dashboard-column-header">
+                  <div className="dashboard-column-biker">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="18.5" cy="17.5" r="3.5" />
+                      <circle cx="5.5" cy="17.5" r="3.5" />
+                      <path d="M15 6a1 1 0 1 0 0-2 1 1 0 0 0 0 2zm-3 11.5V14l-3-3 4-3 2 3h2" />
+                    </svg>
+                    <span className="dashboard-column-title">{biker.username}</span>
+                  </div>
+                  <span className="dashboard-column-count">{bikerRoutes.length}</span>
                 </div>
-                <span className="dashboard-column-count">{bikerRoutes.length}</span>
+                <div className="dashboard-column-cards">
+                  {bikerRoutes.map((s) => (
+                    <SessionCard
+                      key={s.id}
+                      session={s}
+                      bikers={bikers}
+                      assignDropdown={assignDropdown}
+                      confirmDelete={confirmDelete}
+                      onView={() => onViewSession(s.id)}
+                      onAssignOpen={() => setAssignDropdown(assignDropdown === s.id ? null : s.id)}
+                      onAssign={(ownerId) => handleAssign(s.id, ownerId)}
+                      onDeleteConfirm={() => setConfirmDelete(s.id)}
+                      onDeleteCancel={() => setConfirmDelete(null)}
+                      onDelete={() => handleDelete(s.id)}
+                    />
+                  ))}
+                  {bikerRoutes.length === 0 && (
+                    <div className="dashboard-empty">No routes assigned</div>
+                  )}
+                </div>
+                <button
+                  className="btn btn-ghost dashboard-upload-btn"
+                  onClick={() => handleUploadClick(biker.id)}
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="12" y1="5" x2="12" y2="19" />
+                    <line x1="5" y1="12" x2="19" y2="12" />
+                  </svg>
+                  Upload for {biker.username}
+                </button>
+              </div>
+            );
+          })}
+
+          {bikers.length === 0 && unassigned.length === 0 && (
+            <div className="dashboard-no-data">
+              <p>No bikers or routes yet.</p>
+              <p>Bikers will appear here after they sign in.</p>
+            </div>
+          )}
+        </div>
+
+        {/* Right: Unassigned routes */}
+        {unassigned.length > 0 && (
+          <div className="dashboard-unassigned">
+            <div className="dashboard-column">
+              <div className="dashboard-column-header">
+                <span className="dashboard-column-title">Unassigned</span>
+                <span className="dashboard-column-count">{unassigned.length}</span>
               </div>
               <div className="dashboard-column-cards">
-                {bikerRoutes.map((s) => (
+                {unassigned.map((s) => (
                   <SessionCard
                     key={s.id}
                     session={s}
@@ -178,28 +202,8 @@ export function PlannerDashboard({ onViewSession }: PlannerDashboardProps) {
                     onDelete={() => handleDelete(s.id)}
                   />
                 ))}
-                {bikerRoutes.length === 0 && (
-                  <div className="dashboard-empty">No routes assigned</div>
-                )}
               </div>
-              <button
-                className="btn btn-ghost dashboard-upload-btn"
-                onClick={() => handleUploadClick(biker.id)}
-              >
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <line x1="12" y1="5" x2="12" y2="19" />
-                  <line x1="5" y1="12" x2="19" y2="12" />
-                </svg>
-                Upload for {biker.username}
-              </button>
             </div>
-          );
-        })}
-
-        {bikers.length === 0 && unassigned.length === 0 && (
-          <div className="dashboard-no-data">
-            <p>No bikers or routes yet.</p>
-            <p>Bikers will appear here after they sign in.</p>
           </div>
         )}
       </div>

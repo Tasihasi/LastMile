@@ -1904,19 +1904,26 @@ body {
   color: var(--color-text);
 }
 
-.dashboard-grid {
+.dashboard-layout {
   display: flex;
-  gap: 16px;
+  gap: 20px;
   align-items: flex-start;
-  overflow-x: auto;
-  padding-bottom: 8px;
+}
+
+.dashboard-bikers {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.dashboard-unassigned {
+  width: 320px;
+  flex-shrink: 0;
 }
 
 .dashboard-column {
-  min-width: 280px;
-  max-width: 340px;
-  flex-shrink: 0;
-  flex: 1;
   background: var(--color-surface);
   border-radius: var(--radius-lg);
   border: 1px solid var(--color-border);
@@ -2216,13 +2223,12 @@ body {
     padding: 16px;
   }
 
-  .dashboard-grid {
+  .dashboard-layout {
     flex-direction: column;
   }
 
-  .dashboard-column {
-    max-width: none;
-    min-width: 0;
+  .dashboard-unassigned {
+    width: 100%;
   }
 
   /* Show hamburger toggle */
