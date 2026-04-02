@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useDeliveryPlanner } from "./hooks/useDeliveryPlanner";
 import { useTheme } from "./hooks/useTheme";
 import { useSettings } from "./hooks/useSettings";
@@ -32,6 +32,7 @@ function App() {
   const { settings, update: updateSettings } = useSettings();
   const [selectedStopId, setSelectedStopId] = useState<number | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const locatedCount = stops.filter(
     (s) => s.lat != null && s.lng != null
@@ -41,6 +42,11 @@ function App() {
   ).length;
   const canOptimize = !needsGeocoding && !isGeocoding && locatedCount >= 2;
   const isOptimized = stops.some((s) => s.sequence_order != null);
+
+  const selectStop = useCallback((id: number) => {
+    setSelectedStopId(id);
+    setSidebarOpen(false); // close sidebar drawer on mobile
+  }, []);
 
   const selectedStop = selectedStopId != null
     ? stops.find((s) => s.id === selectedStopId) ?? null
@@ -89,7 +95,21 @@ function App() {
         </div>
         <div className="app-header-right">
           {stops.length > 0 && (
-            <button className="btn btn-ghost" onClick={reset}>
+            <button
+              className="sidebar-toggle"
+              onClick={() => setSidebarOpen(!sidebarOpen)}
+              aria-label="Toggle sidebar"
+              title="Toggle sidebar"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="3" y1="6" x2="21" y2="6" />
+                <line x1="3" y1="12" x2="21" y2="12" />
+                <line x1="3" y1="18" x2="21" y2="18" />
+              </svg>
+            </button>
+          )}
+          {stops.length > 0 && (
+            <button className="btn btn-ghost btn-ghost--start-over" onClick={reset}>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <polyline points="1 4 1 10 7 10" />
                 <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
@@ -138,7 +158,8 @@ function App() {
       </header>
 
       <div className="app-layout">
-        <aside className="sidebar">
+        {sidebarOpen && <div className="sidebar-overlay" onClick={() => setSidebarOpen(false)} />}
+        <aside className={`sidebar ${sidebarOpen || stops.length === 0 ? "sidebar--open" : ""}`}>
           <div className="sidebar-content">
             {error && (
               <div className="error-banner">
@@ -263,7 +284,7 @@ function App() {
                 <AddressList
                   stops={stops}
                   selectedStopId={selectedStopId}
-                  onSelectStop={setSelectedStopId}
+                  onSelectStop={selectStop}
                   routeSegments={routeSegments}
                   arrivalTimes={arrivalTimes}
                   speedKmh={settings.speedKmh}
@@ -278,7 +299,7 @@ function App() {
           <DeliveryMap
             stops={stops}
             routeGeometry={routeGeometry}
-            onSelectStop={setSelectedStopId}
+            onSelectStop={selectStop}
             depot={depot}
           />
         </main>
