@@ -1,7 +1,9 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 
 export function LoginScreen() {
+  const navigate = useNavigate();
   const { login } = useAuth();
   const [username, setUsername] = useState("");
   const [role, setRole] = useState<"biker" | "planner">("biker");
@@ -34,7 +36,7 @@ export function LoginScreen() {
               <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5a2.5 2.5 0 110-5 2.5 2.5 0 010 5z" />
             </svg>
           </div>
-          <h1>Route Planner</h1>
+          <h1>LastMile</h1>
           <p className="login-subtitle">Sign in to plan and view delivery routes</p>
         </div>
 
@@ -103,6 +105,19 @@ export function LoginScreen() {
             )}
           </button>
         </form>
+
+        <button
+          className="btn btn-ghost login-help-link"
+          onClick={() => navigate("/docs")}
+          type="button"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ width: 14, height: 14 }}>
+            <circle cx="12" cy="12" r="10" />
+            <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+            <line x1="12" y1="17" x2="12.01" y2="17" />
+          </svg>
+          Help & Documentation
+        </button>
       </div>
     </div>
   );
