@@ -2949,3 +2949,61 @@ body {
 .planner-map-popup-btn:hover {
   background: var(--color-primary-hover);
 }
+
+/* ============================================
+   Session List — Active Route & Finished
+   ============================================ */
+.session-list-item--active {
+  background: var(--color-primary-light) !important;
+  border: 1.5px solid var(--color-primary) !important;
+  border-radius: var(--radius-md);
+}
+
+.session-list-item-name-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.session-list-item-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-primary);
+  animation: pulse-dot 1.5s ease-in-out infinite;
+  flex-shrink: 0;
+}
+
+.session-list-item-status {
+  font-size: 0.75rem;
+  color: var(--color-primary);
+  font-weight: 600;
+}
+
+.session-list-item--finished {
+  opacity: 0.6;
+}
+
+.session-list-item--finished:hover {
+  opacity: 0.85;
+}
+
+.session-list-finished {
+  margin-top: 8px;
+}
+
+.session-list-finished-toggle {
+  font-size: 0.78rem;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  padding: 6px 8px;
+  user-select: none;
+}
+
+.session-list-finished-toggle:hover {
+  color: var(--color-text-secondary);
+}
+
+.session-list-items--finished {
+  opacity: 0.7;
+}

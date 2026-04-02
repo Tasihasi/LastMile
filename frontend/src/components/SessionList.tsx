@@ -3,6 +3,12 @@ import type { SessionSummary } from "../types";
 import { listSessions } from "../api/client";
 import { formatDuration, formatDistance } from "../utils/format";
 
+function statusOrder(s: SessionSummary): number {
+  if (s.status === "in_progress") return 0;
+  if (s.status === "not_started") return 1;
+  return 2; // finished
+}
+
 interface SessionListProps {
   ownerId?: number;
   onSelectSession: (sessionId: string) => void;
@@ -55,31 +61,75 @@ export function SessionList({ ownerId, onSelectSession, onNewRoute }: SessionLis
         </div>
       )}
 
-      {!loading && sessions.length > 0 && (
-        <ul className="session-list-items">
-          {sessions.map((s) => (
-            <li key={s.id}>
-              <button
-                className="session-list-item"
-                onClick={() => onSelectSession(s.id)}
-              >
-                <div className="session-list-item-info">
-                  <span className="session-list-item-name">{s.name || "Untitled Route"}</span>
-                  <span className="session-list-item-date">{formatDate(s.created_at)}</span>
-                  {s.total_duration != null && (
-                    <span className="session-list-item-duration">
-                      {formatDuration(s.total_duration)} / {formatDistance(s.total_distance ?? 0)}
+      {!loading && sessions.length > 0 && (() => {
+        const sorted = [...sessions].sort((a, b) => statusOrder(a) - statusOrder(b));
+        const active = sorted.filter((s) => s.status !== "finished");
+        const finished = sorted.filter((s) => s.status === "finished");
+
+        return (
+          <>
+            <ul className="session-list-items">
+              {active.map((s) => (
+                <li key={s.id}>
+                  <button
+                    className={`session-list-item ${s.status === "in_progress" ? "session-list-item--active" : ""}`}
+                    onClick={() => onSelectSession(s.id)}
+                  >
+                    <div className="session-list-item-info">
+                      <div className="session-list-item-name-row">
+                        {s.status === "in_progress" && <span className="session-list-item-dot" />}
+                        <span className="session-list-item-name">{s.name || "Untitled Route"}</span>
+                      </div>
+                      {s.status === "in_progress" && (
+                        <span className="session-list-item-status">
+                          {s.delivered_count + s.not_received_count}/{s.stop_count} stops done
+                        </span>
+                      )}
+                      {s.status !== "in_progress" && (
+                        <span className="session-list-item-date">{formatDate(s.created_at)}</span>
+                      )}
+                      {s.total_duration != null && (
+                        <span className="session-list-item-duration">
+                          {formatDuration(s.total_duration)} / {formatDistance(s.total_distance ?? 0)}
+                        </span>
+                      )}
+                    </div>
+                    <span className="session-list-item-count">
+                      {s.stop_count} stop{s.stop_count !== 1 ? "s" : ""}
                     </span>
-                  )}
-                </div>
-                <span className="session-list-item-count">
-                  {s.stop_count} stop{s.stop_count !== 1 ? "s" : ""}
-                </span>
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
+                  </button>
+                </li>
+              ))}
+            </ul>
+
+            {finished.length > 0 && (
+              <details className="session-list-finished">
+                <summary className="session-list-finished-toggle">
+                  Finished routes ({finished.length})
+                </summary>
+                <ul className="session-list-items session-list-items--finished">
+                  {finished.map((s) => (
+                    <li key={s.id}>
+                      <button
+                        className="session-list-item session-list-item--finished"
+                        onClick={() => onSelectSession(s.id)}
+                      >
+                        <div className="session-list-item-info">
+                          <span className="session-list-item-name">{s.name || "Untitled Route"}</span>
+                          <span className="session-list-item-date">{formatDate(s.created_at)}</span>
+                        </div>
+                        <span className="session-list-item-count">
+                          {s.stop_count} stop{s.stop_count !== 1 ? "s" : ""}
+                        </span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </details>
+            )}
+          </>
+        );
+      })()}
     </div>
   );
 }
