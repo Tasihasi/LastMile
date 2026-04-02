@@ -95,11 +95,16 @@ Delete a session and all its stops. Planner only.
 
 ### PATCH /sessions/{id}/assign/
 
-Assign a session to a biker. Planner only.
+Assign or unassign a session. Planner only.
 
-**Request:**
+**Assign to a biker:**
 ```json
 { "owner_id": 3 }
+```
+
+**Unassign (remove from biker):**
+```json
+{ "owner_id": null }
 ```
 
 ### PATCH /sessions/{id}/rename/

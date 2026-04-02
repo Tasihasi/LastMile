@@ -34,6 +34,8 @@ After optimization you'll see:
 - A route line on the map
 - Total duration, distance, and a time window estimate
 
+The Optimize button disappears after the route is optimized -- there is no need to re-optimize.
+
 ### 4. Configure settings (optional)
 
 Click the gear icon to adjust:
