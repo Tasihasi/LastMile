@@ -55,7 +55,7 @@ export function PlannerDashboard({ onViewSession, onOpenLiveMap }: PlannerDashbo
     setConfirmDelete(null);
   };
 
-  const handleAssign = async (sessionId: string, ownerId: number) => {
+  const handleAssign = async (sessionId: string, ownerId: number | null) => {
     try {
       await assignSession(sessionId, ownerId);
       refresh();
@@ -112,7 +112,7 @@ export function PlannerDashboard({ onViewSession, onOpenLiveMap }: PlannerDashbo
     if (!draggingId) return;
 
     if (target === "unassigned") {
-      // Can't unassign via drag for now — would need a backend endpoint
+      await handleAssign(draggingId, null);
       return;
     }
 
@@ -343,7 +343,7 @@ interface SessionCardProps {
   onDragEnd: () => void;
   onView: () => void;
   onAssignOpen: () => void;
-  onAssign: (ownerId: number) => void;
+  onAssign: (ownerId: number | null) => void;
   onDeleteConfirm: () => void;
   onDeleteCancel: () => void;
   onDelete: () => void;
@@ -503,6 +503,14 @@ function SessionCard({
                     {b.username === session.owner_name && " (current)"}
                   </button>
                 ))}
+                {session.owner_name && (
+                  <button
+                    className="session-card-assign-option session-card-assign-option--unassign"
+                    onClick={() => onAssign(null)}
+                  >
+                    Unassign
+                  </button>
+                )}
               </div>
             </>
           )}
