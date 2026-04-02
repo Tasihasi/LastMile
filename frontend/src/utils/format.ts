@@ -32,30 +32,57 @@ export function travelSeconds(distanceMeters: number, speedKmh: number): number 
 /**
  * Calculate arrival times for each stop based on settings.
  * Returns a Map from stop sequence_order to arrival Date.
+ * Key 0 = depot departure, keys 1..N = delivery stops, key -1 = return home.
+ *
+ * When hasDepot=true, segments are: [depot->s1, s1->s2, ..., sN->depot]
+ * When hasDepot=false, segments are: [s1->s2, s2->s3, ..., sN-1->sN]
  */
 export function calcArrivalTimes(
   segments: RouteSegment[],
   settings: DeliverySettings,
   stopCount: number,
+  hasDepot: boolean,
 ): Map<number, Date> {
   const arrivals = new Map<number, Date>();
 
   const [h, m] = settings.startTime.split(":").map(Number);
-  const now = new Date();
-  now.setHours(h, m, 0, 0);
+  const start = new Date();
+  start.setHours(h, m, 0, 0);
 
-  // Stop 1 = departure point, arrival = start time
-  arrivals.set(1, new Date(now));
+  let currentTime = start.getTime();
 
-  let currentTime = now.getTime();
+  if (hasDepot) {
+    // Segment 0 = depot -> first stop
+    arrivals.set(0, new Date(currentTime)); // depot departure
+    const depotToFirst = travelSeconds(segments[0].distance, settings.speedKmh);
+    currentTime += depotToFirst * 1000;
+    arrivals.set(1, new Date(currentTime)); // arrive at stop 1
 
-  for (let i = 0; i < segments.length && i < stopCount - 1; i++) {
-    // Add dwell time at current stop (except first stop = depot, optional)
-    currentTime += settings.dwellMinutes * 60 * 1000;
-    // Add travel time to next stop
-    const travel = travelSeconds(segments[i].distance, settings.speedKmh);
-    currentTime += travel * 1000;
-    arrivals.set(i + 2, new Date(currentTime));
+    // Segments 1..stopCount-1 = between delivery stops
+    for (let i = 1; i < segments.length - 1 && i < stopCount; i++) {
+      currentTime += settings.dwellMinutes * 60 * 1000;
+      const travel = travelSeconds(segments[i].distance, settings.speedKmh);
+      currentTime += travel * 1000;
+      arrivals.set(i + 1, new Date(currentTime));
+    }
+
+    // Last segment = last stop -> depot (return home)
+    if (segments.length > stopCount) {
+      currentTime += settings.dwellMinutes * 60 * 1000; // dwell at last stop
+      const returnTravel = travelSeconds(segments[segments.length - 1].distance, settings.speedKmh);
+      currentTime += returnTravel * 1000;
+      arrivals.set(-1, new Date(currentTime)); // arrive home
+    }
+  } else {
+    // No depot: stop 1 = start
+    arrivals.set(1, new Date(currentTime));
+
+    for (let i = 0; i < segments.length && i < stopCount - 1; i++) {
+      currentTime += settings.dwellMinutes * 60 * 1000;
+      const travel = travelSeconds(segments[i].distance, settings.speedKmh);
+      currentTime += travel * 1000;
+      arrivals.set(i + 2, new Date(currentTime));
+    }
   }
 
   return arrivals;

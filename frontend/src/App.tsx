@@ -46,29 +46,35 @@ function App() {
     ? stops.find((s) => s.id === selectedStopId) ?? null
     : null;
 
+  const hasDepot = settings.homeLat != null && settings.homeLng != null;
+  const depot = hasDepot ? { lat: settings.homeLat!, lng: settings.homeLng!, address: settings.homeAddress } : null;
+
   // Calculate arrival times based on settings + segments
   const arrivalTimes = useMemo(() => {
     if (!routeSegments) return null;
-    return calcArrivalTimes(routeSegments, settings, stops.length);
-  }, [routeSegments, settings, stops.length]);
+    return calcArrivalTimes(routeSegments, settings, stops.length, hasDepot);
+  }, [routeSegments, settings, stops.length, hasDepot]);
 
-  // Total route time including dwell
-  const totalRouteTime = useMemo(() => {
-    if (!arrivalTimes || arrivalTimes.size < 2) return null;
-    const first = arrivalTimes.get(1);
-    const last = arrivalTimes.get(arrivalTimes.size);
-    if (!first || !last) return null;
-    // Add dwell at last stop
-    return Math.round((last.getTime() - first.getTime()) / 1000) + settings.dwellMinutes * 60;
-  }, [arrivalTimes, settings.dwellMinutes]);
-
-  // Estimated finish time
+  // Finish time = return home time (if depot) or last stop arrival + dwell
   const finishTime = useMemo(() => {
-    if (!arrivalTimes || arrivalTimes.size < 1) return null;
-    const last = arrivalTimes.get(arrivalTimes.size);
-    if (!last) return null;
-    return new Date(last.getTime() + settings.dwellMinutes * 60 * 1000);
-  }, [arrivalTimes, settings.dwellMinutes]);
+    if (!arrivalTimes) return null;
+    if (hasDepot) {
+      return arrivalTimes.get(-1) ?? null; // return home
+    }
+    // No depot: last stop + dwell
+    const lastOrder = stops.reduce((max, s) => Math.max(max, s.sequence_order ?? 0), 0);
+    const lastArrival = arrivalTimes.get(lastOrder);
+    if (!lastArrival) return null;
+    return new Date(lastArrival.getTime() + settings.dwellMinutes * 60 * 1000);
+  }, [arrivalTimes, hasDepot, stops, settings.dwellMinutes]);
+
+  // Total route time from start to finish
+  const totalRouteTime = useMemo(() => {
+    if (!arrivalTimes || !finishTime) return null;
+    const startPoint = arrivalTimes.get(hasDepot ? 0 : 1);
+    if (!startPoint) return null;
+    return Math.round((finishTime.getTime() - startPoint.getTime()) / 1000);
+  }, [arrivalTimes, finishTime, hasDepot]);
 
   return (
     <div className="app">
@@ -261,6 +267,7 @@ function App() {
                   routeSegments={routeSegments}
                   arrivalTimes={arrivalTimes}
                   speedKmh={settings.speedKmh}
+                  depot={depot}
                 />
               </>
             )}
@@ -272,6 +279,7 @@ function App() {
             stops={stops}
             routeGeometry={routeGeometry}
             onSelectStop={setSelectedStopId}
+            depot={depot}
           />
         </main>
       </div>

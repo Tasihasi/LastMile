@@ -1,6 +1,12 @@
 import type { DeliveryStop, RouteSegment } from "../types";
 import { formatDistance, formatTime, travelSeconds, formatDuration } from "../utils/format";
 
+interface DepotInfo {
+  lat: number;
+  lng: number;
+  address: string;
+}
+
 interface AddressListProps {
   stops: DeliveryStop[];
   selectedStopId: number | null;
@@ -8,6 +14,7 @@ interface AddressListProps {
   routeSegments: RouteSegment[] | null;
   arrivalTimes: Map<number, Date> | null;
   speedKmh: number;
+  depot: DepotInfo | null;
 }
 
 function statusLabel(s: DeliveryStop["geocode_status"]) {
@@ -32,8 +39,13 @@ function numberClass(stop: DeliveryStop) {
   return `stop-number stop-number--${stop.geocode_status}`;
 }
 
-export function AddressList({ stops, selectedStopId, onSelectStop, routeSegments, arrivalTimes, speedKmh }: AddressListProps) {
+export function AddressList({ stops, selectedStopId, onSelectStop, routeSegments, arrivalTimes, speedKmh, depot }: AddressListProps) {
   if (stops.length === 0) return null;
+
+  const isOptimized = stops.some((s) => s.sequence_order != null);
+  const returnHomeArrival = arrivalTimes?.get(-1) ?? null;
+  const showReturnHome = depot && isOptimized && routeSegments;
+  const returnSegment = showReturnHome ? routeSegments[routeSegments.length - 1] : null;
 
   return (
     <div className="address-list">
@@ -47,14 +59,17 @@ export function AddressList({ stops, selectedStopId, onSelectStop, routeSegments
             ? arrivalTimes.get(stop.sequence_order) ?? null
             : null;
 
+          // When depot is set, segment indices shift: seg[0]=depot->s1, seg[1]=s1->s2, etc.
+          const segIndex = depot ? i : i - 1;
+
           return (
             <li key={stop.id}>
               {/* Segment connector showing travel time */}
-              {routeSegments && i > 0 && i <= routeSegments.length && (
+              {routeSegments && segIndex >= 0 && segIndex < routeSegments.length && (depot ? true : i > 0) && (
                 <div className="segment-connector">
                   <div className="segment-line" />
                   <span className="segment-info">
-                    {formatDuration(travelSeconds(routeSegments[i - 1].distance, speedKmh))} / {formatDistance(routeSegments[i - 1].distance)}
+                    {formatDuration(travelSeconds(routeSegments[segIndex].distance, speedKmh))} / {formatDistance(routeSegments[segIndex].distance)}
                   </span>
                   <div className="segment-line" />
                 </div>
@@ -98,6 +113,37 @@ export function AddressList({ stops, selectedStopId, onSelectStop, routeSegments
             </li>
           );
         })}
+
+        {/* Return home */}
+        {showReturnHome && returnSegment && (
+          <li>
+            <div className="segment-connector">
+              <div className="segment-line" />
+              <span className="segment-info">
+                {formatDuration(travelSeconds(returnSegment.distance, speedKmh))} / {formatDistance(returnSegment.distance)}
+              </span>
+              <div className="segment-line" />
+            </div>
+            <div className="stop-item stop-item--home">
+              <span className="stop-number stop-number--home">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+                  <polyline points="9 22 9 12 15 12 15 22" />
+                </svg>
+              </span>
+              <div className="stop-info">
+                <span className="stop-name">Return Home</span>
+                <span className="stop-address">{depot.address}</span>
+              </div>
+              <div className="stop-right">
+                {returnHomeArrival && (
+                  <span className="stop-arrival">{formatTime(returnHomeArrival)}</span>
+                )}
+                <span className="stop-status stop-status--home">Home</span>
+              </div>
+            </div>
+          </li>
+        )}
       </ul>
     </div>
   );
