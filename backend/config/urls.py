@@ -15,10 +15,11 @@ Including another URLconf
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
 
-import os
+from pathlib import Path
 
+from django.conf import settings
 from django.contrib import admin
-from django.http import HttpResponse
+from django.http import Http404, HttpResponse
 from django.urls import include, path, re_path
 
 urlpatterns = [
@@ -26,18 +27,17 @@ urlpatterns = [
     path("api/", include("planner.urls")),
 ]
 
-# In production, serve the React SPA for all non-API routes
-_index_html = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-    os.pardir,
-    "frontend",
-    "dist",
-    "index.html",
-)
-if os.path.isfile(_index_html):
+# In production, serve the React SPA for all non-API routes.
+# Path is resolved at import time, but file is read at request time
+# so the catch-all works even if the build finishes after Django imports urls.
+_index_html = Path(__file__).resolve().parent.parent.parent / "frontend" / "dist" / "index.html"
+
+if not settings.DEBUG or _index_html.is_file():
 
     def _spa_view(request):
-        with open(_index_html) as f:
-            return HttpResponse(f.read(), content_type="text/html")
+        try:
+            return HttpResponse(_index_html.read_text(), content_type="text/html")
+        except FileNotFoundError:
+            raise Http404("Frontend build not found") from None
 
     urlpatterns += [re_path(r"^(?!api/|admin/).*$", _spa_view)]
