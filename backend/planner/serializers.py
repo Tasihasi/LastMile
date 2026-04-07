@@ -44,6 +44,8 @@ class DeliverySessionSerializer(serializers.ModelSerializer):
     stops = DeliveryStopSerializer(many=True, read_only=True)
     needs_geocoding = serializers.SerializerMethodField()
     owner_name = serializers.CharField(source="owner.username", read_only=True, default=None)
+    parent_id = serializers.UUIDField(read_only=True, default=None)
+    sub_route_count = serializers.IntegerField(source="sub_routes.count", read_only=True)
 
     class Meta:
         model = DeliverySession
@@ -52,6 +54,8 @@ class DeliverySessionSerializer(serializers.ModelSerializer):
             "name",
             "created_at",
             "owner_name",
+            "parent_id",
+            "sub_route_count",
             "stops",
             "needs_geocoding",
             "total_duration",
@@ -73,6 +77,8 @@ class SessionListSerializer(serializers.ModelSerializer):
 
     stop_count = serializers.IntegerField(source="stops.count", read_only=True)
     owner_name = serializers.CharField(source="owner.username", read_only=True, default=None)
+    parent_id = serializers.UUIDField(read_only=True, default=None)
+    sub_route_count = serializers.IntegerField(source="sub_routes.count", read_only=True)
     delivered_count = serializers.SerializerMethodField()
     not_received_count = serializers.SerializerMethodField()
     current_stop_name = serializers.SerializerMethodField()
@@ -84,6 +90,8 @@ class SessionListSerializer(serializers.ModelSerializer):
             "name",
             "created_at",
             "owner_name",
+            "parent_id",
+            "sub_route_count",
             "stop_count",
             "total_duration",
             "total_distance",

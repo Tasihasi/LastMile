@@ -26,6 +26,7 @@
 | Geocoding | Nominatim (OpenStreetMap) | 1 req/sec rate limit |
 | Route optimization | OpenRouteService (VROOM algorithm) | 2000 req/day free |
 | Route geometry | ORS Directions API | same key |
+| Clustering | scikit-learn (KMeans) | 1.5+ |
 | File parsing | csv, openpyxl, xml.etree | built-in + openpyxl |
 | Static files | WhiteNoise | 6.x |
 | Linting | Ruff (backend), ESLint (frontend) | |
@@ -45,20 +46,21 @@ delivery_planner/
 │   │   ├── asgi.py / wsgi.py
 │   ├── planner/                  # Main Django app
 │   │   ├── models.py             # DeliverySession, DeliveryStop, UserProfile, SharedRoute
-│   │   ├── views.py              # All API endpoints (~515 lines)
-│   │   ├── serializers.py        # DRF serializers (~146 lines)
+│   │   ├── views.py              # All API endpoints (~580 lines)
+│   │   ├── serializers.py        # DRF serializers (~173 lines)
 │   │   ├── urls.py               # API route definitions
 │   │   ├── geocoder.py           # Nominatim geocoding client
 │   │   ├── optimizer.py          # ORS optimization + directions
+│   │   ├── clustering.py         # KMeans geographic clustering (scikit-learn)
 │   │   ├── parsers.py            # Multi-format file parsing (CSV/XLSX/TXT/XML)
 │   │   ├── admin.py / apps.py / tests.py
-│   │   ├── migrations/           # 7 migrations (0001-0007)
+│   │   ├── migrations/           # 8 migrations (0001-0008)
 │   │   ├── management/commands/
 │   │   │   └── seed_test_data.py # Generates 3 bikers, 9 routes
-│   │   └── sample_data/          # Example CSV/XLSX/XML files
+│   │   └── sample_data/          # Example CSV/XLSX/XML files + large_delivery_300.csv
 │   ├── media/uploads/            # Uploaded files + cached geocodes
 │   ├── db.sqlite3
-│   ├── requirements.txt          # Django, DRF, CORS, openpyxl, requests, python-dotenv
+│   ├── requirements.txt          # Django, DRF, CORS, openpyxl, requests, python-dotenv, scikit-learn
 │   ├── requirements-dev.txt      # Ruff
 │   ├── .env                      # ORS_API_KEY (gitignored)
 │   ├── .env.example
@@ -117,10 +119,11 @@ delivery_planner/
 |-------|------|-------|
 | id | UUID | Primary key |
 | owner | FK(User) | Nullable -- null = unassigned |
+| parent | FK(self) | Nullable -- links sub-routes to parent session (related_name="sub_routes") |
 | name | str | Auto-named from filename |
 | original_file | FileField | uploads/ |
 | created_at | DateTimeField | auto_now_add |
-| status | str | `not_started` / `in_progress` / `finished` |
+| status | str | `not_started` / `in_progress` / `finished` / `split` |
 | started_at | DateTimeField | Nullable, set when biker starts |
 | finished_at | DateTimeField | Nullable, set when all stops marked |
 | current_stop_index | int | Nullable, tracks next pending stop's sequence_order |
@@ -158,7 +161,7 @@ delivery_planner/
 | session | FK(DeliverySession) | |
 | created_at | DateTimeField | auto_now_add |
 
-### Migrations (7 total)
+### Migrations (8 total)
 1. `0001_initial` -- Base Session + Stop
 2. `0002_*` -- Recipient fields, product_code
 3. `0003_*` -- Auth system (owner, roles, shares)
@@ -166,6 +169,7 @@ delivery_planner/
 5. `0005_*` -- Status fields (status, started_at, finished_at, current_stop_index)
 6. `0006_*` -- route_geometry (GeoJSON)
 7. `0007_*` -- route_segments (timing array)
+8. `0008_session_parent_and_split_status` -- parent FK (self-referential) + "split" status choice
 
 ---
 
@@ -194,6 +198,20 @@ delivery_planner/
 | POST | `/api/sessions/<id>/geocode/` | Stream NDJSON, geocode pending stops | Token |
 | GET | `/api/sessions/<id>/geocode-status/` | Check progress (pending/success/failed) | Token |
 | POST | `/api/sessions/<id>/optimize/` | Optimize route order + geometry + segments | Token |
+
+### Bulk Clustering (Planner)
+| Method | Endpoint | Description | Auth |
+|--------|----------|-------------|------|
+| POST | `/api/sessions/<id>/cluster/` | Cluster stops into N child sessions (KMeans) | Planner |
+| POST | `/api/sessions/<id>/move-stop/` | Move a stop between sibling sub-routes | Planner |
+
+**POST cluster/** request: `{"n_routes": 7, "max_stops_per_route": 48}` (both optional, defaults auto-calculated).
+Response: `{parent_id, sub_routes[], cluster_summary{total_stops, skipped_stops, n_routes, avg_stops_per_route, min_stops, max_stops}}`.
+Parent session status becomes `split`; stops are moved to child sessions.
+
+**POST move-stop/** request: `{"stop_id": 123, "to_session_id": "uuid"}`.
+Response: `{stop_id, from_session_id, to_session_id, from_count, to_count}`.
+Both sessions must be siblings (same parent).
 
 ### Route Lifecycle (Biker)
 | Method | Endpoint | Description | Auth |
@@ -347,7 +365,7 @@ Single web service on Render. Django serves both the API and the built React SPA
 - No password auth (demo uses username-only)
 - Polling not WebSockets for live updates
 - Stop-based tracking not GPS
-- Single vehicle per route (no multi-vehicle dispatch)
+- Single vehicle per route (bulk clustering splits into sub-routes, but no true multi-vehicle dispatch)
 - CORS whitelist: only localhost:5173
 - No file cleanup for uploads
 
@@ -369,6 +387,13 @@ All Tier 1 and Tier 2 features from PLAN.md are **completed**:
 - Dark/light theme
 - Responsive layout
 - Finished route stats panel
+
+**Bulk Clustering (Phase 1 -- backend only):**
+- KMeans geographic clustering of large uploads into sub-routes (scikit-learn)
+- Auto-split oversized clusters to respect ORS 48-stop limit
+- Parent/child session hierarchy (parent status = "split", children are independent routes)
+- Move stops between sibling sub-routes
+- 300-address Budapest test CSV for bulk testing
 
 ---
 
