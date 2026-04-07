@@ -5,20 +5,34 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('planner', '0007_add_route_segments'),
+        ("planner", "0007_add_route_segments"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='deliverysession',
-            name='parent',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.CASCADE, related_name='sub_routes', to='planner.deliverysession'),
+            model_name="deliverysession",
+            name="parent",
+            field=models.ForeignKey(
+                blank=True,
+                null=True,
+                on_delete=django.db.models.deletion.CASCADE,
+                related_name="sub_routes",
+                to="planner.deliverysession",
+            ),
         ),
         migrations.AlterField(
-            model_name='deliverysession',
-            name='status',
-            field=models.CharField(choices=[('not_started', 'Not Started'), ('in_progress', 'In Progress'), ('finished', 'Finished'), ('split', 'Split into Routes')], default='not_started', max_length=20),
+            model_name="deliverysession",
+            name="status",
+            field=models.CharField(
+                choices=[
+                    ("not_started", "Not Started"),
+                    ("in_progress", "In Progress"),
+                    ("finished", "Finished"),
+                    ("split", "Split into Routes"),
+                ],
+                default="not_started",
+                max_length=20,
+            ),
         ),
     ]
