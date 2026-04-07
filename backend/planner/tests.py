@@ -548,6 +548,7 @@ class OptimizeAPIKeyTest(TestCase):
     @patch("planner.views.django_settings")
     def test_optimize_missing_api_key(self, mock_settings):
         mock_settings.ORS_API_KEY = ""
+        mock_settings.E2E_MOCK = False
         response = self.client.post(f"/api/sessions/{self.session.id}/optimize/")
         self.assertEqual(response.status_code, 503)
         error = response.json()["error"]

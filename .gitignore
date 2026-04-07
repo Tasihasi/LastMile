@@ -30,3 +30,8 @@ claude_exec_plan/
 
 # Claude docs (local only)
 claude_docs/
+
+# Playwright
+frontend/test-results/
+frontend/playwright-report/
+frontend/blob-report/

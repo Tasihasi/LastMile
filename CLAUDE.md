@@ -29,6 +29,7 @@
 | Clustering | scikit-learn (KMeans) | 1.5+ |
 | File parsing | csv, openpyxl, xml.etree | built-in + openpyxl |
 | Static files | WhiteNoise | 6.x |
+| E2E Testing | Playwright | 1.59+ |
 | Linting | Ruff (backend), ESLint (frontend) | |
 | CI/CD | GitHub Actions | Python 3.12, Node 20 |
 | Hosting | Render (single web service) | Free tier |
@@ -98,12 +99,24 @@ delivery_planner/
 │   │       └── format.ts         # Duration, distance, time formatting
 │   ├── index.html                # HTML entry (Inter font, "LastMile" title)
 │   ├── .env.development          # Dev API URL (VITE_API_BASE=http://localhost:8000/api)
+│   ├── e2e/                      # Playwright E2E test suite
+│   │   ├── fixtures.ts           # Login helpers, test data paths
+│   │   ├── auth.spec.ts          # Auth flow tests (login, logout, role selection)
+│   │   ├── biker-journey.spec.ts # Upload, optimize, start, deliver, finish
+│   │   ├── planner-journey.spec.ts # Dashboard, assign, rename, delete, live map
+│   │   ├── clustering.spec.ts    # Split, cluster review, optimize all, undo
+│   │   ├── map-interactions.spec.ts  # Map markers, stop detail, sidebar toggle
+│   │   ├── session-list.spec.ts  # Biker session list, empty state, finished section
+│   │   ├── settings-theme.spec.ts # Settings panel, theme toggle persistence
+│   │   ├── sharing.spec.ts       # Share link, shared route view, invalid link
+│   │   └── test-data/            # CSV fixtures for upload tests
+│   ├── playwright.config.ts      # Playwright config (webServer: Django + Vite)
 │   ├── vite.config.ts
 │   ├── package.json
 │   ├── tsconfig.json
 │   └── eslint.config.js
 ├── .github/workflows/
-│   └── ci.yml                    # Backend lint/test + frontend build
+│   └── ci.yml                    # Backend lint/test + frontend build + E2E tests
 ├── build.sh                      # Render build script (frontend + backend)
 ├── CLAUDE.md                     # This file
 ├── PLAN.md                       # Tier 1 & 2 implementation roadmap (all completed)
@@ -322,6 +335,15 @@ python manage.py seed_test_data  # Creates 3 bikers, 9 routes
 ### Environment Variables
 - `ORS_API_KEY` in `backend/.env` (get free key at openrouteservice.org)
 
+### Run E2E Tests
+```bash
+cd frontend
+npx playwright install chromium    # First time only
+npm run test:e2e                   # Runs Playwright (auto-starts Django + Vite)
+npm run test:e2e:ui                # Interactive Playwright UI mode
+```
+E2E tests require `E2E_MOCK=true` env var on the backend (set automatically by playwright.config.ts webServer).
+
 ---
 
 ## CI/CD (.github/workflows/ci.yml)
@@ -329,6 +351,7 @@ python manage.py seed_test_data  # Creates 3 bikers, 9 routes
 Runs on **all branches** + PRs:
 - **Backend**: Python 3.12, `ruff check` + `ruff format --check`, `python manage.py check`, `python manage.py migrate`, `python manage.py test`
 - **Frontend**: Node 20, `npx eslint .`, `npx tsc -b`, `npx vite build`
+- **E2E Tests** (PRs to main/production only): Depends on Backend + Frontend jobs passing first. Playwright Chromium tests against real Django backend (with mocked external APIs via `E2E_MOCK=true`) + Vite dev server. Uploads Playwright report as artifact on failure.
 
 ---
 
@@ -425,6 +448,15 @@ All Tier 1 and Tier 2 features from PLAN.md are **completed**:
 - Database indexes on hot columns: DeliverySession.status, DeliveryStop.delivery_status/geocode_status/sequence_order
 - N+1 query elimination: `list_sessions` uses annotated queryset (Count + Subquery + select_related); `active_sessions` computes counts from prefetched stops in Python
 - Annotation-aware serializers: SessionListSerializer and ActiveSessionSerializer use pre-computed annotations when available, with fallback queries for single-object usage
+
+**E2E Testing (completed):**
+- Playwright E2E test suite covering full user journeys: auth, upload, geocoding, optimization, route lifecycle, planner dashboard, clustering, sharing, settings, theme, map interactions, session list
+- E2E mock mode (`E2E_MOCK=true` env var): geocoder.py returns deterministic fake Budapest-area coordinates; optimizer.py returns angle-sorted order with straight-line geometry -- no external API calls in CI
+- CI job runs E2E tests only on PRs to main/production, after backend+frontend jobs pass
+- Test data: CSV fixtures with pre-geocoded stops (`e2e/test-data/`) + seeded data from `seed_test_data` command
+- Playwright config auto-starts Django backend (with mock + seed) and Vite dev server
+- ESLint excludes `e2e/` and `playwright.config.ts` (Playwright uses Node-style imports)
+- Playwright report uploaded as CI artifact on failure
 
 ---
 
