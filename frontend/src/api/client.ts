@@ -1,7 +1,9 @@
 import axios from "axios";
 import type {
   AuthResponse,
+  ClusterResponse,
   DeliveryStopStatus,
+  MoveStopResponse,
   OptimizeResponse,
   SessionResponse,
   SessionSummary,
@@ -227,6 +229,47 @@ export async function renameSession(
     `/sessions/${sessionId}/rename/`,
     { name }
   );
+  return data;
+}
+
+// ============================================
+// Clustering
+// ============================================
+
+export async function clusterSession(
+  sessionId: string,
+  nRoutes?: number,
+  maxStopsPerRoute?: number
+): Promise<ClusterResponse> {
+  const body: Record<string, number> = {};
+  if (nRoutes != null) body.n_routes = nRoutes;
+  if (maxStopsPerRoute != null) body.max_stops_per_route = maxStopsPerRoute;
+  const { data } = await api.post<ClusterResponse>(
+    `/sessions/${sessionId}/cluster/`,
+    body
+  );
+  return data;
+}
+
+export async function moveStop(
+  sessionId: string,
+  stopId: number,
+  toSessionId: string
+): Promise<MoveStopResponse> {
+  const { data } = await api.post<MoveStopResponse>(
+    `/sessions/${sessionId}/move-stop/`,
+    { stop_id: stopId, to_session_id: toSessionId }
+  );
+  return data;
+}
+
+export async function unclusterSession(
+  sessionId: string
+): Promise<{ parent_id: string; deleted_routes: number }> {
+  const { data } = await api.delete<{
+    parent_id: string;
+    deleted_routes: number;
+  }>(`/sessions/${sessionId}/uncluster/`);
   return data;
 }
 

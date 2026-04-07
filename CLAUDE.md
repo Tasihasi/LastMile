@@ -26,6 +26,7 @@
 | Geocoding | Nominatim (OpenStreetMap) | 1 req/sec rate limit |
 | Route optimization | OpenRouteService (VROOM algorithm) | 2000 req/day free |
 | Route geometry | ORS Directions API | same key |
+| Clustering | scikit-learn (KMeans) | 1.5+ |
 | File parsing | csv, openpyxl, xml.etree | built-in + openpyxl |
 | Static files | WhiteNoise | 6.x |
 | Linting | Ruff (backend), ESLint (frontend) | |
@@ -40,25 +41,26 @@
 delivery_planner/
 ├── backend/
 │   ├── config/
-│   │   ├── settings.py           # Django config (SQLite, CORS, DRF, TokenAuth)
+│   │   ├── settings.py           # Django config (SQLite, CORS, DRF, TokenAuth, HTTPS enforcement, upload limits)
 │   │   ├── urls.py               # Root URL routing -> planner.urls
 │   │   ├── asgi.py / wsgi.py
 │   ├── planner/                  # Main Django app
 │   │   ├── models.py             # DeliverySession, DeliveryStop, UserProfile, SharedRoute
-│   │   ├── views.py              # All API endpoints (~515 lines)
-│   │   ├── serializers.py        # DRF serializers (~146 lines)
+│   │   ├── views.py              # All API endpoints (~580 lines)
+│   │   ├── serializers.py        # DRF serializers (~173 lines)
 │   │   ├── urls.py               # API route definitions
 │   │   ├── geocoder.py           # Nominatim geocoding client
 │   │   ├── optimizer.py          # ORS optimization + directions
+│   │   ├── clustering.py         # KMeans geographic clustering (scikit-learn)
 │   │   ├── parsers.py            # Multi-format file parsing (CSV/XLSX/TXT/XML)
 │   │   ├── admin.py / apps.py / tests.py
-│   │   ├── migrations/           # 7 migrations (0001-0007)
+│   │   ├── migrations/           # 9 migrations (0001-0009)
 │   │   ├── management/commands/
 │   │   │   └── seed_test_data.py # Generates 3 bikers, 9 routes
-│   │   └── sample_data/          # Example CSV/XLSX/XML files
+│   │   └── sample_data/          # Example CSV/XLSX/XML files + large_delivery_300.csv
 │   ├── media/uploads/            # Uploaded files + cached geocodes
 │   ├── db.sqlite3
-│   ├── requirements.txt          # Django, DRF, CORS, openpyxl, requests, python-dotenv
+│   ├── requirements.txt          # Django, DRF, CORS, openpyxl, requests, python-dotenv, scikit-learn
 │   ├── requirements-dev.txt      # Ruff
 │   ├── .env                      # ORS_API_KEY (gitignored)
 │   ├── .env.example
@@ -66,7 +68,7 @@ delivery_planner/
 ├── frontend/
 │   ├── src/
 │   │   ├── main.tsx              # Entry point (AuthContext + React Router)
-│   │   ├── App.tsx               # Main app shell, 3 view modes (~480 lines)
+│   │   ├── App.tsx               # Main app shell, 4 view modes (~480 lines)
 │   │   ├── App.css               # All styles (~3300 lines), CSS variables, light/dark
 │   │   ├── index.css             # Base styles
 │   │   ├── api/
@@ -87,7 +89,8 @@ delivery_planner/
 │   │   │   ├── SettingsPanel.tsx     # Route config (depot, time, speed)
 │   │   │   ├── SessionList.tsx       # Biker's route history
 │   │   │   ├── BikerPicker.tsx       # Dropdown to filter by biker
-│   │   │   ├── PlannerDashboard.tsx  # Kanban-style route management
+│   │   │   ├── PlannerDashboard.tsx  # Kanban-style route management + cluster triggers
+│   │   │   ├── ClusterReviewView.tsx # Cluster review: color-coded map, move stops, optimize/assign per route
 │   │   │   ├── PlannerMapView.tsx    # Aggregate live map (all active routes)
 │   │   │   ├── SharedRouteView.tsx   # Public read-only route view
 │   │   │   └── FinishedRouteDetail.tsx # Modal with delivery stats
@@ -117,10 +120,11 @@ delivery_planner/
 |-------|------|-------|
 | id | UUID | Primary key |
 | owner | FK(User) | Nullable -- null = unassigned |
+| parent | FK(self) | Nullable -- links sub-routes to parent session (related_name="sub_routes") |
 | name | str | Auto-named from filename |
 | original_file | FileField | uploads/ |
 | created_at | DateTimeField | auto_now_add |
-| status | str | `not_started` / `in_progress` / `finished` |
+| status | str | `not_started` / `in_progress` / `finished` / `split` |
 | started_at | DateTimeField | Nullable, set when biker starts |
 | finished_at | DateTimeField | Nullable, set when all stops marked |
 | current_stop_index | int | Nullable, tracks next pending stop's sequence_order |
@@ -158,7 +162,7 @@ delivery_planner/
 | session | FK(DeliverySession) | |
 | created_at | DateTimeField | auto_now_add |
 
-### Migrations (7 total)
+### Migrations (9 total)
 1. `0001_initial` -- Base Session + Stop
 2. `0002_*` -- Recipient fields, product_code
 3. `0003_*` -- Auth system (owner, roles, shares)
@@ -166,6 +170,8 @@ delivery_planner/
 5. `0005_*` -- Status fields (status, started_at, finished_at, current_stop_index)
 6. `0006_*` -- route_geometry (GeoJSON)
 7. `0007_*` -- route_segments (timing array)
+8. `0008_session_parent_and_split_status` -- parent FK (self-referential) + "split" status choice
+9. `0009_add_indexes_on_hot_columns` -- db_index on DeliverySession.status, DeliveryStop.delivery_status/geocode_status/sequence_order
 
 ---
 
@@ -195,6 +201,25 @@ delivery_planner/
 | GET | `/api/sessions/<id>/geocode-status/` | Check progress (pending/success/failed) | Token |
 | POST | `/api/sessions/<id>/optimize/` | Optimize route order + geometry + segments | Token |
 
+### Bulk Clustering (Planner)
+| Method | Endpoint | Description | Auth |
+|--------|----------|-------------|------|
+| POST | `/api/sessions/<id>/cluster/` | Cluster stops into N child sessions (KMeans) | Planner |
+| POST | `/api/sessions/<id>/move-stop/` | Move a stop between sibling sub-routes | Planner |
+| DELETE | `/api/sessions/<id>/uncluster/` | Undo split: delete sub-routes, restore stops to parent, reset to not_started. Blocked if any sub-route is in_progress | Planner |
+
+**POST cluster/** request: `{"n_routes": 7, "max_stops_per_route": 48}` (both optional, defaults auto-calculated).
+Response: `{parent_id, sub_routes[], cluster_summary{total_stops, skipped_stops, n_routes, avg_stops_per_route, min_stops, max_stops}}`.
+Parent session status becomes `split`; stops are moved to child sessions.
+
+**POST move-stop/** request: `{"stop_id": 123, "to_session_id": "uuid"}`.
+Response: `{stop_id, from_session_id, to_session_id, from_count, to_count}`.
+Both sessions must be siblings (same parent).
+
+**DELETE uncluster/** -- no request body.
+Response: `{message, session_id, stops_restored, sub_routes_deleted}`.
+Fails with 409 if any sub-route has status `in_progress`. Parent status resets to `not_started`; all child sessions and their stops are deleted; original stops are restored to parent.
+
 ### Route Lifecycle (Biker)
 | Method | Endpoint | Description | Auth |
 |--------|----------|-------------|------|
@@ -222,10 +247,11 @@ Auto-advances `current_stop_index` to next pending stop. Auto-finishes route whe
 - **useTheme** -- Light/dark mode toggle (localStorage + OS preference)
 
 ### View Modes (App.tsx)
-The app has 3 main view modes controlled by state in App.tsx:
+The app has 4 main view modes controlled by state in App.tsx:
 1. **Route View** (default for bikers) -- Map + sidebar with stops
 2. **Planner Dashboard** -- Kanban columns (unassigned + per-biker)
 3. **Live Map** -- Aggregate map of all active routes (planner only)
+4. **Cluster Review** -- Color-coded map + sidebar for reviewing/editing clustered sub-routes (planner only, accessed from "split" sessions in dashboard)
 
 ### Authentication Flow
 ```
@@ -239,6 +265,7 @@ LoginScreen -> POST /api/auth/login/ -> token in localStorage
 - **Coordinate order**: Leaflet = `[lat, lng]`, ORS APIs = `[lng, lat]`. Conversion in `optimizer.py`.
 - **Polling**: Live map polls `GET /api/sessions/active/` every 30 seconds (not WebSockets).
 - **Stop-based tracking**: Position = next pending stop's sequence_order, not GPS.
+- **Cluster colors**: 10 distinct colors for cluster markers (red, blue, green, purple, orange, teal, pink, brown, indigo, cyan), cycled by cluster index.
 
 ---
 
@@ -341,15 +368,18 @@ Single web service on Render. Django serves both the API and the built React SPA
 - Custom hooks for all stateful logic (no Redux, no Zustand)
 - Leaflet map wrapped in React-Leaflet components
 - Token auth (no sessions, no cookies, no passwords)
+- **Query optimization**: List views use `_annotate_session_list()` with `Count`/`Subquery` annotations + `select_related("owner")` to avoid N+1; serializers check for `_annotated` attributes with `hasattr()` fallback for single-object usage
+- **Production security**: HTTPS enforcement (HSTS, SSL redirect, secure cookies) auto-enabled when `DEBUG=False`
 
 ### Known Limitations
 - SQLite only (not production-ready, would need PostgreSQL)
 - No password auth (demo uses username-only)
 - Polling not WebSockets for live updates
 - Stop-based tracking not GPS
-- Single vehicle per route (no multi-vehicle dispatch)
-- CORS whitelist: only localhost:5173
+- Single vehicle per route (bulk clustering splits large uploads into sub-routes of max 48 stops each, but no true multi-vehicle dispatch)
+- CORS whitelist: only localhost:5173 (configurable via env)
 - No file cleanup for uploads
+- File upload limit: 10 MB
 
 ---
 
@@ -369,6 +399,32 @@ All Tier 1 and Tier 2 features from PLAN.md are **completed**:
 - Dark/light theme
 - Responsive layout
 - Finished route stats panel
+
+**Bulk Clustering (fully completed -- all 3 phases):**
+- KMeans geographic clustering of large uploads into sub-routes (scikit-learn)
+- Auto-split oversized clusters to respect ORS 48-stop limit
+- Parent/child session hierarchy (parent status = "split", children are independent routes)
+- Move stops between sibling sub-routes
+- 300-address Budapest test CSV for bulk testing
+- ClusterReviewView with color-coded cluster map, collapsible cluster cards, per-route optimize/assign actions, move-stop controls
+- PlannerDashboard "Split into Routes" button on sessions with >48 stops, "Split Routes" section for reviewing parent sessions
+- Child sessions filtered out of normal kanban view (parent_id != null hidden)
+- Undo split (DELETE uncluster/) -- reverts clustering, restores stops to parent, blocked if any sub-route is in progress
+- Bikers no longer see split parent sessions in session list
+- start_route rejects split sessions with clear error message
+- "Undo Split" button in ClusterReviewView header
+- Empty route warning in sub-route cards (when all stops moved out)
+- Delete button for empty sub-routes
+- Skipped stops count indicator (non-geocoded stops from parent)
+- New TypeScript types: ClusterResponse, ClusterSubRoute, ClusterSummary, MoveStopResponse
+- New API client functions: clusterSession(), moveStop(), unclusterSession()
+
+**Backend Hardening (completed):**
+- Production HTTPS enforcement: SECURE_SSL_REDIRECT, HSTS, secure cookies (gated by DEBUG=False)
+- File upload size limits: 10 MB (DATA_UPLOAD_MAX_MEMORY_SIZE + FILE_UPLOAD_MAX_MEMORY_SIZE)
+- Database indexes on hot columns: DeliverySession.status, DeliveryStop.delivery_status/geocode_status/sequence_order
+- N+1 query elimination: `list_sessions` uses annotated queryset (Count + Subquery + select_related); `active_sessions` computes counts from prefetched stops in Python
+- Annotation-aware serializers: SessionListSerializer and ActiveSessionSerializer use pre-computed annotations when available, with fallback queries for single-object usage
 
 ---
 

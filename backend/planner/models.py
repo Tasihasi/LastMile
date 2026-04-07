@@ -21,11 +21,13 @@ class DeliverySession(models.Model):
         NOT_STARTED = "not_started", "Not Started"
         IN_PROGRESS = "in_progress", "In Progress"
         FINISHED = "finished", "Finished"
+        SPLIT = "split", "Split into Routes"
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     owner = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="sessions", null=True, blank=True
     )
+    parent = models.ForeignKey("self", on_delete=models.CASCADE, null=True, blank=True, related_name="sub_routes")
     name = models.CharField(max_length=255, blank=True, default="")
     original_file = models.FileField(upload_to="uploads/")
     created_at = models.DateTimeField(auto_now_add=True)
@@ -33,7 +35,7 @@ class DeliverySession(models.Model):
     total_distance = models.FloatField(null=True, blank=True)  # meters, set after optimization
     route_geometry = models.JSONField(null=True, blank=True)  # GeoJSON LineString, set after optimization
     route_segments = models.JSONField(null=True, blank=True)  # segment durations/distances, set after optimization
-    status = models.CharField(max_length=20, choices=Status.choices, default=Status.NOT_STARTED)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.NOT_STARTED, db_index=True)
     started_at = models.DateTimeField(null=True, blank=True)
     finished_at = models.DateTimeField(null=True, blank=True)
     current_stop_index = models.IntegerField(null=True, blank=True)
@@ -67,13 +69,15 @@ class DeliveryStop(models.Model):
         max_length=20,
         choices=GeocodeStatus.choices,
         default=GeocodeStatus.PENDING,
+        db_index=True,
     )
     geocode_error = models.CharField(max_length=500, blank=True, default="")
-    sequence_order = models.IntegerField(null=True, blank=True)
+    sequence_order = models.IntegerField(null=True, blank=True, db_index=True)
     delivery_status = models.CharField(
         max_length=20,
         choices=DeliveryStatus.choices,
         default=DeliveryStatus.PENDING,
+        db_index=True,
     )
 
     class Meta:

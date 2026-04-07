@@ -160,6 +160,78 @@ Optimize the stop order and generate route geometry.
 
 ---
 
+## Bulk Clustering
+
+### POST /sessions/{id}/cluster/
+
+Cluster a session's geocoded stops into N geographic sub-routes using KMeans. Planner only. The parent session's status becomes `split` and its stops are moved to child sessions.
+
+**Request** (all fields optional):
+```json
+{ "n_routes": 7, "max_stops_per_route": 48 }
+```
+
+If `n_routes` is omitted, it is auto-calculated from the stop count and `max_stops_per_route` (default 48, which is the ORS optimization limit).
+
+**Response** `201`:
+```json
+{
+  "parent_id": "uuid",
+  "sub_routes": [
+    { "id": "uuid", "name": "Monday Deliveries - Route 1", "stop_count": 43 },
+    { "id": "uuid", "name": "Monday Deliveries - Route 2", "stop_count": 41 }
+  ],
+  "cluster_summary": {
+    "total_stops": 284,
+    "skipped_stops": 16,
+    "n_routes": 7,
+    "avg_stops_per_route": 40.6,
+    "min_stops": 35,
+    "max_stops": 48
+  }
+}
+```
+
+Stops that are not geocoded (`geocode_status` != `success` and no lat/lng) are skipped and remain on the parent session.
+
+### POST /sessions/{id}/move-stop/
+
+Move a stop from one sub-route to a sibling sub-route (both must share the same parent). Planner only.
+
+**Request:**
+```json
+{ "stop_id": 123, "to_session_id": "uuid" }
+```
+
+**Response** `200`:
+```json
+{
+  "stop_id": 123,
+  "from_session_id": "uuid",
+  "to_session_id": "uuid",
+  "from_count": 42,
+  "to_count": 44
+}
+```
+
+### DELETE /sessions/{id}/uncluster/
+
+Undo a cluster split. Deletes all sub-routes, restores stops to the parent session, and resets the parent status to `not_started`. Planner only.
+
+Fails with `409 Conflict` if any sub-route has status `in_progress` (a biker is actively delivering).
+
+**Response** `200`:
+```json
+{
+  "message": "Split undone successfully",
+  "session_id": "uuid",
+  "stops_restored": 284,
+  "sub_routes_deleted": 7
+}
+```
+
+---
+
 ## Delivery Tracking
 
 ### PATCH /sessions/{id}/start/

@@ -9,13 +9,15 @@ export interface AuthResponse {
   user: User;
 }
 
-export type SessionStatus = "not_started" | "in_progress" | "finished";
+export type SessionStatus = "not_started" | "in_progress" | "finished" | "split";
 
 export interface SessionSummary {
   id: string;
   name: string;
   created_at: string;
   owner_name: string | null;
+  parent_id: string | null;
+  sub_route_count: number;
   stop_count: number;
   total_duration: number | null;
   total_distance: number | null;
@@ -56,6 +58,8 @@ export interface SessionResponse {
   name: string;
   created_at: string;
   owner_name: string | null;
+  parent_id: string | null;
+  sub_route_count: number;
   stops: DeliveryStop[];
   needs_geocoding: boolean;
   total_duration: number | null;
@@ -81,4 +85,33 @@ export interface OptimizeResponse {
   route_segments: RouteSegment[] | null;
   total_duration: number | null; // seconds
   total_distance: number | null; // meters
+}
+
+export interface ClusterSubRoute {
+  id: string;
+  name: string;
+  stop_count: number;
+}
+
+export interface ClusterSummary {
+  total_stops: number;
+  skipped_stops: number;
+  n_routes: number;
+  avg_stops_per_route: number;
+  min_stops: number;
+  max_stops: number;
+}
+
+export interface ClusterResponse {
+  parent_id: string;
+  sub_routes: ClusterSubRoute[];
+  cluster_summary: ClusterSummary;
+}
+
+export interface MoveStopResponse {
+  stop_id: number;
+  from_session_id: string;
+  to_session_id: string;
+  from_count: number;
+  to_count: number;
 }

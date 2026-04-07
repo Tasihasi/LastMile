@@ -131,9 +131,11 @@ USE_TZ = True
 STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 
-# Serve Vite build output at root URLs (e.g. /assets/xxx.js)
+# Serve Vite build output at root URLs (e.g. /assets/xxx.js, /favicon.svg)
+# In production, always set even if dir doesn't exist yet at import time;
+# WhiteNoise gracefully handles a missing directory.
 _frontend_dist = BASE_DIR.parent / "frontend" / "dist"
-if _frontend_dist.exists():
+if not DEBUG or _frontend_dist.exists():
     WHITENOISE_ROOT = str(_frontend_dist)
 
 # Media files (uploads)
@@ -155,6 +157,20 @@ REST_FRAMEWORK = {
 
 # OpenRouteService
 ORS_API_KEY = os.getenv("ORS_API_KEY", "")
+
+# File upload size limits (10 MB)
+DATA_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024
+FILE_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024
+
+# Production security settings
+if not DEBUG:
+    SECURE_SSL_REDIRECT = True
+    SECURE_HSTS_SECONDS = 31536000  # 1 year
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
 # Default primary key field type
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"

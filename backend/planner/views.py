@@ -4,6 +4,7 @@ import json
 import requests
 from django.conf import settings as django_settings
 from django.contrib.auth.models import User
+from django.db.models import Count, OuterRef, Q, Subquery
 from django.http import StreamingHttpResponse
 from django.utils import timezone
 from rest_framework import status
@@ -13,6 +14,7 @@ from rest_framework.parsers import MultiPartParser
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
+from .clustering import calculate_n_clusters, cluster_stops
 from .geocoder import geocode_address
 from .models import DeliverySession, DeliveryStop, SharedRoute, UserProfile
 from .optimizer import get_route_details, optimize_route
@@ -121,6 +123,22 @@ def active_sessions(request):
     return Response(ActiveSessionSerializer(qs, many=True).data)
 
 
+def _annotate_session_list(qs):
+    """Add computed annotations to a session queryset to avoid N+1 queries."""
+    return qs.select_related("owner").annotate(
+        _stop_count=Count("stops", distinct=True),
+        _sub_route_count=Count("sub_routes", distinct=True),
+        _delivered_count=Count("stops", filter=Q(stops__delivery_status="delivered"), distinct=True),
+        _not_received_count=Count("stops", filter=Q(stops__delivery_status="not_received"), distinct=True),
+        _current_stop_name=Subquery(
+            DeliveryStop.objects.filter(
+                session=OuterRef("pk"),
+                sequence_order=OuterRef("current_stop_index"),
+            ).values("name")[:1]
+        ),
+    )
+
+
 @api_view(["GET"])
 def list_sessions(request):
     """List sessions. Bikers see their own; planners see all (optionally filtered by owner_id)."""
@@ -130,9 +148,10 @@ def list_sessions(request):
         if owner_id:
             qs = qs.filter(owner_id=owner_id)
     else:
-        qs = DeliverySession.objects.filter(owner=request.user)
+        # Bikers see only their own sessions, excluding split parents (which have no deliverable stops)
+        qs = DeliverySession.objects.filter(owner=request.user).exclude(status=DeliverySession.Status.SPLIT)
 
-    qs = qs.order_by("-created_at")
+    qs = _annotate_session_list(qs).order_by("-created_at")
     return Response(SessionListSerializer(qs, many=True).data)
 
 
@@ -167,10 +186,11 @@ def upload_file(request):
             status=status.HTTP_400_BAD_REQUEST,
         )
 
-    # Determine owner: planners can assign to a biker via owner_id
-    owner = request.user
+    # Determine owner: planners upload as unassigned unless they specify a biker
+    is_planner = hasattr(request.user, "profile") and request.user.profile.role == "planner"
+    owner = None if is_planner else request.user
     owner_id = request.data.get("owner_id")
-    if owner_id and hasattr(request.user, "profile") and request.user.profile.role == "planner":
+    if owner_id and is_planner:
         with contextlib.suppress(User.DoesNotExist, ValueError, TypeError):
             owner = User.objects.get(id=int(owner_id))
 
@@ -468,6 +488,218 @@ def rename_session(request, session_id):
 
 
 # ============================================
+# Clustering (planner)
+# ============================================
+
+
+@api_view(["POST"])
+def cluster_session(request, session_id):
+    """Split a large session into clustered sub-routes using KMeans."""
+    if not _require_planner(request):
+        return Response({"error": "Planner access required."}, status=status.HTTP_403_FORBIDDEN)
+
+    try:
+        session = DeliverySession.objects.get(id=session_id)
+    except DeliverySession.DoesNotExist:
+        return Response({"error": "Session not found."}, status=status.HTTP_404_NOT_FOUND)
+
+    if session.sub_routes.exists():
+        return Response(
+            {"error": "Session already has sub-routes. Delete them first to re-cluster."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    if session.parent is not None:
+        return Response(
+            {"error": "Cannot cluster a sub-route. Cluster the parent session instead."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    # Get stops with valid coordinates (geocoded or uploaded with coords)
+    geocoded_stops = list(
+        session.stops.filter(geocode_status__in=["success", "skipped"], lat__isnull=False, lng__isnull=False)
+    )
+    skipped_count = session.stops.exclude(geocode_status__in=["success", "skipped"]).count()
+
+    if len(geocoded_stops) < 2:
+        return Response(
+            {"error": "Need at least 2 geocoded stops to cluster."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    max_stops = int(request.data.get("max_stops_per_route", 48))
+    n_routes_param = request.data.get("n_routes")
+    n_routes = (
+        int(n_routes_param) if n_routes_param is not None else calculate_n_clusters(len(geocoded_stops), max_stops)
+    )
+
+    # Run KMeans clustering
+    clusters = cluster_stops(geocoded_stops, n_routes, max_stops_per_cluster=max_stops)
+
+    # Create child sessions with copied stops
+    sub_routes = []
+    for i, cluster in enumerate(clusters, start=1):
+        child = DeliverySession.objects.create(
+            parent=session,
+            owner=None,
+            name=f"Route {i} of {len(clusters)}",
+            original_file=session.original_file,
+        )
+
+        child_stops = []
+        for stop in cluster:
+            child_stops.append(
+                DeliveryStop(
+                    session=child,
+                    name=stop.name,
+                    raw_address=stop.raw_address,
+                    product_code=stop.product_code,
+                    recipient_name=stop.recipient_name,
+                    recipient_phone=stop.recipient_phone,
+                    lat=stop.lat,
+                    lng=stop.lng,
+                    geocode_status=stop.geocode_status,
+                    geocode_error=stop.geocode_error,
+                )
+            )
+        DeliveryStop.objects.bulk_create(child_stops)
+
+        sub_routes.append(
+            {
+                "id": str(child.id),
+                "name": child.name,
+                "stop_count": len(cluster),
+            }
+        )
+
+    # Mark parent as split
+    session.status = DeliverySession.Status.SPLIT
+    session.save(update_fields=["status"])
+
+    stop_counts = [len(c) for c in clusters]
+    return Response(
+        {
+            "parent_id": str(session.id),
+            "sub_routes": sub_routes,
+            "cluster_summary": {
+                "total_stops": len(geocoded_stops),
+                "skipped_stops": skipped_count,
+                "n_routes": len(clusters),
+                "avg_stops_per_route": round(len(geocoded_stops) / len(clusters), 1),
+                "min_stops": min(stop_counts),
+                "max_stops": max(stop_counts),
+            },
+        },
+        status=status.HTTP_201_CREATED,
+    )
+
+
+@api_view(["POST"])
+def move_stop(request, session_id):
+    """Move a stop from one sub-route to a sibling sub-route."""
+    if not _require_planner(request):
+        return Response({"error": "Planner access required."}, status=status.HTTP_403_FORBIDDEN)
+
+    try:
+        source_session = DeliverySession.objects.get(id=session_id)
+    except DeliverySession.DoesNotExist:
+        return Response({"error": "Session not found."}, status=status.HTTP_404_NOT_FOUND)
+
+    stop_id = request.data.get("stop_id")
+    to_session_id = request.data.get("to_session_id")
+
+    if not stop_id or not to_session_id:
+        return Response(
+            {"error": "stop_id and to_session_id are required."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    try:
+        stop = source_session.stops.get(id=int(stop_id))
+    except (DeliveryStop.DoesNotExist, ValueError, TypeError):
+        return Response({"error": "Stop not found in this session."}, status=status.HTTP_404_NOT_FOUND)
+
+    try:
+        target_session = DeliverySession.objects.get(id=to_session_id)
+    except DeliverySession.DoesNotExist:
+        return Response({"error": "Target session not found."}, status=status.HTTP_404_NOT_FOUND)
+
+    # Validate both sessions share the same parent
+    if source_session.parent_id is None or source_session.parent_id != target_session.parent_id:
+        return Response(
+            {"error": "Can only move stops between sibling sub-routes (same parent)."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    # Block moves if either session is in progress
+    if source_session.status == DeliverySession.Status.IN_PROGRESS:
+        return Response(
+            {"error": "Cannot move stops from an in-progress route."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    if target_session.status == DeliverySession.Status.IN_PROGRESS:
+        return Response(
+            {"error": "Cannot move stops to an in-progress route."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    # Move the stop
+    stop.session = target_session
+    stop.sequence_order = None  # Needs re-optimization
+    stop.save(update_fields=["session_id", "sequence_order"])
+
+    # Clear optimization data on both sessions since routes changed
+    for s in [source_session, target_session]:
+        s.route_geometry = None
+        s.route_segments = None
+        s.total_duration = None
+        s.total_distance = None
+        s.save(update_fields=["route_geometry", "route_segments", "total_duration", "total_distance"])
+
+    return Response(
+        {
+            "stop_id": stop.id,
+            "from_session_id": str(source_session.id),
+            "to_session_id": str(target_session.id),
+            "from_count": source_session.stops.count(),
+            "to_count": target_session.stops.count(),
+        }
+    )
+
+
+@api_view(["DELETE"])
+def uncluster_session(request, session_id):
+    """Undo a split: delete all sub-routes and reset parent to not_started."""
+    if not _require_planner(request):
+        return Response({"error": "Planner access required."}, status=status.HTTP_403_FORBIDDEN)
+
+    try:
+        session = DeliverySession.objects.get(id=session_id)
+    except DeliverySession.DoesNotExist:
+        return Response({"error": "Session not found."}, status=status.HTTP_404_NOT_FOUND)
+
+    if session.status != DeliverySession.Status.SPLIT:
+        return Response(
+            {"error": "Session is not split."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    # Block if any sub-route is in progress
+    if session.sub_routes.filter(status=DeliverySession.Status.IN_PROGRESS).exists():
+        return Response(
+            {"error": "Cannot undo split while a sub-route is in progress."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    deleted_count = session.sub_routes.count()
+    session.sub_routes.all().delete()
+    session.status = DeliverySession.Status.NOT_STARTED
+    session.save(update_fields=["status"])
+
+    return Response({"parent_id": str(session.id), "deleted_routes": deleted_count})
+
+
+# ============================================
 # Route Lifecycle (biker)
 # ============================================
 
@@ -478,6 +710,11 @@ def start_route(request, session_id):
     session = _get_user_session(request, session_id)
     if not session:
         return Response({"error": "Session not found."}, status=status.HTTP_404_NOT_FOUND)
+
+    if session.status == DeliverySession.Status.SPLIT:
+        return Response(
+            {"error": "Cannot start a split session. Start the sub-routes instead."}, status=status.HTTP_400_BAD_REQUEST
+        )
 
     if session.status != "not_started":
         return Response({"error": "Route already started."}, status=status.HTTP_400_BAD_REQUEST)

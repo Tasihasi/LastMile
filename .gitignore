@@ -27,3 +27,6 @@ frontend/dist/
 
 # Claude execution plans (local only)
 claude_exec_plan/
+
+# Claude docs (local only)
+claude_docs/
