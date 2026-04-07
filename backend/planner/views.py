@@ -321,7 +321,7 @@ def optimize(request, session_id):
             status=status.HTTP_400_BAD_REQUEST,
         )
 
-    if not django_settings.ORS_API_KEY:
+    if not django_settings.ORS_API_KEY and not django_settings.E2E_MOCK:
         return Response(
             {
                 "error": "Route optimization is not available: ORS_API_KEY is not configured. "

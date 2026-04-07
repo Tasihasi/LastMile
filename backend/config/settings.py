@@ -158,6 +158,9 @@ REST_FRAMEWORK = {
 # OpenRouteService
 ORS_API_KEY = os.getenv("ORS_API_KEY", "")
 
+# E2E testing mode — mocks external APIs (Nominatim, ORS) with deterministic fake data
+E2E_MOCK = os.getenv("E2E_MOCK", "").lower() == "true"
+
 # File upload size limits (10 MB)
 DATA_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024
 FILE_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024
