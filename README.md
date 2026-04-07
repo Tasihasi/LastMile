@@ -43,6 +43,26 @@ Upload File  -->  Parse Stops  -->  Geocode Addresses  -->  Optimize Route
 3. Click **Optimize Route** to calculate the optimal delivery order
 4. View the optimized route on the map with numbered stops and a road-following path
 
+## Bulk Delivery Planning
+
+For large uploads (50+ stops), LastMile splits deliveries into manageable routes using geographic clustering:
+
+```
+Upload 300 stops  -->  Geocode all  -->  Split into Routes  -->  Review clusters
+                                          (KMeans, max 48       (color-coded map,
+                                           stops each)           move stops between)
+
+  -->  Optimize each route  -->  Assign to bikers  -->  Bikers deliver normally
+        (ORS VROOM +              (planner picks         (each biker sees their
+         Directions x N)           from biker list)       route as usual)
+```
+
+- Clustering uses KMeans on geographic coordinates, auto-splitting any cluster that exceeds the ORS 48-stop limit
+- Planners review clusters on a color-coded map and can drag stops between sub-routes before optimizing
+- Each sub-route is optimized independently (2 ORS API calls each: VROOM + Directions)
+- Undo split is available as long as no sub-route has been started by a biker
+- Non-geocoded stops are skipped during clustering and reported in the UI
+
 ## Tech Stack
 
 | Layer | Technology | Why |
@@ -172,6 +192,7 @@ Sample files are included in `backend/planner/sample_data/`.
 | `POST` | `/api/sessions/{id}/optimize/` | Optimize route, return ordered stops + GeoJSON |
 | `POST` | `/api/sessions/{id}/cluster/` | Cluster stops into N geographic sub-routes |
 | `POST` | `/api/sessions/{id}/move-stop/` | Move a stop between sibling sub-routes |
+| `DELETE` | `/api/sessions/{id}/uncluster/` | Undo split, restore stops to parent session |
 
 ### POST /api/upload/
 

@@ -9,6 +9,8 @@ import {
   optimizeRoute,
   assignSession,
   moveStop,
+  deleteSession,
+  unclusterSession,
 } from "../api/client";
 import { useSettings } from "../hooks/useSettings";
 import { formatDuration, formatDistance } from "../utils/format";
@@ -56,6 +58,7 @@ export function ClusterReviewView({
     stop: DeliveryStop;
     routeId: string;
   } | null>(null);
+  const [unclustering, setUnclustering] = useState(false);
 
   const { settings } = useSettings();
 
@@ -183,6 +186,26 @@ export function ClusterReviewView({
     }
   };
 
+  const handleUncluster = async () => {
+    setUnclustering(true);
+    try {
+      await unclusterSession(parentSessionId);
+      onBack();
+    } catch {
+      setError("Failed to undo split. A sub-route may be in progress.");
+      setUnclustering(false);
+    }
+  };
+
+  const handleDeleteRoute = async (routeId: string) => {
+    try {
+      await deleteSession(routeId);
+      setSubRoutes((prev) => prev.filter((r) => r.session.id !== routeId));
+    } catch {
+      setError("Failed to delete route.");
+    }
+  };
+
   if (loading) {
     return (
       <div className="cluster-review-loading">
@@ -210,6 +233,10 @@ export function ClusterReviewView({
     (r) => r.session.total_duration != null
   ).length;
   const allOptimized = optimizedCount === subRoutes.length;
+  const emptyRoutes = subRoutes.filter((r) => r.session.stops.length === 0).length;
+  const parentSkippedStops = parentSession
+    ? parentSession.stops.filter((s) => s.geocode_status !== "success").length
+    : 0;
 
   // Build a map of routeId -> color for the stop move popup
   const routeColorMap = new Map(
@@ -253,6 +280,32 @@ export function ClusterReviewView({
               )}
             </button>
           )}
+          <button
+            className="btn btn-ghost btn-sm"
+            onClick={handleUncluster}
+            disabled={unclustering}
+            title="Undo split and return to original session"
+          >
+            {unclustering ? (
+              <span
+                className="upload-spinner"
+                style={{ width: 14, height: 14, borderWidth: 2 }}
+              />
+            ) : (
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <polyline points="1 4 1 10 7 10" />
+                <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
+              </svg>
+            )}
+            Undo Split
+          </button>
         </div>
       </div>
 
@@ -284,6 +337,21 @@ export function ClusterReviewView({
               <span className="cluster-review-stat-label">Optimized</span>
             </div>
           </div>
+
+          {(parentSkippedStops > 0 || emptyRoutes > 0) && (
+            <div className="cluster-review-warnings">
+              {parentSkippedStops > 0 && (
+                <span className="cluster-review-warning">
+                  {parentSkippedStops} stop{parentSkippedStops !== 1 ? "s" : ""} skipped (not geocoded)
+                </span>
+              )}
+              {emptyRoutes > 0 && (
+                <span className="cluster-review-warning cluster-review-warning--empty">
+                  {emptyRoutes} empty route{emptyRoutes !== 1 ? "s" : ""}
+                </span>
+              )}
+            </div>
+          )}
 
           <div className="cluster-review-routes">
             {subRoutes.map((route) => {
@@ -440,7 +508,33 @@ export function ClusterReviewView({
                         <circle cx="12" cy="12" r="3" />
                       </svg>
                     </button>
+                    {route.session.stops.length === 0 && (
+                      <button
+                        className="btn btn-sm btn-ghost cluster-route-delete"
+                        onClick={() => handleDeleteRoute(route.session.id)}
+                        title="Delete empty route"
+                      >
+                        <svg
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        >
+                          <polyline points="3 6 5 6 21 6" />
+                          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                        </svg>
+                      </button>
+                    )}
                   </div>
+
+                  {/* Empty route warning */}
+                  {route.session.stops.length === 0 && (
+                    <div className="cluster-route-empty-warning">
+                      No stops — delete or move stops here
+                    </div>
+                  )}
 
                   {/* Expanded stop list */}
                   {isExpanded && (

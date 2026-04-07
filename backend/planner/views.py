@@ -131,7 +131,8 @@ def list_sessions(request):
         if owner_id:
             qs = qs.filter(owner_id=owner_id)
     else:
-        qs = DeliverySession.objects.filter(owner=request.user)
+        # Bikers see only their own sessions, excluding split parents (which have no deliverable stops)
+        qs = DeliverySession.objects.filter(owner=request.user).exclude(status=DeliverySession.Status.SPLIT)
 
     qs = qs.order_by("-created_at")
     return Response(SessionListSerializer(qs, many=True).data)
@@ -646,6 +647,38 @@ def move_stop(request, session_id):
     )
 
 
+@api_view(["DELETE"])
+def uncluster_session(request, session_id):
+    """Undo a split: delete all sub-routes and reset parent to not_started."""
+    if not _require_planner(request):
+        return Response({"error": "Planner access required."}, status=status.HTTP_403_FORBIDDEN)
+
+    try:
+        session = DeliverySession.objects.get(id=session_id)
+    except DeliverySession.DoesNotExist:
+        return Response({"error": "Session not found."}, status=status.HTTP_404_NOT_FOUND)
+
+    if session.status != DeliverySession.Status.SPLIT:
+        return Response(
+            {"error": "Session is not split."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    # Block if any sub-route is in progress
+    if session.sub_routes.filter(status=DeliverySession.Status.IN_PROGRESS).exists():
+        return Response(
+            {"error": "Cannot undo split while a sub-route is in progress."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    deleted_count = session.sub_routes.count()
+    session.sub_routes.all().delete()
+    session.status = DeliverySession.Status.NOT_STARTED
+    session.save(update_fields=["status"])
+
+    return Response({"parent_id": str(session.id), "deleted_routes": deleted_count})
+
+
 # ============================================
 # Route Lifecycle (biker)
 # ============================================
@@ -657,6 +690,11 @@ def start_route(request, session_id):
     session = _get_user_session(request, session_id)
     if not session:
         return Response({"error": "Session not found."}, status=status.HTTP_404_NOT_FOUND)
+
+    if session.status == DeliverySession.Status.SPLIT:
+        return Response(
+            {"error": "Cannot start a split session. Start the sub-routes instead."}, status=status.HTTP_400_BAD_REQUEST
+        )
 
     if session.status != "not_started":
         return Response({"error": "Route already started."}, status=status.HTTP_400_BAD_REQUEST)

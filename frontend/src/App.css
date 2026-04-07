@@ -4024,6 +4024,39 @@ body {
   letter-spacing: 0.03em;
 }
 
+.cluster-review-warnings {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.cluster-review-warning {
+  font-size: 0.75rem;
+  color: var(--color-warning-text);
+  background: var(--color-warning-bg);
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+}
+
+.cluster-review-warning--empty {
+  color: var(--color-danger-text);
+  background: var(--color-danger-bg);
+}
+
+.cluster-route-empty-warning {
+  padding: 6px 12px;
+  font-size: 0.75rem;
+  color: var(--color-danger-text);
+  background: var(--color-danger-bg);
+  border-top: 1px solid var(--color-border-light);
+}
+
+.cluster-route-delete {
+  color: var(--color-danger) !important;
+}
+
 .cluster-review-routes {
   flex: 1;
   overflow-y: auto;

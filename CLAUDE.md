@@ -205,6 +205,7 @@ delivery_planner/
 |--------|----------|-------------|------|
 | POST | `/api/sessions/<id>/cluster/` | Cluster stops into N child sessions (KMeans) | Planner |
 | POST | `/api/sessions/<id>/move-stop/` | Move a stop between sibling sub-routes | Planner |
+| DELETE | `/api/sessions/<id>/uncluster/` | Undo split: delete sub-routes, restore stops to parent, reset to not_started. Blocked if any sub-route is in_progress | Planner |
 
 **POST cluster/** request: `{"n_routes": 7, "max_stops_per_route": 48}` (both optional, defaults auto-calculated).
 Response: `{parent_id, sub_routes[], cluster_summary{total_stops, skipped_stops, n_routes, avg_stops_per_route, min_stops, max_stops}}`.
@@ -213,6 +214,10 @@ Parent session status becomes `split`; stops are moved to child sessions.
 **POST move-stop/** request: `{"stop_id": 123, "to_session_id": "uuid"}`.
 Response: `{stop_id, from_session_id, to_session_id, from_count, to_count}`.
 Both sessions must be siblings (same parent).
+
+**DELETE uncluster/** -- no request body.
+Response: `{message, session_id, stops_restored, sub_routes_deleted}`.
+Fails with 409 if any sub-route has status `in_progress`. Parent status resets to `not_started`; all child sessions and their stops are deleted; original stops are restored to parent.
 
 ### Route Lifecycle (Biker)
 | Method | Endpoint | Description | Auth |
@@ -368,7 +373,7 @@ Single web service on Render. Django serves both the API and the built React SPA
 - No password auth (demo uses username-only)
 - Polling not WebSockets for live updates
 - Stop-based tracking not GPS
-- Single vehicle per route (bulk clustering splits into sub-routes, but no true multi-vehicle dispatch)
+- Single vehicle per route (bulk clustering splits large uploads into sub-routes of max 48 stops each, but no true multi-vehicle dispatch)
 - CORS whitelist: only localhost:5173
 - No file cleanup for uploads
 
@@ -391,17 +396,24 @@ All Tier 1 and Tier 2 features from PLAN.md are **completed**:
 - Responsive layout
 - Finished route stats panel
 
-**Bulk Clustering (Phase 1 -- backend + Phase 2 -- frontend complete):**
+**Bulk Clustering (fully completed -- all 3 phases):**
 - KMeans geographic clustering of large uploads into sub-routes (scikit-learn)
 - Auto-split oversized clusters to respect ORS 48-stop limit
 - Parent/child session hierarchy (parent status = "split", children are independent routes)
 - Move stops between sibling sub-routes
 - 300-address Budapest test CSV for bulk testing
-- **Phase 2 frontend**: ClusterReviewView with color-coded cluster map, collapsible cluster cards, per-route optimize/assign actions, move-stop controls between sub-routes
+- ClusterReviewView with color-coded cluster map, collapsible cluster cards, per-route optimize/assign actions, move-stop controls
 - PlannerDashboard "Split into Routes" button on sessions with >48 stops, "Split Routes" section for reviewing parent sessions
 - Child sessions filtered out of normal kanban view (parent_id != null hidden)
+- Undo split (DELETE uncluster/) -- reverts clustering, restores stops to parent, blocked if any sub-route is in progress
+- Bikers no longer see split parent sessions in session list
+- start_route rejects split sessions with clear error message
+- "Undo Split" button in ClusterReviewView header
+- Empty route warning in sub-route cards (when all stops moved out)
+- Delete button for empty sub-routes
+- Skipped stops count indicator (non-geocoded stops from parent)
 - New TypeScript types: ClusterResponse, ClusterSubRoute, ClusterSummary, MoveStopResponse
-- New API client functions: clusterSession(), moveStop()
+- New API client functions: clusterSession(), moveStop(), unclusterSession()
 
 ---
 

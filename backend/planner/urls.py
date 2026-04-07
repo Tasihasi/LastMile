@@ -23,6 +23,7 @@ urlpatterns = [
     path("sessions/<uuid:session_id>/rename/", views.rename_session, name="rename-session"),
     path("sessions/<uuid:session_id>/cluster/", views.cluster_session, name="cluster-session"),
     path("sessions/<uuid:session_id>/move-stop/", views.move_stop, name="move-stop"),
+    path("sessions/<uuid:session_id>/uncluster/", views.uncluster_session, name="uncluster-session"),
     path("sessions/<uuid:session_id>/start/", views.start_route, name="start-route"),
     path("sessions/<uuid:session_id>/stops/<int:stop_id>/status/", views.update_stop_status, name="update-stop-status"),
     # Public sharing
