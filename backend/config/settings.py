@@ -131,9 +131,11 @@ USE_TZ = True
 STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 
-# Serve Vite build output at root URLs (e.g. /assets/xxx.js)
+# Serve Vite build output at root URLs (e.g. /assets/xxx.js, /favicon.svg)
+# In production, always set even if dir doesn't exist yet at import time;
+# WhiteNoise gracefully handles a missing directory.
 _frontend_dist = BASE_DIR.parent / "frontend" / "dist"
-if _frontend_dist.exists():
+if not DEBUG or _frontend_dist.exists():
     WHITENOISE_ROOT = str(_frontend_dist)
 
 # Media files (uploads)
