@@ -252,6 +252,7 @@ function App() {
         <PlannerDashboard
           onViewSession={handleSelectSession}
           onOpenLiveMap={() => setViewMode("live-map")}
+          onOpenMapView={handleNewRoute}
           onClusterReview={handleClusterReview}
         />
       ) : isPlanner && viewMode === "live-map" ? (

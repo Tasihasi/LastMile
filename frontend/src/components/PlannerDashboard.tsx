@@ -16,13 +16,14 @@ import { FinishedRouteDetail } from "./FinishedRouteDetail";
 interface PlannerDashboardProps {
   onViewSession: (sessionId: string) => void;
   onOpenLiveMap?: () => void;
+  onOpenMapView?: () => void;
   onClusterReview?: (parentSessionId: string) => void;
 }
 
 // Drop zone identifier: biker id or "unassigned"
 type DropTarget = number | "unassigned";
 
-export function PlannerDashboard({ onViewSession, onOpenLiveMap, onClusterReview }: PlannerDashboardProps) {
+export function PlannerDashboard({ onViewSession, onOpenLiveMap, onOpenMapView, onClusterReview }: PlannerDashboardProps) {
   const [bikers, setBikers] = useState<User[]>([]);
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
   const [loading, setLoading] = useState(true);
@@ -206,6 +207,15 @@ export function PlannerDashboard({ onViewSession, onOpenLiveMap, onClusterReview
               </button>
             ))}
           </div>
+          {onOpenMapView && (
+            <button className="btn btn-ghost btn-sm" onClick={onOpenMapView}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+                <circle cx="12" cy="10" r="3" />
+              </svg>
+              My Map
+            </button>
+          )}
           {onOpenLiveMap && activeCount > 0 && (
             <button className="btn btn-live-map btn-sm" onClick={onOpenLiveMap}>
               <span className="btn-live-dot" />
