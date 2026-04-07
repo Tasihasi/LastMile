@@ -41,7 +41,7 @@
 delivery_planner/
 ├── backend/
 │   ├── config/
-│   │   ├── settings.py           # Django config (SQLite, CORS, DRF, TokenAuth)
+│   │   ├── settings.py           # Django config (SQLite, CORS, DRF, TokenAuth, HTTPS enforcement, upload limits)
 │   │   ├── urls.py               # Root URL routing -> planner.urls
 │   │   ├── asgi.py / wsgi.py
 │   ├── planner/                  # Main Django app
@@ -54,7 +54,7 @@ delivery_planner/
 │   │   ├── clustering.py         # KMeans geographic clustering (scikit-learn)
 │   │   ├── parsers.py            # Multi-format file parsing (CSV/XLSX/TXT/XML)
 │   │   ├── admin.py / apps.py / tests.py
-│   │   ├── migrations/           # 8 migrations (0001-0008)
+│   │   ├── migrations/           # 9 migrations (0001-0009)
 │   │   ├── management/commands/
 │   │   │   └── seed_test_data.py # Generates 3 bikers, 9 routes
 │   │   └── sample_data/          # Example CSV/XLSX/XML files + large_delivery_300.csv
@@ -162,7 +162,7 @@ delivery_planner/
 | session | FK(DeliverySession) | |
 | created_at | DateTimeField | auto_now_add |
 
-### Migrations (8 total)
+### Migrations (9 total)
 1. `0001_initial` -- Base Session + Stop
 2. `0002_*` -- Recipient fields, product_code
 3. `0003_*` -- Auth system (owner, roles, shares)
@@ -171,6 +171,7 @@ delivery_planner/
 6. `0006_*` -- route_geometry (GeoJSON)
 7. `0007_*` -- route_segments (timing array)
 8. `0008_session_parent_and_split_status` -- parent FK (self-referential) + "split" status choice
+9. `0009_add_indexes_on_hot_columns` -- db_index on DeliverySession.status, DeliveryStop.delivery_status/geocode_status/sequence_order
 
 ---
 
@@ -367,6 +368,8 @@ Single web service on Render. Django serves both the API and the built React SPA
 - Custom hooks for all stateful logic (no Redux, no Zustand)
 - Leaflet map wrapped in React-Leaflet components
 - Token auth (no sessions, no cookies, no passwords)
+- **Query optimization**: List views use `_annotate_session_list()` with `Count`/`Subquery` annotations + `select_related("owner")` to avoid N+1; serializers check for `_annotated` attributes with `hasattr()` fallback for single-object usage
+- **Production security**: HTTPS enforcement (HSTS, SSL redirect, secure cookies) auto-enabled when `DEBUG=False`
 
 ### Known Limitations
 - SQLite only (not production-ready, would need PostgreSQL)
@@ -374,8 +377,9 @@ Single web service on Render. Django serves both the API and the built React SPA
 - Polling not WebSockets for live updates
 - Stop-based tracking not GPS
 - Single vehicle per route (bulk clustering splits large uploads into sub-routes of max 48 stops each, but no true multi-vehicle dispatch)
-- CORS whitelist: only localhost:5173
+- CORS whitelist: only localhost:5173 (configurable via env)
 - No file cleanup for uploads
+- File upload limit: 10 MB
 
 ---
 
@@ -414,6 +418,13 @@ All Tier 1 and Tier 2 features from PLAN.md are **completed**:
 - Skipped stops count indicator (non-geocoded stops from parent)
 - New TypeScript types: ClusterResponse, ClusterSubRoute, ClusterSummary, MoveStopResponse
 - New API client functions: clusterSession(), moveStop(), unclusterSession()
+
+**Backend Hardening (completed):**
+- Production HTTPS enforcement: SECURE_SSL_REDIRECT, HSTS, secure cookies (gated by DEBUG=False)
+- File upload size limits: 10 MB (DATA_UPLOAD_MAX_MEMORY_SIZE + FILE_UPLOAD_MAX_MEMORY_SIZE)
+- Database indexes on hot columns: DeliverySession.status, DeliveryStop.delivery_status/geocode_status/sequence_order
+- N+1 query elimination: `list_sessions` uses annotated queryset (Count + Subquery + select_related); `active_sessions` computes counts from prefetched stops in Python
+- Annotation-aware serializers: SessionListSerializer and ActiveSessionSerializer use pre-computed annotations when available, with fallback queries for single-object usage
 
 ---
 

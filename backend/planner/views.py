@@ -4,6 +4,7 @@ import json
 import requests
 from django.conf import settings as django_settings
 from django.contrib.auth.models import User
+from django.db.models import Count, OuterRef, Q, Subquery
 from django.http import StreamingHttpResponse
 from django.utils import timezone
 from rest_framework import status
@@ -122,6 +123,22 @@ def active_sessions(request):
     return Response(ActiveSessionSerializer(qs, many=True).data)
 
 
+def _annotate_session_list(qs):
+    """Add computed annotations to a session queryset to avoid N+1 queries."""
+    return qs.select_related("owner").annotate(
+        _stop_count=Count("stops", distinct=True),
+        _sub_route_count=Count("sub_routes", distinct=True),
+        _delivered_count=Count("stops", filter=Q(stops__delivery_status="delivered"), distinct=True),
+        _not_received_count=Count("stops", filter=Q(stops__delivery_status="not_received"), distinct=True),
+        _current_stop_name=Subquery(
+            DeliveryStop.objects.filter(
+                session=OuterRef("pk"),
+                sequence_order=OuterRef("current_stop_index"),
+            ).values("name")[:1]
+        ),
+    )
+
+
 @api_view(["GET"])
 def list_sessions(request):
     """List sessions. Bikers see their own; planners see all (optionally filtered by owner_id)."""
@@ -134,7 +151,7 @@ def list_sessions(request):
         # Bikers see only their own sessions, excluding split parents (which have no deliverable stops)
         qs = DeliverySession.objects.filter(owner=request.user).exclude(status=DeliverySession.Status.SPLIT)
 
-    qs = qs.order_by("-created_at")
+    qs = _annotate_session_list(qs).order_by("-created_at")
     return Response(SessionListSerializer(qs, many=True).data)
 
 

@@ -73,12 +73,16 @@ class DeliverySessionSerializer(serializers.ModelSerializer):
 
 
 class SessionListSerializer(serializers.ModelSerializer):
-    """Lighter serializer for session lists (no stops)."""
+    """Lighter serializer for session lists (no stops).
 
-    stop_count = serializers.IntegerField(source="stops.count", read_only=True)
+    Supports pre-annotated querysets (_stop_count, _delivered_count, etc.)
+    for efficient list views, with fallback queries for single-object usage.
+    """
+
+    stop_count = serializers.SerializerMethodField()
     owner_name = serializers.CharField(source="owner.username", read_only=True, default=None)
     parent_id = serializers.UUIDField(read_only=True, default=None)
-    sub_route_count = serializers.IntegerField(source="sub_routes.count", read_only=True)
+    sub_route_count = serializers.SerializerMethodField()
     delivered_count = serializers.SerializerMethodField()
     not_received_count = serializers.SerializerMethodField()
     current_stop_name = serializers.SerializerMethodField()
@@ -104,13 +108,29 @@ class SessionListSerializer(serializers.ModelSerializer):
             "current_stop_name",
         ]
 
+    def get_stop_count(self, obj):
+        if hasattr(obj, "_stop_count"):
+            return obj._stop_count
+        return obj.stops.count()
+
+    def get_sub_route_count(self, obj):
+        if hasattr(obj, "_sub_route_count"):
+            return obj._sub_route_count
+        return obj.sub_routes.count()
+
     def get_delivered_count(self, obj):
+        if hasattr(obj, "_delivered_count"):
+            return obj._delivered_count
         return obj.stops.filter(delivery_status="delivered").count()
 
     def get_not_received_count(self, obj):
+        if hasattr(obj, "_not_received_count"):
+            return obj._not_received_count
         return obj.stops.filter(delivery_status="not_received").count()
 
     def get_current_stop_name(self, obj):
+        if hasattr(obj, "_current_stop_name"):
+            return obj._current_stop_name
         if obj.current_stop_index is None:
             return None
         stop = obj.stops.filter(sequence_order=obj.current_stop_index).first()
@@ -126,13 +146,16 @@ class ActiveSessionStopSerializer(serializers.ModelSerializer):
 
 
 class ActiveSessionSerializer(serializers.ModelSerializer):
-    """Session data for the planner aggregate map."""
+    """Session data for the planner aggregate map.
+
+    Uses prefetched stops to compute counts in Python, avoiding N+1 queries.
+    """
 
     stops = ActiveSessionStopSerializer(many=True, read_only=True)
     owner_name = serializers.CharField(source="owner.username", read_only=True, default=None)
     owner_id = serializers.IntegerField(source="owner.id", read_only=True, default=None)
     delivered_count = serializers.SerializerMethodField()
-    stop_count = serializers.IntegerField(source="stops.count", read_only=True)
+    stop_count = serializers.SerializerMethodField()
     current_stop_name = serializers.SerializerMethodField()
 
     class Meta:
@@ -154,14 +177,24 @@ class ActiveSessionSerializer(serializers.ModelSerializer):
             "stops",
         ]
 
+    def _get_cached_stops(self, obj):
+        """Get stops from prefetch cache to avoid extra queries."""
+        return list(obj.stops.all())
+
+    def get_stop_count(self, obj):
+        return len(self._get_cached_stops(obj))
+
     def get_delivered_count(self, obj):
-        return obj.stops.filter(delivery_status__in=["delivered", "not_received", "skipped"]).count()
+        done_statuses = {"delivered", "not_received", "skipped"}
+        return sum(1 for s in self._get_cached_stops(obj) if s.delivery_status in done_statuses)
 
     def get_current_stop_name(self, obj):
         if obj.current_stop_index is None:
             return None
-        stop = obj.stops.filter(sequence_order=obj.current_stop_index).first()
-        return stop.name if stop else None
+        for s in self._get_cached_stops(obj):
+            if s.sequence_order == obj.current_stop_index:
+                return s.name
+        return None
 
 
 class SharedRouteSerializer(serializers.ModelSerializer):
