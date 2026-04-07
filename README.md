@@ -28,6 +28,7 @@ Full user guides and API reference are in the [`docs/`](docs/) folder:
 - **Road-following routes** -- route line follows actual roads, not straight lines
 - **Interactive map** -- numbered markers, popups, auto-zoom to fit all stops
 - **Color-coded markers** -- grey (pending), red (failed), green (geocoded/has coords), blue (optimized)
+- **Bulk clustering** -- split large uploads into geographic sub-routes using KMeans (respects ORS 48-stop limit)
 
 ## How It Works
 
@@ -52,6 +53,7 @@ Upload File  -->  Parse Stops  -->  Geocode Addresses  -->  Optimize Route
 | Geocoding | Nominatim | Free, 1 req/sec rate limit |
 | Route optimization | OpenRouteService (VROOM) | Free tier, 2000 req/day |
 | Route geometry | ORS Directions API | Real road-following paths |
+| Clustering | scikit-learn (KMeans) | Geographic splitting of large uploads |
 | File parsing | csv, openpyxl, xml.etree | Handles CSV, XLSX, TXT, XML |
 
 **Total cost: $0** -- all APIs are free tier.
@@ -168,6 +170,8 @@ Sample files are included in `backend/planner/sample_data/`.
 | `POST` | `/api/sessions/{id}/geocode/` | Geocode pending stops (streams NDJSON) |
 | `GET` | `/api/sessions/{id}/geocode-status/` | Get geocoding progress |
 | `POST` | `/api/sessions/{id}/optimize/` | Optimize route, return ordered stops + GeoJSON |
+| `POST` | `/api/sessions/{id}/cluster/` | Cluster stops into N geographic sub-routes |
+| `POST` | `/api/sessions/{id}/move-stop/` | Move a stop between sibling sub-routes |
 
 ### POST /api/upload/
 
@@ -232,6 +236,7 @@ delivery_planner/
 │   │   ├── parsers.py         # CSV/XLSX/TXT/XML file parsing
 │   │   ├── geocoder.py        # Nominatim geocoding client
 │   │   ├── optimizer.py       # ORS route optimization + directions
+│   │   ├── clustering.py     # KMeans geographic clustering
 │   │   ├── views.py           # API endpoints
 │   │   ├── serializers.py     # DRF serializers
 │   │   ├── urls.py            # URL routing
