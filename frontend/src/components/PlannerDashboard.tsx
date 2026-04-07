@@ -9,18 +9,20 @@ import {
   assignSession,
   renameSession,
   uploadFile as apiUpload,
+  clusterSession,
 } from "../api/client";
 import { FinishedRouteDetail } from "./FinishedRouteDetail";
 
 interface PlannerDashboardProps {
   onViewSession: (sessionId: string) => void;
   onOpenLiveMap?: () => void;
+  onClusterReview?: (parentSessionId: string) => void;
 }
 
 // Drop zone identifier: biker id or "unassigned"
 type DropTarget = number | "unassigned";
 
-export function PlannerDashboard({ onViewSession, onOpenLiveMap }: PlannerDashboardProps) {
+export function PlannerDashboard({ onViewSession, onOpenLiveMap, onClusterReview }: PlannerDashboardProps) {
   const [bikers, setBikers] = useState<User[]>([]);
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
   const [loading, setLoading] = useState(true);
@@ -31,6 +33,7 @@ export function PlannerDashboard({ onViewSession, onOpenLiveMap }: PlannerDashbo
   const [dragOverTarget, setDragOverTarget] = useState<DropTarget | null>(null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [finishedDetailId, setFinishedDetailId] = useState<string | null>(null);
+  const [clusteringId, setClusteringId] = useState<string | null>(null);
 
   const { settings } = useSettings();
   const [bikerFilter, setBikerFilter] = useState<"active" | "inactive" | "all">("active");
@@ -89,6 +92,22 @@ export function PlannerDashboard({ onViewSession, onOpenLiveMap }: PlannerDashbo
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
+  const handleCluster = async (sessionId: string) => {
+    setClusteringId(sessionId);
+    try {
+      const result = await clusterSession(sessionId);
+      if (onClusterReview) {
+        onClusterReview(result.parent_id);
+      } else {
+        refresh();
+      }
+    } catch {
+      // ignore
+    } finally {
+      setClusteringId(null);
+    }
+  };
+
   // Drag & drop handlers
   const handleDragStart = (sessionId: string) => {
     setDraggingId(sessionId);
@@ -123,9 +142,13 @@ export function PlannerDashboard({ onViewSession, onOpenLiveMap }: PlannerDashbo
     await handleAssign(draggingId, target);
   };
 
-  // Separate finished routes
+  // Separate finished, split, and child routes
   const finishedSessions = sessions.filter((s) => s.status === "finished");
-  const activeSessions = sessions.filter((s) => s.status !== "finished");
+  const splitSessions = sessions.filter((s) => s.status === "split");
+  const childSessionIds = new Set(sessions.filter((s) => s.parent_id != null).map((s) => s.id));
+  const activeSessions = sessions.filter(
+    (s) => s.status !== "finished" && s.status !== "split" && !childSessionIds.has(s.id)
+  );
   const activeCount = sessions.filter((s) => s.status === "in_progress").length;
 
   // Group active sessions by owner, in_progress always first
@@ -232,7 +255,55 @@ export function PlannerDashboard({ onViewSession, onOpenLiveMap }: PlannerDashbo
                     onDeleteCancel={() => setConfirmDelete(null)}
                     onDelete={() => handleDelete(s.id)}
                     onRename={(name) => handleRename(s.id, name)}
+                    clusteringId={clusteringId}
+                    onCluster={() => handleCluster(s.id)}
                   />
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Split sessions */}
+        {splitSessions.length > 0 && (
+          <div className="dashboard-split">
+            <div className="dashboard-column">
+              <div className="dashboard-column-header">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="3" />
+                  <circle cx="5" cy="6" r="2" />
+                  <circle cx="19" cy="6" r="2" />
+                  <circle cx="5" cy="18" r="2" />
+                  <circle cx="19" cy="18" r="2" />
+                </svg>
+                <span className="dashboard-column-title">Split Routes</span>
+                <span className="dashboard-column-count">{splitSessions.length}</span>
+              </div>
+              <div className="dashboard-column-cards">
+                {splitSessions.map((s) => (
+                  <div
+                    key={s.id}
+                    className="session-card session-card--split"
+                    onClick={() => onClusterReview?.(s.id)}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => { if (e.key === "Enter") onClusterReview?.(s.id); }}
+                  >
+                    <div className="session-card-info">
+                      <div className="session-card-name-row">
+                        <span className="session-card-name">{s.name || "Untitled Route"}</span>
+                        <span className="session-card-status session-card-status--split">
+                          {s.sub_route_count} routes
+                        </span>
+                      </div>
+                      <div className="session-card-meta">
+                        <span className="session-card-stops">{s.stop_count} stops total</span>
+                      </div>
+                    </div>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ width: 20, height: 20, flexShrink: 0, opacity: 0.5 }}>
+                      <polyline points="9 18 15 12 9 6" />
+                    </svg>
+                  </div>
                 ))}
               </div>
             </div>
@@ -273,6 +344,7 @@ export function PlannerDashboard({ onViewSession, onOpenLiveMap }: PlannerDashbo
                       confirmDelete={confirmDelete}
                       isDragging={draggingId === s.id}
                       dwellMinutes={settings.dwellMinutes}
+                      clusteringId={clusteringId}
                       onDragStart={() => handleDragStart(s.id)}
                       onDragEnd={handleDragEnd}
                       onView={() => onViewSession(s.id)}
@@ -282,6 +354,7 @@ export function PlannerDashboard({ onViewSession, onOpenLiveMap }: PlannerDashbo
                       onDeleteCancel={() => setConfirmDelete(null)}
                       onDelete={() => handleDelete(s.id)}
                       onRename={(name) => handleRename(s.id, name)}
+                      onCluster={() => handleCluster(s.id)}
                     />
                   ))}
                   {bikerRoutes.length === 0 && (
@@ -340,6 +413,7 @@ export function PlannerDashboard({ onViewSession, onOpenLiveMap }: PlannerDashbo
                 confirmDelete={confirmDelete}
                 isDragging={draggingId === s.id}
                 dwellMinutes={settings.dwellMinutes}
+                clusteringId={clusteringId}
                 onDragStart={() => handleDragStart(s.id)}
                 onDragEnd={handleDragEnd}
                 onView={() => setFinishedDetailId(s.id)}
@@ -374,6 +448,7 @@ interface SessionCardProps {
   confirmDelete: string | null;
   isDragging: boolean;
   dwellMinutes: number;
+  clusteringId: string | null;
   onDragStart: () => void;
   onDragEnd: () => void;
   onView: () => void;
@@ -383,6 +458,7 @@ interface SessionCardProps {
   onDeleteCancel: () => void;
   onDelete: () => void;
   onRename: (name: string) => void;
+  onCluster?: () => void;
 }
 
 function SessionCard({
@@ -392,6 +468,7 @@ function SessionCard({
   confirmDelete,
   isDragging,
   dwellMinutes,
+  clusteringId,
   onDragStart,
   onDragEnd,
   onView,
@@ -401,6 +478,7 @@ function SessionCard({
   onDeleteCancel,
   onDelete,
   onRename,
+  onCluster,
 }: SessionCardProps) {
   const isAssigning = assignDropdown === session.id;
   const isConfirmingDelete = confirmDelete === session.id;
@@ -474,7 +552,36 @@ function SessionCard({
           {session.status === "finished" && (
             <span className="session-card-status session-card-status--finished">Done</span>
           )}
+          {session.status === "split" && (
+            <span className="session-card-status session-card-status--split">Split</span>
+          )}
         </div>
+        {/* Split into Routes button for large unoptimized sessions */}
+        {onCluster && session.stop_count > 48 && session.status === "not_started" && (
+          <button
+            className="btn btn-sm btn-cluster"
+            onClick={(e) => { e.stopPropagation(); onCluster(); }}
+            disabled={clusteringId === session.id}
+          >
+            {clusteringId === session.id ? (
+              <>
+                <span className="upload-spinner" style={{ width: 12, height: 12, borderWidth: 2 }} />
+                Splitting...
+              </>
+            ) : (
+              <>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="3" />
+                  <circle cx="5" cy="6" r="2" />
+                  <circle cx="19" cy="6" r="2" />
+                  <circle cx="5" cy="18" r="2" />
+                  <circle cx="19" cy="18" r="2" />
+                </svg>
+                Split into Routes ({Math.ceil(session.stop_count / 48)} routes)
+              </>
+            )}
+          </button>
+        )}
         <div className="session-card-meta">
           <span className="session-card-stops">
             {session.status === "in_progress" || session.status === "finished"
