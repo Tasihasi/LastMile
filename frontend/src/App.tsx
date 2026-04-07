@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useDeliveryPlanner } from "./hooks/useDeliveryPlanner";
 import { useTheme } from "./hooks/useTheme";
@@ -54,6 +54,13 @@ function App() {
   const [clusterReviewId, setClusterReviewId] = useState<string | null>(null);
   const [shareLoading, setShareLoading] = useState(false);
   const [shareCopied, setShareCopied] = useState(false);
+
+  // Sync view mode when user role changes (e.g. after login)
+  useEffect(() => {
+    if (isPlanner && viewMode === "map" && stops.length === 0 && !showUpload) {
+      setViewMode("dashboard");
+    }
+  }, [isPlanner]);
 
   const locatedCount = stops.filter(
     (s) => s.lat != null && s.lng != null
@@ -163,6 +170,14 @@ function App() {
                 <polyline points="15 18 9 12 15 6" />
               </svg>
               Dashboard
+            </button>
+          )}
+          {!isPlanner && showUpload && stops.length === 0 && (
+            <button className="btn btn-ghost" onClick={() => setShowUpload(false)}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="15 18 9 12 15 6" />
+              </svg>
+              Back
             </button>
           )}
           {viewMode === "map" && stops.length > 0 && (

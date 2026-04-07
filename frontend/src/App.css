@@ -2391,15 +2391,90 @@ body {
 @media (max-width: 768px) {
   /* Dashboard responsive */
   .dashboard {
-    padding: 16px;
+    padding: 12px;
+  }
+
+  .dashboard-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+
+  .dashboard-header h2 {
+    font-size: 1rem;
+  }
+
+  .dashboard-header-actions {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .dashboard-filter {
+    width: 100%;
+    order: 1;
+  }
+
+  .dashboard-filter-btn {
+    flex: 1;
+    padding: 6px 8px;
+    font-size: 0.72rem;
+    text-align: center;
   }
 
   .dashboard-layout {
     flex-direction: column;
+    gap: 12px;
   }
 
   .dashboard-unassigned {
     width: 100%;
+  }
+
+  .dashboard-column-header {
+    padding: 10px 12px;
+  }
+
+  .dashboard-column-cards {
+    padding: 6px;
+    gap: 4px;
+  }
+
+  /* Hide drag handle on touch devices */
+  .session-card-drag-handle {
+    display: none;
+  }
+
+  .session-card {
+    padding: 8px 10px;
+  }
+
+  .session-card-actions {
+    gap: 1px;
+  }
+
+  .session-card-btn {
+    width: 32px;
+    height: 32px;
+  }
+
+  .session-card-btn svg {
+    width: 15px;
+    height: 15px;
+  }
+
+  /* Upload button inside biker column -- full width */
+  .dashboard-upload-btn {
+    font-size: 0.75rem;
+    padding: 8px 12px;
+  }
+
+  .dashboard-finished-cards {
+    gap: 4px;
+  }
+
+  .dashboard-split {
+    margin-bottom: 12px;
   }
 
   /* Show hamburger toggle */
