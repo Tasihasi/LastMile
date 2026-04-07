@@ -214,6 +214,22 @@ Move a stop from one sub-route to a sibling sub-route (both must share the same 
 }
 ```
 
+### DELETE /sessions/{id}/uncluster/
+
+Undo a cluster split. Deletes all sub-routes, restores stops to the parent session, and resets the parent status to `not_started`. Planner only.
+
+Fails with `409 Conflict` if any sub-route has status `in_progress` (a biker is actively delivering).
+
+**Response** `200`:
+```json
+{
+  "message": "Split undone successfully",
+  "session_id": "uuid",
+  "stops_restored": 284,
+  "sub_routes_deleted": 7
+}
+```
+
 ---
 
 ## Delivery Tracking

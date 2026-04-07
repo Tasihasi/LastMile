@@ -263,6 +263,16 @@ export async function moveStop(
   return data;
 }
 
+export async function unclusterSession(
+  sessionId: string
+): Promise<{ parent_id: string; deleted_routes: number }> {
+  const { data } = await api.delete<{
+    parent_id: string;
+    deleted_routes: number;
+  }>(`/sessions/${sessionId}/uncluster/`);
+  return data;
+}
+
 // ============================================
 // Route Lifecycle
 // ============================================
