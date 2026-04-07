@@ -861,3 +861,237 @@ class SessionAPITest(TestCase):
         DeliveryStop.objects.filter(session=self.session, name="Shop A").update(lat=None, lng=None)
         response = self.client.post(f"/api/sessions/{self.session.id}/optimize/")
         self.assertEqual(response.status_code, 400)
+
+
+# ============================================
+# Full Integration Test: Upload → Cluster → Optimize → Deliver
+# ============================================
+
+
+class FullLifecycleIntegrationTest(TestCase):
+    """End-to-end test covering the complete multi-route delivery workflow.
+
+    Flow: planner uploads pre-geocoded CSV → clusters into sub-routes →
+    moves a stop → optimizes a sub-route → assigns to biker →
+    biker starts route → marks all stops delivered → route finishes.
+    Also tests uncluster on a separate split session.
+    """
+
+    def setUp(self):
+        self.planner, self.planner_client = _make_planner("integ_planner")
+        self.biker, self.biker_client = _make_biker("integ_biker")
+
+    def _build_csv(self, num_stops=60):
+        """Build a pre-geocoded CSV with stops scattered around Budapest."""
+        import random
+
+        rng = random.Random(42)
+        lines = ["name,lat,lng"]
+        centers = [(47.497, 19.040), (47.510, 19.080), (47.480, 19.060)]
+        for i in range(num_stops):
+            c = centers[i % 3]
+            lat = c[0] + rng.uniform(-0.02, 0.02)
+            lng = c[1] + rng.uniform(-0.02, 0.02)
+            lines.append(f"Stop {i + 1},{lat:.6f},{lng:.6f}")
+        return ("\n".join(lines) + "\n").encode()
+
+    def test_full_cluster_optimize_deliver_lifecycle(self):
+        # ── Step 1: Planner uploads a 60-stop pre-geocoded CSV ──
+        csv_content = self._build_csv(60)
+        f = SimpleUploadedFile("cluster_test.csv", csv_content, content_type="text/csv")
+        resp = self.planner_client.post("/api/upload/", {"file": f}, format="multipart")
+        self.assertEqual(resp.status_code, 201)
+        session_id = resp.json()["id"]
+        stops = resp.json()["stops"]
+        self.assertEqual(len(stops), 60)
+        # Pre-geocoded stops should be skipped (not pending)
+        self.assertFalse(resp.json()["needs_geocoding"])
+
+        # ── Step 2: Verify session appears in planner's session list ──
+        resp = self.planner_client.get("/api/sessions/")
+        self.assertEqual(resp.status_code, 200)
+        session_ids = [s["id"] for s in resp.json()]
+        self.assertIn(session_id, session_ids)
+
+        # ── Step 3: Planner clusters the session into sub-routes ──
+        resp = self.planner_client.post(f"/api/sessions/{session_id}/cluster/", {"n_routes": 3})
+        self.assertEqual(resp.status_code, 201)
+        cluster_data = resp.json()
+        self.assertEqual(cluster_data["parent_id"], session_id)
+        self.assertEqual(len(cluster_data["sub_routes"]), 3)
+        self.assertEqual(cluster_data["cluster_summary"]["n_routes"], 3)
+        self.assertEqual(cluster_data["cluster_summary"]["total_stops"], 60)
+
+        sub_route_ids = [sr["id"] for sr in cluster_data["sub_routes"]]
+        total_stops_across_routes = sum(sr["stop_count"] for sr in cluster_data["sub_routes"])
+        self.assertEqual(total_stops_across_routes, 60)
+
+        # Parent session should now be "split"
+        resp = self.planner_client.get(f"/api/sessions/{session_id}/")
+        self.assertEqual(resp.json()["status"], "split")
+
+        # ── Step 4: Verify sub-routes are accessible ──
+        for sr_id in sub_route_ids:
+            resp = self.planner_client.get(f"/api/sessions/{sr_id}/")
+            self.assertEqual(resp.status_code, 200)
+            self.assertEqual(resp.json()["status"], "not_started")
+
+        # ── Step 5: Move a stop from route 1 to route 2 ──
+        route1_id = sub_route_ids[0]
+        route2_id = sub_route_ids[1]
+        resp = self.planner_client.get(f"/api/sessions/{route1_id}/")
+        route1_stops = resp.json()["stops"]
+        stop_to_move = route1_stops[0]["id"]
+        route1_count_before = len(route1_stops)
+
+        resp = self.planner_client.post(
+            f"/api/sessions/{route1_id}/move-stop/",
+            {"stop_id": stop_to_move, "to_session_id": route2_id},
+        )
+        self.assertEqual(resp.status_code, 200)
+        move_data = resp.json()
+        self.assertEqual(move_data["from_count"], route1_count_before - 1)
+
+        # ── Step 6: Optimize a sub-route (mock ORS) ──
+        target_route_id = sub_route_ids[2]
+        resp = self.planner_client.get(f"/api/sessions/{target_route_id}/")
+        target_stops = resp.json()["stops"]
+        target_stop_ids = [s["id"] for s in target_stops]
+
+        with (
+            patch("planner.views.optimize_route") as mock_opt,
+            patch("planner.views.get_route_details") as mock_details,
+        ):
+            # Mock optimize to return stops in original order
+            mock_opt.return_value = target_stop_ids
+            mock_details.return_value = {
+                "total_duration": 3600,
+                "total_distance": 15000,
+                "geometry": {"type": "LineString", "coordinates": [[19.04, 47.5], [19.08, 47.51]]},
+                "segments": [
+                    {"from_index": i, "to_index": i + 1, "duration": 300, "distance": 1200}
+                    for i in range(len(target_stops) - 1)
+                ],
+            }
+
+            resp = self.planner_client.post(f"/api/sessions/{target_route_id}/optimize/")
+            self.assertEqual(resp.status_code, 200)
+            opt_data = resp.json()
+            self.assertIsNotNone(opt_data["route_geometry"])
+            self.assertEqual(opt_data["total_duration"], 3600)
+            self.assertEqual(opt_data["total_distance"], 15000)
+
+            # Verify stops got sequence_order
+            for stop in opt_data["optimized_stops"]:
+                self.assertIsNotNone(stop["sequence_order"])
+
+        # ── Step 7: Assign the optimized sub-route to a biker ──
+        resp = self.planner_client.patch(
+            f"/api/sessions/{target_route_id}/assign/",
+            {"owner_id": self.biker.id},
+        )
+        self.assertEqual(resp.status_code, 200)
+
+        # ── Step 8: Biker sees the assigned route ──
+        resp = self.biker_client.get("/api/sessions/")
+        biker_session_ids = [s["id"] for s in resp.json()]
+        self.assertIn(target_route_id, biker_session_ids)
+        # Biker should NOT see the split parent
+        self.assertNotIn(session_id, biker_session_ids)
+
+        # ── Step 9: Biker starts the route ──
+        resp = self.biker_client.patch(f"/api/sessions/{target_route_id}/start/")
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.json()["status"], "in_progress")
+
+        # Verify it shows up in active sessions (planner endpoint)
+        resp = self.planner_client.get("/api/sessions/active/")
+        self.assertEqual(resp.status_code, 200)
+        active_ids = [s["id"] for s in resp.json()]
+        self.assertIn(target_route_id, active_ids)
+
+        # ── Step 10: Biker delivers all stops ──
+        resp = self.biker_client.get(f"/api/sessions/{target_route_id}/")
+        route_stops = resp.json()["stops"]
+        ordered = sorted([s for s in route_stops if s["sequence_order"]], key=lambda s: s["sequence_order"])
+
+        for i, stop in enumerate(ordered):
+            status_choice = "delivered" if i % 3 != 2 else "not_received"
+            resp = self.biker_client.patch(
+                f"/api/sessions/{target_route_id}/stops/{stop['id']}/status/",
+                {"status": status_choice},
+            )
+            self.assertEqual(resp.status_code, 200)
+
+        # ── Step 11: Verify route auto-finished ──
+        resp = self.biker_client.get(f"/api/sessions/{target_route_id}/")
+        self.assertEqual(resp.json()["status"], "finished")
+
+        # Active sessions should no longer include this route
+        resp = self.planner_client.get("/api/sessions/active/")
+        active_ids = [s["id"] for s in resp.json()]
+        self.assertNotIn(target_route_id, active_ids)
+
+    def test_uncluster_lifecycle(self):
+        """Test the full cluster → uncluster flow."""
+        csv_content = self._build_csv(60)
+        f = SimpleUploadedFile("uncluster_test.csv", csv_content, content_type="text/csv")
+        resp = self.planner_client.post("/api/upload/", {"file": f}, format="multipart")
+        session_id = resp.json()["id"]
+
+        # Cluster
+        resp = self.planner_client.post(f"/api/sessions/{session_id}/cluster/", {"n_routes": 2})
+        self.assertEqual(resp.status_code, 201)
+        self.assertEqual(len(resp.json()["sub_routes"]), 2)
+
+        # Uncluster
+        resp = self.planner_client.delete(f"/api/sessions/{session_id}/uncluster/")
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.json()["deleted_routes"], 2)
+
+        # Parent should be back to not_started
+        resp = self.planner_client.get(f"/api/sessions/{session_id}/")
+        self.assertEqual(resp.json()["status"], "not_started")
+        # Original stops should still be there
+        self.assertEqual(len(resp.json()["stops"]), 60)
+
+    def test_uncluster_blocked_by_in_progress(self):
+        """Cannot uncluster when a sub-route is in progress."""
+        csv_content = self._build_csv(60)
+        f = SimpleUploadedFile("block_test.csv", csv_content, content_type="text/csv")
+        resp = self.planner_client.post("/api/upload/", {"file": f}, format="multipart")
+        session_id = resp.json()["id"]
+
+        resp = self.planner_client.post(f"/api/sessions/{session_id}/cluster/", {"n_routes": 2})
+        sub_id = resp.json()["sub_routes"][0]["id"]
+
+        # Start a sub-route: need to assign, optimize, then start
+        self.planner_client.patch(f"/api/sessions/{sub_id}/assign/", {"owner_id": self.biker.id})
+        # Create optimized stops directly for simplicity
+        sub_session = DeliverySession.objects.get(id=sub_id)
+        for i, stop in enumerate(sub_session.stops.all(), start=1):
+            stop.sequence_order = i
+            stop.save(update_fields=["sequence_order"])
+
+        self.biker_client.patch(f"/api/sessions/{sub_id}/start/")
+
+        # Uncluster should be blocked
+        resp = self.planner_client.delete(f"/api/sessions/{session_id}/uncluster/")
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn("in progress", resp.json()["error"].lower())
+
+    def test_planner_upload_creates_unassigned_session(self):
+        """When a planner uploads without specifying a biker, the session should be unassigned."""
+        csv_content = b"name,address\nShop A,Main St\nShop B,Vaci ut\n"
+        f = SimpleUploadedFile("planner_upload.csv", csv_content, content_type="text/csv")
+        resp = self.planner_client.post("/api/upload/", {"file": f}, format="multipart")
+        self.assertEqual(resp.status_code, 201)
+        self.assertIsNone(resp.json()["owner_name"])
+
+    def test_planner_upload_for_biker(self):
+        """When a planner specifies owner_id, the session is assigned to that biker."""
+        csv_content = b"name,address\nShop A,Main St\nShop B,Vaci ut\n"
+        f = SimpleUploadedFile("biker_upload.csv", csv_content, content_type="text/csv")
+        resp = self.planner_client.post("/api/upload/", {"file": f, "owner_id": self.biker.id}, format="multipart")
+        self.assertEqual(resp.status_code, 201)
+        self.assertEqual(resp.json()["owner_name"], "integ_biker")

@@ -186,10 +186,11 @@ def upload_file(request):
             status=status.HTTP_400_BAD_REQUEST,
         )
 
-    # Determine owner: planners can assign to a biker via owner_id
-    owner = request.user
+    # Determine owner: planners upload as unassigned unless they specify a biker
+    is_planner = hasattr(request.user, "profile") and request.user.profile.role == "planner"
+    owner = None if is_planner else request.user
     owner_id = request.data.get("owner_id")
-    if owner_id and hasattr(request.user, "profile") and request.user.profile.role == "planner":
+    if owner_id and is_planner:
         with contextlib.suppress(User.DoesNotExist, ValueError, TypeError):
             owner = User.objects.get(id=int(owner_id))
 
@@ -514,9 +515,11 @@ def cluster_session(request, session_id):
             status=status.HTTP_400_BAD_REQUEST,
         )
 
-    # Get geocoded stops only
-    geocoded_stops = list(session.stops.filter(geocode_status="success", lat__isnull=False, lng__isnull=False))
-    skipped_count = session.stops.exclude(geocode_status="success").count()
+    # Get stops with valid coordinates (geocoded or uploaded with coords)
+    geocoded_stops = list(
+        session.stops.filter(geocode_status__in=["success", "skipped"], lat__isnull=False, lng__isnull=False)
+    )
+    skipped_count = session.stops.exclude(geocode_status__in=["success", "skipped"]).count()
 
     if len(geocoded_stops) < 2:
         return Response(

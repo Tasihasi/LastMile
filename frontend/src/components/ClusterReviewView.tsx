@@ -701,53 +701,93 @@ function ClusterMapLayer({
         const num = stop.sequence_order ?? 0;
 
         return (
-          <Marker
+          <ClusterMarker
             key={`${route.session.id}-${stop.id}`}
-            position={[stop.lat!, stop.lng!]}
-            icon={createClusterIcon(num, route.color, isSelected)}
-            eventHandlers={{ click: () => onSelectStop(stop) }}
-            zIndexOffset={isSelected ? 1000 : 0}
-          >
-            {isSelected && (
-              <Popup>
-                <div className="cluster-stop-popup">
-                  <strong>{stop.name}</strong>
-                  {stop.raw_address && <span>{stop.raw_address}</span>}
-                  {stop.product_code && (
-                    <span className="cluster-stop-popup-code">
-                      {stop.product_code}
-                    </span>
-                  )}
-                  <div className="cluster-stop-popup-move">
-                    <span>Move to:</span>
-                    {allRoutes
-                      .filter((r) => r.session.id !== route.session.id)
-                      .map((r) => (
-                        <button
-                          key={r.session.id}
-                          className="cluster-stop-popup-move-btn"
-                          onClick={() =>
-                            onMoveStop(stop.id, route.session.id, r.session.id)
-                          }
-                        >
-                          <span
-                            className="cluster-stop-dot"
-                            style={{
-                              background:
-                                routeColorMap.get(r.session.id) ?? "#6366f1",
-                            }}
-                          />
-                          {r.session.name}
-                        </button>
-                      ))}
-                  </div>
-                </div>
-              </Popup>
-            )}
-          </Marker>
+            stop={stop}
+            route={route}
+            isSelected={isSelected}
+            num={num}
+            allRoutes={allRoutes}
+            routeColorMap={routeColorMap}
+            onSelectStop={onSelectStop}
+            onMoveStop={onMoveStop}
+          />
         );
       })}
     </>
+  );
+}
+
+function ClusterMarker({
+  stop,
+  route,
+  isSelected,
+  num,
+  allRoutes,
+  routeColorMap,
+  onSelectStop,
+  onMoveStop,
+}: {
+  stop: DeliveryStop;
+  route: SubRouteData;
+  isSelected: boolean;
+  num: number;
+  allRoutes: SubRouteData[];
+  routeColorMap: Map<string, string>;
+  onSelectStop: (stop: DeliveryStop) => void;
+  onMoveStop: (stopId: number, fromSessionId: string, toSessionId: string) => void;
+}) {
+  const markerRef = useRef<L.Marker>(null);
+
+  useEffect(() => {
+    if (isSelected && markerRef.current) {
+      markerRef.current.openPopup();
+    }
+  }, [isSelected]);
+
+  return (
+    <Marker
+      ref={markerRef}
+      position={[stop.lat!, stop.lng!]}
+      icon={createClusterIcon(num, route.color, isSelected)}
+      eventHandlers={{ click: () => onSelectStop(stop) }}
+      zIndexOffset={isSelected ? 1000 : 0}
+    >
+      <Popup>
+        <div className="cluster-stop-popup">
+          <strong>{stop.name}</strong>
+          {stop.raw_address && <span>{stop.raw_address}</span>}
+          {stop.product_code && (
+            <span className="cluster-stop-popup-code">
+              {stop.product_code}
+            </span>
+          )}
+          <div className="cluster-stop-popup-move">
+            <span>Move to:</span>
+            {allRoutes
+              .filter((r) => r.session.id !== route.session.id)
+              .map((r) => (
+                <button
+                  key={r.session.id}
+                  className="cluster-stop-popup-move-btn"
+                  onClick={() =>
+                    onMoveStop(stop.id, route.session.id, r.session.id)
+                  }
+                >
+                  <span
+                    className="cluster-stop-dot"
+                    style={{
+                      background:
+                        routeColorMap.get(r.session.id) ?? "#6366f1",
+                    }}
+                  />
+                  {r.session.name}
+                </button>
+              ))}
+          </div>
+        </div>
+      </Popup>
+    </Marker>
   );
 }
 
