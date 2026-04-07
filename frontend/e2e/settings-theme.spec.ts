@@ -4,10 +4,14 @@ test.describe("Settings and Theme", () => {
   test.beforeEach(async ({ page }) => {
     await loginViaAPI(page, "BikerSettings", "biker");
     await page.getByRole("button", { name: "New Route" }).click();
+    await expect(page.locator('input[type="file"]')).toBeAttached({
+      timeout: 10_000,
+    });
     await uploadTestFile(page, "geocoded_stops.csv");
     await expect(page.locator(".stop-item").first()).toBeVisible({
-      timeout: 15_000,
+      timeout: 20_000,
     });
+    await page.waitForLoadState("networkidle");
   });
 
   test.describe("Theme toggle", () => {

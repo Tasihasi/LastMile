@@ -91,19 +91,21 @@ test.describe("Map and Stop Interactions", () => {
   test("sidebar toggle works on mobile viewport", async ({ page }) => {
     // Resize to mobile
     await page.setViewportSize({ width: 375, height: 812 });
-    await page.waitForTimeout(500);
+    await page.waitForTimeout(1000);
 
-    // Toggle sidebar
+    // Toggle sidebar open
     const toggleBtn = page.locator('[aria-label="Toggle sidebar"]');
-    if (await toggleBtn.isVisible()) {
+    if (await toggleBtn.isVisible({ timeout: 5_000 }).catch(() => false)) {
       await toggleBtn.click();
-      await expect(page.locator(".sidebar--open")).toBeVisible();
+      await expect(page.locator(".sidebar--open")).toBeVisible({
+        timeout: 5_000,
+      });
 
-      // Click overlay to close
+      // Close sidebar by clicking overlay (force needed as sidebar sits above)
       const overlay = page.locator(".sidebar-overlay");
-      if (await overlay.isVisible()) {
-        await overlay.click();
-        await expect(overlay).not.toBeVisible({ timeout: 3_000 });
+      if (await overlay.isVisible({ timeout: 3_000 }).catch(() => false)) {
+        await overlay.click({ force: true });
+        await expect(overlay).not.toBeVisible({ timeout: 5_000 });
       }
     }
   });

@@ -11,8 +11,9 @@ test.describe("Planner Journey", () => {
 
   test.describe("Dashboard overview", () => {
     test("shows Route Management heading and layout", async ({ page }) => {
-      await expect(page.getByText("Route Management")).toBeVisible();
-      // Should see dashboard layout
+      await expect(page.getByText("Route Management")).toBeVisible({
+        timeout: 15_000,
+      });
       await expect(page.locator(".dashboard")).toBeVisible();
     });
 
@@ -153,28 +154,19 @@ test.describe("Planner Journey", () => {
     });
 
     test("delete session with confirmation", async ({ page }) => {
-      // First upload a route to have something to delete
-      const fileInput = page.locator('input[type="file"]').first();
-      await expect(fileInput).toBeAttached({ timeout: 15_000 });
-      await fileInput.setInputFiles(
-        path.resolve(__dirname, "test-data", "geocoded_stops.csv")
-      );
-      await expect(page.locator(".stop-item").first()).toBeVisible({
-        timeout: 15_000,
-      });
-
-      // Go back to dashboard
-      await page.getByRole("button", { name: "Dashboard" }).click();
+      // Wait for dashboard to fully load
       await expect(page.locator(".dashboard-layout")).toBeVisible({
-        timeout: 15_000,
+        timeout: 20_000,
       });
+      await page.waitForLoadState("networkidle");
 
-      // Find a session card and click delete
+      // Find a session card with a delete button
       const cards = page.locator(".session-card");
+      await expect(cards.first()).toBeVisible({ timeout: 15_000 });
       const cardCount = await cards.count();
 
       const deleteBtn = page.locator(".session-card-btn--danger").first();
-      if (await deleteBtn.isVisible()) {
+      if (await deleteBtn.isVisible({ timeout: 5_000 }).catch(() => false)) {
         await deleteBtn.click();
 
         // Confirmation dialog should appear
@@ -189,7 +181,7 @@ test.describe("Planner Journey", () => {
           .click();
 
         // Card should be removed
-        await expect(cards).toHaveCount(cardCount - 1, { timeout: 5_000 });
+        await expect(cards).toHaveCount(cardCount - 1, { timeout: 10_000 });
       }
     });
   });

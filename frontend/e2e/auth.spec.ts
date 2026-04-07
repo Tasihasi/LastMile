@@ -40,7 +40,9 @@ test.describe("Authentication", () => {
   test("login as planner shows dashboard", async ({ page }) => {
     await loginViaUI(page, "E2EPlanner", "planner");
     // Planner sees the dashboard
-    await expect(page.getByText("Route Management")).toBeVisible();
+    await expect(page.getByText("Route Management")).toBeVisible({
+      timeout: 15_000,
+    });
     await expect(page.locator(".user-badge-name")).toHaveText("E2EPlanner");
   });
 

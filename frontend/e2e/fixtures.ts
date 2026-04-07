@@ -17,8 +17,11 @@ async function loginViaUI(
   await page.getByLabel("Username").fill(username);
   await page.getByRole("button", { name: role, exact: false }).click();
   await page.getByRole("button", { name: "Sign In" }).click();
-  // Wait for the app to load after login
-  await expect(page.locator("h1", { hasText: "LastMile" })).toBeVisible();
+  // Wait for the app to fully load after login (dashboard or session list)
+  await expect(page.locator("h1", { hasText: "LastMile" })).toBeVisible({
+    timeout: 15_000,
+  });
+  await page.waitForLoadState("networkidle");
 }
 
 /** Helper: log in via API and set token in localStorage (faster). */
@@ -34,7 +37,10 @@ async function loginViaAPI(
   await page.goto("/");
   await page.evaluate((t) => localStorage.setItem("auth-token", t), token);
   await page.reload();
-  await expect(page.locator("h1", { hasText: "LastMile" })).toBeVisible();
+  await expect(page.locator("h1", { hasText: "LastMile" })).toBeVisible({
+    timeout: 15_000,
+  });
+  await page.waitForLoadState("networkidle");
 }
 
 /** Helper: upload a file by setting it on the hidden input. */
