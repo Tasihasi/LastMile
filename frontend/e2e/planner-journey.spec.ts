@@ -1,5 +1,8 @@
 import { test, expect, loginViaAPI } from "./fixtures";
 import path from "path";
+import { fileURLToPath } from "url";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 test.describe("Planner Journey", () => {
   test.beforeEach(async ({ page }) => {

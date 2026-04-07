@@ -1,5 +1,8 @@
 import { test, expect, loginViaAPI, API_BASE } from "./fixtures";
 import path from "path";
+import { fileURLToPath } from "url";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 test.describe("Clustering", () => {
   /**
