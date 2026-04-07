@@ -2750,6 +2750,59 @@ body {
   color: var(--color-success-text);
 }
 
+.session-card-status--split {
+  background: rgba(139, 92, 246, 0.12);
+  color: var(--color-accent);
+}
+
+.session-card--split {
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  padding: 12px 14px;
+  gap: 8px;
+}
+
+.session-card--split:hover {
+  background: var(--color-surface-hover);
+}
+
+.btn-cluster {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 8px 0 4px;
+  background: var(--color-accent);
+  color: white;
+  border: none;
+  padding: 6px 12px;
+  border-radius: var(--radius-sm);
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--transition);
+  width: 100%;
+  justify-content: center;
+}
+
+.btn-cluster:hover {
+  background: #7c3aed;
+}
+
+.btn-cluster:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btn-cluster svg {
+  width: 14px;
+  height: 14px;
+}
+
+.dashboard-split {
+  margin-bottom: 16px;
+}
+
 .session-card-progress {
   display: flex;
   align-items: center;
@@ -3863,5 +3916,390 @@ body {
 
   .docs-h2 {
     font-size: 1.05rem;
+  }
+}
+
+/* ============================================
+   Cluster Review View
+   ============================================ */
+
+.cluster-review {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 56px);
+  overflow: hidden;
+}
+
+.cluster-review-loading,
+.cluster-review-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: calc(100vh - 56px);
+  gap: 16px;
+  color: var(--color-text-secondary);
+}
+
+.cluster-review-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+
+.cluster-review-header h3 {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--color-text);
+  flex: 1;
+}
+
+.cluster-review-header-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.cluster-review-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 16px;
+  background: var(--color-danger-bg);
+  color: var(--color-danger-text);
+  font-size: 0.85rem;
+  border-bottom: 1px solid var(--color-danger-border);
+}
+
+.cluster-review-error button {
+  background: none;
+  border: none;
+  color: var(--color-danger-text);
+  cursor: pointer;
+  font-weight: 600;
+  text-decoration: underline;
+}
+
+.cluster-review-layout {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+.cluster-review-sidebar {
+  width: 340px;
+  border-right: 1px solid var(--color-border);
+  background: var(--color-surface);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.cluster-review-summary {
+  display: flex;
+  gap: 4px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.cluster-review-stat {
+  flex: 1;
+  text-align: center;
+}
+
+.cluster-review-stat-value {
+  display: block;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.cluster-review-stat-label {
+  display: block;
+  font-size: 0.72rem;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.cluster-review-routes {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+}
+
+.cluster-review-map {
+  flex: 1;
+  position: relative;
+}
+
+/* Cluster route cards */
+
+.cluster-route-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  margin-bottom: 6px;
+  overflow: hidden;
+  transition: box-shadow var(--transition);
+}
+
+.cluster-route-card:hover {
+  box-shadow: var(--shadow-sm);
+}
+
+.cluster-route-card-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.cluster-route-color {
+  width: 14px;
+  height: 14px;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
+.cluster-route-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.cluster-route-name {
+  display: block;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--color-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cluster-route-meta {
+  font-size: 0.75rem;
+  color: var(--color-text-secondary);
+}
+
+.cluster-route-owner {
+  display: block;
+  font-size: 0.72rem;
+  color: var(--color-primary);
+  margin-top: 2px;
+}
+
+.cluster-route-chevron {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  color: var(--color-text-muted);
+  transition: transform var(--transition);
+}
+
+.cluster-route-chevron--open {
+  transform: rotate(180deg);
+}
+
+/* Route actions row */
+
+.cluster-route-actions {
+  display: flex;
+  gap: 4px;
+  padding: 0 10px 8px;
+}
+
+.cluster-route-actions .btn {
+  padding: 4px 8px;
+}
+
+.cluster-route-actions .btn svg {
+  width: 15px;
+  height: 15px;
+}
+
+.cluster-route-assign-wrap {
+  position: relative;
+}
+
+.cluster-assign-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 99;
+}
+
+.cluster-assign-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 100;
+  min-width: 160px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  padding: 4px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.cluster-assign-option {
+  display: block;
+  width: 100%;
+  padding: 6px 10px;
+  border: none;
+  background: none;
+  text-align: left;
+  font-size: 0.82rem;
+  color: var(--color-text);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.cluster-assign-option:hover {
+  background: var(--color-surface-hover);
+}
+
+.cluster-assign-option--current {
+  color: var(--color-primary);
+  font-weight: 600;
+}
+
+.cluster-assign-option--unassign {
+  color: var(--color-text-muted);
+  border-top: 1px solid var(--color-border);
+  margin-top: 2px;
+  padding-top: 8px;
+}
+
+/* Expanded stop list */
+
+.cluster-route-stops {
+  border-top: 1px solid var(--color-border-light);
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.cluster-stop-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  cursor: pointer;
+  font-size: 0.8rem;
+  color: var(--color-text);
+  transition: background var(--transition);
+}
+
+.cluster-stop-item:hover {
+  background: var(--color-surface-hover);
+}
+
+.cluster-stop-item--selected {
+  background: var(--color-primary-light);
+}
+
+.cluster-stop-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.cluster-stop-name {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cluster-stop-order {
+  font-size: 0.72rem;
+  color: var(--color-text-muted);
+  font-weight: 600;
+}
+
+/* Map popup for stop move */
+
+.cluster-stop-popup {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 180px;
+}
+
+.cluster-stop-popup strong {
+  font-size: 0.85rem;
+}
+
+.cluster-stop-popup span {
+  font-size: 0.78rem;
+  color: var(--color-text-secondary);
+}
+
+.cluster-stop-popup-code {
+  font-family: monospace;
+  font-size: 0.75rem !important;
+  background: var(--color-bg);
+  padding: 2px 4px;
+  border-radius: 3px;
+}
+
+.cluster-stop-popup-move {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--color-border);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.cluster-stop-popup-move > span {
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-muted);
+}
+
+.cluster-stop-popup-move-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  cursor: pointer;
+  font-size: 0.78rem;
+  color: var(--color-text);
+  transition: background var(--transition);
+}
+
+.cluster-stop-popup-move-btn:hover {
+  background: var(--color-surface-hover);
+}
+
+.cluster-stop-popup-move-btn .cluster-stop-dot {
+  width: 10px;
+  height: 10px;
+}
+
+/* Responsive */
+
+@media (max-width: 768px) {
+  .cluster-review-layout {
+    flex-direction: column;
+  }
+
+  .cluster-review-sidebar {
+    width: 100%;
+    max-height: 40vh;
+    border-right: none;
+    border-bottom: 1px solid var(--color-border);
   }
 }

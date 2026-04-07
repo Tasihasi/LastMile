@@ -68,7 +68,7 @@ delivery_planner/
 ├── frontend/
 │   ├── src/
 │   │   ├── main.tsx              # Entry point (AuthContext + React Router)
-│   │   ├── App.tsx               # Main app shell, 3 view modes (~480 lines)
+│   │   ├── App.tsx               # Main app shell, 4 view modes (~480 lines)
 │   │   ├── App.css               # All styles (~3300 lines), CSS variables, light/dark
 │   │   ├── index.css             # Base styles
 │   │   ├── api/
@@ -89,7 +89,8 @@ delivery_planner/
 │   │   │   ├── SettingsPanel.tsx     # Route config (depot, time, speed)
 │   │   │   ├── SessionList.tsx       # Biker's route history
 │   │   │   ├── BikerPicker.tsx       # Dropdown to filter by biker
-│   │   │   ├── PlannerDashboard.tsx  # Kanban-style route management
+│   │   │   ├── PlannerDashboard.tsx  # Kanban-style route management + cluster triggers
+│   │   │   ├── ClusterReviewView.tsx # Cluster review: color-coded map, move stops, optimize/assign per route
 │   │   │   ├── PlannerMapView.tsx    # Aggregate live map (all active routes)
 │   │   │   ├── SharedRouteView.tsx   # Public read-only route view
 │   │   │   └── FinishedRouteDetail.tsx # Modal with delivery stats
@@ -240,10 +241,11 @@ Auto-advances `current_stop_index` to next pending stop. Auto-finishes route whe
 - **useTheme** -- Light/dark mode toggle (localStorage + OS preference)
 
 ### View Modes (App.tsx)
-The app has 3 main view modes controlled by state in App.tsx:
+The app has 4 main view modes controlled by state in App.tsx:
 1. **Route View** (default for bikers) -- Map + sidebar with stops
 2. **Planner Dashboard** -- Kanban columns (unassigned + per-biker)
 3. **Live Map** -- Aggregate map of all active routes (planner only)
+4. **Cluster Review** -- Color-coded map + sidebar for reviewing/editing clustered sub-routes (planner only, accessed from "split" sessions in dashboard)
 
 ### Authentication Flow
 ```
@@ -257,6 +259,7 @@ LoginScreen -> POST /api/auth/login/ -> token in localStorage
 - **Coordinate order**: Leaflet = `[lat, lng]`, ORS APIs = `[lng, lat]`. Conversion in `optimizer.py`.
 - **Polling**: Live map polls `GET /api/sessions/active/` every 30 seconds (not WebSockets).
 - **Stop-based tracking**: Position = next pending stop's sequence_order, not GPS.
+- **Cluster colors**: 10 distinct colors for cluster markers (red, blue, green, purple, orange, teal, pink, brown, indigo, cyan), cycled by cluster index.
 
 ---
 
@@ -388,12 +391,17 @@ All Tier 1 and Tier 2 features from PLAN.md are **completed**:
 - Responsive layout
 - Finished route stats panel
 
-**Bulk Clustering (Phase 1 -- backend only):**
+**Bulk Clustering (Phase 1 -- backend + Phase 2 -- frontend complete):**
 - KMeans geographic clustering of large uploads into sub-routes (scikit-learn)
 - Auto-split oversized clusters to respect ORS 48-stop limit
 - Parent/child session hierarchy (parent status = "split", children are independent routes)
 - Move stops between sibling sub-routes
 - 300-address Budapest test CSV for bulk testing
+- **Phase 2 frontend**: ClusterReviewView with color-coded cluster map, collapsible cluster cards, per-route optimize/assign actions, move-stop controls between sub-routes
+- PlannerDashboard "Split into Routes" button on sessions with >48 stops, "Split Routes" section for reviewing parent sessions
+- Child sessions filtered out of normal kanban view (parent_id != null hidden)
+- New TypeScript types: ClusterResponse, ClusterSubRoute, ClusterSummary, MoveStopResponse
+- New API client functions: clusterSession(), moveStop()
 
 ---
 
