@@ -285,14 +285,16 @@ export function PlannerDashboard({ onViewSession, onOpenLiveMap, onOpenMapView, 
           <div className="dashboard-split">
             <div className="dashboard-column">
               <div className="dashboard-column-header">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <circle cx="12" cy="12" r="3" />
-                  <circle cx="5" cy="6" r="2" />
-                  <circle cx="19" cy="6" r="2" />
-                  <circle cx="5" cy="18" r="2" />
-                  <circle cx="19" cy="18" r="2" />
-                </svg>
-                <span className="dashboard-column-title">Split Routes</span>
+                <div className="dashboard-column-biker">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="3" />
+                    <circle cx="5" cy="6" r="2" />
+                    <circle cx="19" cy="6" r="2" />
+                    <circle cx="5" cy="18" r="2" />
+                    <circle cx="19" cy="18" r="2" />
+                  </svg>
+                  <span className="dashboard-column-title">Split Routes</span>
+                </div>
                 <span className="dashboard-column-count">{splitSessions.length}</span>
               </div>
               <div className="dashboard-column-cards">
