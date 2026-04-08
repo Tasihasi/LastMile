@@ -8,7 +8,7 @@
 
 - **Status**: Learning/portfolio project, actively developed
 - **Repo**: GitHub (Tasihasi/delivery-planner)
-- **Main branch**: `main`
+- **Main branch**: `main` (connected to Render live deployment)
 - **Total cost**: $0 -- all APIs are free tier
 
 ---
@@ -42,15 +42,15 @@
 delivery_planner/
 ├── backend/
 │   ├── config/
-│   │   ├── settings.py           # Django config (SQLite, CORS, DRF, TokenAuth, HTTPS enforcement, upload limits)
+│   │   ├── settings.py           # Django config (SQLite, CORS, DRF, TokenAuth, HTTPS enforcement, upload limits, logging)
 │   │   ├── urls.py               # Root URL routing -> planner.urls
 │   │   ├── asgi.py / wsgi.py
 │   ├── planner/                  # Main Django app
 │   │   ├── models.py             # DeliverySession, DeliveryStop, UserProfile, SharedRoute
-│   │   ├── views.py              # All API endpoints (~580 lines)
-│   │   ├── serializers.py        # DRF serializers (~173 lines)
+│   │   ├── views.py              # All API endpoints (~778 lines)
+│   │   ├── serializers.py        # DRF serializers (~205 lines)
 │   │   ├── urls.py               # API route definitions
-│   │   ├── geocoder.py           # Nominatim geocoding client
+│   │   ├── geocoder.py           # Nominatim geocoding client (with logging + app-identifying User-Agent)
 │   │   ├── optimizer.py          # ORS optimization + directions
 │   │   ├── clustering.py         # KMeans geographic clustering (scikit-learn)
 │   │   ├── parsers.py            # Multi-format file parsing (CSV/XLSX/TXT/XML)
@@ -69,13 +69,13 @@ delivery_planner/
 ├── frontend/
 │   ├── src/
 │   │   ├── main.tsx              # Entry point (AuthContext + React Router)
-│   │   ├── App.tsx               # Main app shell, 4 view modes (~480 lines)
-│   │   ├── App.css               # All styles (~3300 lines), CSS variables, light/dark
+│   │   ├── App.tsx               # Main app shell, 4 view modes (~559 lines)
+│   │   ├── App.css               # All styles (~4589 lines), CSS variables, light/dark
 │   │   ├── index.css             # Base styles
 │   │   ├── api/
-│   │   │   └── client.ts         # Axios + Fetch API client (~261 lines)
+│   │   │   └── client.ts         # Axios + Fetch API client (~303 lines)
 │   │   ├── types/
-│   │   │   └── index.ts          # TypeScript interfaces (~85 lines)
+│   │   │   └── index.ts          # TypeScript interfaces (~117 lines)
 │   │   ├── hooks/
 │   │   │   ├── useAuth.ts        # Auth context provider + hook
 │   │   │   ├── useDeliveryPlanner.ts  # Central state (stops, sessions, optimization)
@@ -279,6 +279,9 @@ LoginScreen -> POST /api/auth/login/ -> token in localStorage
 - **Polling**: Live map polls `GET /api/sessions/active/` every 30 seconds (not WebSockets).
 - **Stop-based tracking**: Position = next pending stop's sequence_order, not GPS.
 - **Cluster colors**: 10 distinct colors for cluster markers (red, blue, green, purple, orange, teal, pink, brown, indigo, cyan), cycled by cluster index.
+- **ClusterBanner**: Extracted component in PlannerDashboard -- renders above SessionCard in a `.session-card-wrapper`, uses connected border-radius pattern (banner rounded top, card rounded bottom).
+- **Re-optimize confirmation**: In-progress routes show a ghost "Re-optimize Route" button with inline confirm/cancel bar before executing.
+- **Mobile back button**: Bikers get a back button in mobile upload view to return to map/session view.
 
 ---
 
@@ -301,10 +304,10 @@ Supports CSV, XLSX, TXT (tab-delimited), XML. Each row must have `name` + either
 
 ## Styling
 
-- **Single CSS file**: `App.css` (~3300 lines) with CSS variables (50+ design tokens)
+- **Single CSS file**: `App.css` (~4589 lines) with CSS variables (50+ design tokens)
 - **Themes**: Light (default, slate + indigo), Dark (inverted with adjusted map brightness)
-- **Responsive**: Mobile-first breakpoints for mobile, tablet, desktop
-- **Key class patterns**: `.app`, `.sidebar`, `.map-container`, `.session-card`, `.stop-item`, `.stop-detail-overlay`
+- **Responsive**: Mobile-first breakpoints for mobile, tablet, desktop. Dashboard fully optimized for mobile (centered columns, touch targets, hidden drag handles)
+- **Key class patterns**: `.app`, `.sidebar`, `.map-container`, `.session-card`, `.stop-item`, `.stop-detail-overlay`, `.session-card-wrapper`, `.cluster-banner`, `.reoptimize-confirm`
 
 ---
 
@@ -366,9 +369,11 @@ Single web service on Render. Django serves both the API and the built React SPA
 - API calls use relative `/api` path in production (no CORS needed, same origin)
 
 **Render settings:**
+- Deploys from `main` branch (auto-deploy on push)
 - Build command: `./build.sh`
 - Start command: `cd backend && gunicorn config.wsgi`
-- Environment variables: `DEBUG=False`, `SECRET_KEY`, `ORS_API_KEY`, `ALLOWED_HOSTS`
+- Root directory: empty (repo root)
+- Environment variables: `DEBUG=False`, `SECRET_KEY`, `ORS_API_KEY`, `NODE_VERSION=20`
 - `RENDER_EXTERNAL_HOSTNAME` is auto-set by Render and added to `ALLOWED_HOSTS`
 
 **Frontend API URL:**
@@ -393,6 +398,7 @@ Single web service on Render. Django serves both the API and the built React SPA
 - Token auth (no sessions, no cookies, no passwords)
 - **Query optimization**: List views use `_annotate_session_list()` with `Count`/`Subquery` annotations + `select_related("owner")` to avoid N+1; serializers check for `_annotated` attributes with `hasattr()` fallback for single-object usage
 - **Production security**: HTTPS enforcement (HSTS, SSL redirect, secure cookies) auto-enabled when `DEBUG=False`
+- **Production logging**: `planner.*` loggers at WARNING level to console; geocoder logs Nominatim request failures and empty results
 
 ### Known Limitations
 - SQLite only (not production-ready, would need PostgreSQL)
@@ -457,6 +463,19 @@ All Tier 1 and Tier 2 features from PLAN.md are **completed**:
 - Playwright config auto-starts Django backend (with mock + seed) and Vite dev server
 - ESLint excludes `e2e/` and `playwright.config.ts` (Playwright uses Node-style imports)
 - Playwright report uploaded as CI artifact on failure
+
+**Mobile & UX Polish (completed):**
+- Mobile back button for bikers to exit upload/map view
+- Planner dashboard fully optimized for mobile (centered columns, 480px max-width, touch-friendly 32px buttons, hidden drag handles)
+- ClusterBanner extracted from SessionCard (connected banner-above-card pattern)
+- Geocode/optimize buttons hidden for in-progress and finished routes
+- Re-optimize ghost button for in-progress routes with inline confirmation prompt
+- Split Routes column icon sized correctly via dashboard-column-biker wrapper
+
+**Production Observability (completed):**
+- Django LOGGING config surfaces `planner.*` warnings/errors to gunicorn console output
+- Geocoder logs actual Nominatim errors (HTTP failures, empty results, parse errors) instead of silently returning None
+- Nominatim User-Agent includes app URL per usage policy (`DeliveryPlannerDemo/1.0 (lastmile-c07a.onrender.com)`)
 
 ---
 
