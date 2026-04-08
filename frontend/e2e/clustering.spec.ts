@@ -19,7 +19,7 @@ test.describe("Clustering", () => {
 
     const samplePath = path.resolve(
       __dirname,
-      "../../backend/planner/sample_data/large_delivery_300.csv"
+      "test-data/large_geocoded_60.csv"
     );
 
     const fs = await import("fs");
@@ -28,7 +28,7 @@ test.describe("Clustering", () => {
       headers: { Authorization: `Token ${token}` },
       multipart: {
         file: {
-          name: "large_delivery_300.csv",
+          name: "large_geocoded_60.csv",
           mimeType: "text/csv",
           buffer: fileContent,
         },
@@ -56,7 +56,7 @@ test.describe("Clustering", () => {
       timeout: 20_000,
     });
 
-    const splitBtn = page.locator(".btn-cluster");
+    const splitBtn = page.locator(".btn-cluster").first();
     await expect(splitBtn).toBeVisible({ timeout: 20_000 });
   });
 
@@ -77,8 +77,8 @@ test.describe("Clustering", () => {
     await expect(splitBtn).toBeVisible({ timeout: 20_000 });
     await splitBtn.click();
 
-    // Wait for cluster review (backend clustering + frontend transition)
-    await expect(page.getByText("Cluster Review")).toBeVisible({
+    // Wait for cluster review view (heading shows session name)
+    await expect(page.locator(".cluster-review-header")).toBeVisible({
       timeout: 30_000,
     });
 
@@ -121,7 +121,7 @@ test.describe("Clustering", () => {
     await expect(splitBtn).toBeVisible({ timeout: 20_000 });
     await splitBtn.click();
 
-    await expect(page.getByText("Cluster Review")).toBeVisible({
+    await expect(page.locator(".cluster-review-header")).toBeVisible({
       timeout: 30_000,
     });
 

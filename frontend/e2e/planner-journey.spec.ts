@@ -1,8 +1,53 @@
-import { test, expect, loginViaAPI } from "./fixtures";
+import { test, expect, loginViaAPI, API_BASE } from "./fixtures";
 import path from "path";
 import { fileURLToPath } from "url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+/** Ensure at least one in_progress session exists for the Live Map button. */
+async function ensureActiveRoute(page: import("@playwright/test").Page) {
+  const token = await page.evaluate(() => localStorage.getItem("auth-token"));
+  const headers = { Authorization: `Token ${token}` };
+
+  // Check if there's already an active route
+  const res = await page.request.get(`${API_BASE}/sessions/`, { headers });
+  const sessions = await res.json();
+  if (sessions.some((s: { status: string }) => s.status === "in_progress")) {
+    return;
+  }
+
+  // Try starting an existing not_started, pre-optimized route
+  const notStarted = sessions.find(
+    (s: { status: string; owner_name: string | null }) =>
+      s.status === "not_started" && s.owner_name != null
+  );
+  if (notStarted) {
+    const startRes = await page.request.patch(
+      `${API_BASE}/sessions/${notStarted.id}/start/`,
+      { headers }
+    );
+    if (startRes.ok()) return;
+  }
+
+  // No suitable route exists — upload a small geocoded CSV, optimize, start
+  const fs = await import("fs");
+  const csvPath = path.resolve(__dirname, "test-data", "geocoded_stops.csv");
+  const csvContent = fs.readFileSync(csvPath);
+  const uploadRes = await page.request.post(`${API_BASE}/upload/`, {
+    headers,
+    multipart: {
+      file: { name: "active_route.csv", mimeType: "text/csv", buffer: csvContent },
+    },
+  });
+  const { id: sessionId } = await uploadRes.json();
+
+  await page.request.post(`${API_BASE}/sessions/${sessionId}/optimize/`, {
+    headers,
+  });
+  await page.request.patch(`${API_BASE}/sessions/${sessionId}/start/`, {
+    headers,
+  });
+}
 
 test.describe("Planner Journey", () => {
   test.beforeEach(async ({ page }) => {
@@ -48,25 +93,34 @@ test.describe("Planner Journey", () => {
       await expect(page.locator(".dashboard-layout")).toBeVisible({
         timeout: 15_000,
       });
+      // Ensure at least one in_progress route exists so the button renders
+      await ensureActiveRoute(page);
+      await page.reload();
+      await expect(page.locator(".dashboard-layout")).toBeVisible({
+        timeout: 15_000,
+      });
       const liveMapBtn = page.locator(".btn-live-map");
-      await expect(liveMapBtn).toBeVisible();
+      await expect(liveMapBtn).toBeVisible({ timeout: 10_000 });
     });
   });
 
   test.describe("Session management", () => {
     test("upload route as planner", async ({ page }) => {
-      // Click Upload Route button
-      const uploadBtn = page.locator(".dashboard-upload-btn").first();
-      await expect(uploadBtn).toBeVisible({ timeout: 15_000 });
+      await expect(page.locator(".dashboard-layout")).toBeVisible({
+        timeout: 15_000,
+      });
 
-      // Use the hidden file input
+      // Count existing session cards
+      const cardsBefore = await page.locator(".session-card").count();
+
+      // Use the hidden file input via Upload Route button
       const fileInput = page.locator('input[type="file"]').first();
       await fileInput.setInputFiles(
         path.resolve(__dirname, "test-data", "geocoded_stops.csv")
       );
 
-      // Should navigate to map view with uploaded route
-      await expect(page.locator(".stop-item").first()).toBeVisible({
+      // Planner upload stays on dashboard — a new session card should appear
+      await expect(page.locator(".session-card")).toHaveCount(cardsBefore + 1, {
         timeout: 15_000,
       });
     });
@@ -76,8 +130,8 @@ test.describe("Planner Journey", () => {
         timeout: 15_000,
       });
 
-      // Click view button on first session card
-      const viewBtn = page.locator(".session-card-btn").first();
+      // Click view button (eye icon) on first session card
+      const viewBtn = page.locator('[title="View route on map"]').first();
       if (await viewBtn.isVisible()) {
         await viewBtn.click();
 
@@ -131,8 +185,8 @@ test.describe("Planner Journey", () => {
       const unassignedSection = page.locator(".dashboard-unassigned");
       if (await unassignedSection.isVisible()) {
         const assignBtn = unassignedSection
-          .locator(".session-card-btn")
-          .nth(1); // Second button is assign
+          .locator('[title="Assign to biker"]')
+          .first();
         if (await assignBtn.isVisible()) {
           await assignBtn.click();
 
@@ -192,8 +246,15 @@ test.describe("Planner Journey", () => {
         timeout: 15_000,
       });
 
+      // Ensure at least one in_progress route exists
+      await ensureActiveRoute(page);
+      await page.reload();
+      await expect(page.locator(".dashboard-layout")).toBeVisible({
+        timeout: 15_000,
+      });
+
       const liveMapBtn = page.locator(".btn-live-map");
-      await expect(liveMapBtn).toBeVisible();
+      await expect(liveMapBtn).toBeVisible({ timeout: 10_000 });
       await liveMapBtn.click();
 
       // Should show a map

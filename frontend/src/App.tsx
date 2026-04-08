@@ -55,7 +55,8 @@ function App() {
   const [shareLoading, setShareLoading] = useState(false);
   const [shareCopied, setShareCopied] = useState(false);
 
-  // Sync view mode when user role changes (e.g. after login)
+  // Sync view mode when user role changes (e.g. after login via UI)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (isPlanner && viewMode === "map" && stops.length === 0 && !showUpload) {
       setViewMode("dashboard");

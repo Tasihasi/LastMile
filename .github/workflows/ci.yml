@@ -80,7 +80,7 @@ jobs:
     needs: [backend, frontend]
     if: >
       github.event_name == 'pull_request' &&
-      github.base_ref == 'production'
+      (github.base_ref == 'main' || github.base_ref == 'production')
 
     steps:
       - uses: actions/checkout@v4

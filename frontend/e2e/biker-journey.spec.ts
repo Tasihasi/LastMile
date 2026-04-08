@@ -55,22 +55,26 @@ test.describe("Biker Journey", () => {
     test("full delivery lifecycle: start, deliver stops, finish", async ({
       page,
     }) => {
-      // Login as biker and load a seeded route
+      // Login as biker and upload a fresh route (seeded routes may be consumed by earlier tests)
       await loginViaAPI(page, "Anna", "biker");
-
-      // Find a not_started session in the session list
-      const notStartedSession = page
-        .locator(".session-list-item")
-        .filter({ hasNot: page.locator(".session-list-item-dot") })
-        .first();
-      await notStartedSession.click();
+      await page.getByRole("button", { name: "New Route" }).click();
+      await expect(page.locator('input[type="file"]')).toBeAttached({
+        timeout: 10_000,
+      });
+      await uploadTestFile(page, "geocoded_stops.csv");
 
       // Wait for stops to load
       await expect(page.locator(".stop-item").first()).toBeVisible({
         timeout: 15_000,
       });
 
-      // Route should have a Start Route button (seeded routes are pre-optimized)
+      // Optimize the uploaded route
+      await page.getByRole("button", { name: "Optimize Route" }).click();
+      await expect(page.locator(".route-summary")).toBeVisible({
+        timeout: 30_000,
+      });
+
+      // Start the route
       const startBtn = page.getByRole("button", { name: "Start Route" });
       if (await startBtn.isVisible()) {
         await startBtn.click();

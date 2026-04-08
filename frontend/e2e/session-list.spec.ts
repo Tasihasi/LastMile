@@ -9,10 +9,21 @@ test.describe("Session List (Biker)", () => {
       timeout: 15_000,
     });
 
-    // Anna has seeded routes
-    const sessions = page.locator(".session-list-item");
-    await expect(sessions.first()).toBeVisible({ timeout: 10_000 });
-    expect(await sessions.count()).toBeGreaterThan(0);
+    // Anna has seeded routes — may be active or all finished (collapsed)
+    const activeSessions = page.locator(".session-list-item:not(.session-list-item--finished)");
+    const finishedToggle = page.locator(".session-list-finished-toggle");
+
+    const hasActive = await activeSessions.first().isVisible({ timeout: 5_000 }).catch(() => false);
+    if (hasActive) {
+      expect(await activeSessions.count()).toBeGreaterThan(0);
+    } else {
+      // All routes finished — expand toggle to verify
+      await expect(finishedToggle).toBeVisible({ timeout: 5_000 });
+      await finishedToggle.click();
+      await expect(
+        page.locator(".session-list-item--finished").first()
+      ).toBeVisible({ timeout: 5_000 });
+    }
   });
 
   test("shows new route button", async ({ page }) => {
@@ -64,7 +75,16 @@ test.describe("Session List (Biker)", () => {
       timeout: 15_000,
     });
 
-    const session = page.locator(".session-list-item").first();
+    // Routes may be in the active list or the collapsed finished section
+    let session = page.locator(".session-list-item:not(.session-list-item--finished)").first();
+    const hasActive = await session.isVisible({ timeout: 5_000 }).catch(() => false);
+    if (!hasActive) {
+      const toggle = page.locator(".session-list-finished-toggle");
+      if (await toggle.isVisible()) {
+        await toggle.click();
+      }
+      session = page.locator(".session-list-item--finished").first();
+    }
     await expect(session).toBeVisible({ timeout: 10_000 });
     await session.click();
 

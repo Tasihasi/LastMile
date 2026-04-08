@@ -43,10 +43,11 @@ test.describe("Settings and Theme", () => {
       if (await darkToggle.isVisible()) {
         await darkToggle.click();
         await page.reload();
-        // After reload, should still be in dark mode
-        await expect(page.locator(".stop-item").first()).toBeVisible({
-          timeout: 15_000,
-        });
+        // After reload, wait for app to load
+        await expect(
+          page.locator("h1", { hasText: "LastMile" })
+        ).toBeVisible({ timeout: 15_000 });
+        // Should still be in dark mode
         await expect(
           page.locator('[aria-label="Switch to light mode"]')
         ).toBeVisible();
