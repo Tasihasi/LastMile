@@ -2871,34 +2871,47 @@ body {
   background: var(--color-surface-hover);
 }
 
-.btn-cluster {
+.session-card-wrapper {
+  display: flex;
+  flex-direction: column;
+}
+
+.session-card-wrapper .session-card {
+  border-radius: var(--radius-md);
+}
+
+.session-card-wrapper .cluster-banner + .session-card {
+  border-radius: 0 0 var(--radius-md) var(--radius-md);
+}
+
+.cluster-banner {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
-  margin: 8px 0 4px;
+  width: 100%;
   background: var(--color-accent);
   color: white;
   border: none;
-  padding: 6px 12px;
-  border-radius: var(--radius-sm);
+  padding: 7px 12px;
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
+  font-family: var(--font);
   font-size: 0.78rem;
   font-weight: 600;
   cursor: pointer;
   transition: background var(--transition);
-  width: 100%;
-  justify-content: center;
 }
 
-.btn-cluster:hover {
+.cluster-banner:hover {
   background: #7c3aed;
 }
 
-.btn-cluster:disabled {
+.cluster-banner:disabled {
   opacity: 0.6;
   cursor: not-allowed;
 }
 
-.btn-cluster svg {
+.cluster-banner svg {
   width: 14px;
   height: 14px;
 }
