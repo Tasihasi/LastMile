@@ -248,26 +248,32 @@ export function PlannerDashboard({ onViewSession, onOpenLiveMap, onOpenMapView, 
               </div>
               <div className="dashboard-column-cards">
                 {unassigned.map((s) => (
-                  <SessionCard
-                    key={s.id}
-                    session={s}
-                    bikers={bikers}
-                    assignDropdown={assignDropdown}
-                    confirmDelete={confirmDelete}
-                    isDragging={draggingId === s.id}
-                    dwellMinutes={settings.dwellMinutes}
-                    onDragStart={() => handleDragStart(s.id)}
-                    onDragEnd={handleDragEnd}
-                    onView={() => onViewSession(s.id)}
-                    onAssignOpen={() => setAssignDropdown(assignDropdown === s.id ? null : s.id)}
-                    onAssign={(ownerId) => handleAssign(s.id, ownerId)}
-                    onDeleteConfirm={() => setConfirmDelete(s.id)}
-                    onDeleteCancel={() => setConfirmDelete(null)}
-                    onDelete={() => handleDelete(s.id)}
-                    onRename={(name) => handleRename(s.id, name)}
-                    clusteringId={clusteringId}
-                    onCluster={() => handleCluster(s.id)}
-                  />
+                  <div key={s.id} className="session-card-wrapper">
+                    {s.stop_count > 48 && s.status === "not_started" && (
+                      <ClusterBanner
+                        session={s}
+                        clusteringId={clusteringId}
+                        onCluster={() => handleCluster(s.id)}
+                      />
+                    )}
+                    <SessionCard
+                      session={s}
+                      bikers={bikers}
+                      assignDropdown={assignDropdown}
+                      confirmDelete={confirmDelete}
+                      isDragging={draggingId === s.id}
+                      dwellMinutes={settings.dwellMinutes}
+                      onDragStart={() => handleDragStart(s.id)}
+                      onDragEnd={handleDragEnd}
+                      onView={() => onViewSession(s.id)}
+                      onAssignOpen={() => setAssignDropdown(assignDropdown === s.id ? null : s.id)}
+                      onAssign={(ownerId) => handleAssign(s.id, ownerId)}
+                      onDeleteConfirm={() => setConfirmDelete(s.id)}
+                      onDeleteCancel={() => setConfirmDelete(null)}
+                      onDelete={() => handleDelete(s.id)}
+                      onRename={(name) => handleRename(s.id, name)}
+                    />
+                  </div>
                 ))}
               </div>
             </div>
@@ -346,26 +352,32 @@ export function PlannerDashboard({ onViewSession, onOpenLiveMap, onOpenMapView, 
                 </div>
                 <div className="dashboard-column-cards">
                   {bikerRoutes.map((s) => (
-                    <SessionCard
-                      key={s.id}
-                      session={s}
-                      bikers={bikers}
-                      assignDropdown={assignDropdown}
-                      confirmDelete={confirmDelete}
-                      isDragging={draggingId === s.id}
-                      dwellMinutes={settings.dwellMinutes}
-                      clusteringId={clusteringId}
-                      onDragStart={() => handleDragStart(s.id)}
-                      onDragEnd={handleDragEnd}
-                      onView={() => onViewSession(s.id)}
-                      onAssignOpen={() => setAssignDropdown(assignDropdown === s.id ? null : s.id)}
-                      onAssign={(ownerId) => handleAssign(s.id, ownerId)}
-                      onDeleteConfirm={() => setConfirmDelete(s.id)}
-                      onDeleteCancel={() => setConfirmDelete(null)}
-                      onDelete={() => handleDelete(s.id)}
-                      onRename={(name) => handleRename(s.id, name)}
-                      onCluster={() => handleCluster(s.id)}
-                    />
+                    <div key={s.id} className="session-card-wrapper">
+                      {s.stop_count > 48 && s.status === "not_started" && (
+                        <ClusterBanner
+                          session={s}
+                          clusteringId={clusteringId}
+                          onCluster={() => handleCluster(s.id)}
+                        />
+                      )}
+                      <SessionCard
+                        session={s}
+                        bikers={bikers}
+                        assignDropdown={assignDropdown}
+                        confirmDelete={confirmDelete}
+                        isDragging={draggingId === s.id}
+                        dwellMinutes={settings.dwellMinutes}
+                        onDragStart={() => handleDragStart(s.id)}
+                        onDragEnd={handleDragEnd}
+                        onView={() => onViewSession(s.id)}
+                        onAssignOpen={() => setAssignDropdown(assignDropdown === s.id ? null : s.id)}
+                        onAssign={(ownerId) => handleAssign(s.id, ownerId)}
+                        onDeleteConfirm={() => setConfirmDelete(s.id)}
+                        onDeleteCancel={() => setConfirmDelete(null)}
+                        onDelete={() => handleDelete(s.id)}
+                        onRename={(name) => handleRename(s.id, name)}
+                      />
+                    </div>
                   ))}
                   {bikerRoutes.length === 0 && (
                     <div className="dashboard-empty">
@@ -423,7 +435,6 @@ export function PlannerDashboard({ onViewSession, onOpenLiveMap, onOpenMapView, 
                 confirmDelete={confirmDelete}
                 isDragging={draggingId === s.id}
                 dwellMinutes={settings.dwellMinutes}
-                clusteringId={clusteringId}
                 onDragStart={() => handleDragStart(s.id)}
                 onDragEnd={handleDragEnd}
                 onView={() => setFinishedDetailId(s.id)}
@@ -458,7 +469,6 @@ interface SessionCardProps {
   confirmDelete: string | null;
   isDragging: boolean;
   dwellMinutes: number;
-  clusteringId: string | null;
   onDragStart: () => void;
   onDragEnd: () => void;
   onView: () => void;
@@ -468,7 +478,6 @@ interface SessionCardProps {
   onDeleteCancel: () => void;
   onDelete: () => void;
   onRename: (name: string) => void;
-  onCluster?: () => void;
 }
 
 function SessionCard({
@@ -478,7 +487,6 @@ function SessionCard({
   confirmDelete,
   isDragging,
   dwellMinutes,
-  clusteringId,
   onDragStart,
   onDragEnd,
   onView,
@@ -488,7 +496,6 @@ function SessionCard({
   onDeleteCancel,
   onDelete,
   onRename,
-  onCluster,
 }: SessionCardProps) {
   const isAssigning = assignDropdown === session.id;
   const isConfirmingDelete = confirmDelete === session.id;
@@ -566,32 +573,6 @@ function SessionCard({
             <span className="session-card-status session-card-status--split">Split</span>
           )}
         </div>
-        {/* Split into Routes button for large unoptimized sessions */}
-        {onCluster && session.stop_count > 48 && session.status === "not_started" && (
-          <button
-            className="btn btn-sm btn-cluster"
-            onClick={(e) => { e.stopPropagation(); onCluster(); }}
-            disabled={clusteringId === session.id}
-          >
-            {clusteringId === session.id ? (
-              <>
-                <span className="upload-spinner" style={{ width: 12, height: 12, borderWidth: 2 }} />
-                Splitting...
-              </>
-            ) : (
-              <>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <circle cx="12" cy="12" r="3" />
-                  <circle cx="5" cy="6" r="2" />
-                  <circle cx="19" cy="6" r="2" />
-                  <circle cx="5" cy="18" r="2" />
-                  <circle cx="19" cy="18" r="2" />
-                </svg>
-                Split into Routes ({Math.ceil(session.stop_count / 48)} routes)
-              </>
-            )}
-          </button>
-        )}
         <div className="session-card-meta">
           <span className="session-card-stops">
             {session.status === "in_progress" || session.status === "finished"
@@ -702,5 +683,37 @@ function SessionCard({
         </div>
       )}
     </div>
+  );
+}
+
+function ClusterBanner({ session, clusteringId, onCluster }: {
+  session: SessionSummary;
+  clusteringId: string | null;
+  onCluster: () => void;
+}) {
+  return (
+    <button
+      className="cluster-banner"
+      onClick={onCluster}
+      disabled={clusteringId === session.id}
+    >
+      {clusteringId === session.id ? (
+        <>
+          <span className="upload-spinner" style={{ width: 12, height: 12, borderWidth: 2 }} />
+          Splitting...
+        </>
+      ) : (
+        <>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="3" />
+            <circle cx="5" cy="6" r="2" />
+            <circle cx="19" cy="6" r="2" />
+            <circle cx="5" cy="18" r="2" />
+            <circle cx="19" cy="18" r="2" />
+          </svg>
+          Split into {Math.ceil(session.stop_count / 48)} Routes
+        </>
+      )}
+    </button>
   );
 }

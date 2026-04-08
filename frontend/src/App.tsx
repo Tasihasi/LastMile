@@ -54,6 +54,7 @@ function App() {
   const [clusterReviewId, setClusterReviewId] = useState<string | null>(null);
   const [shareLoading, setShareLoading] = useState(false);
   const [shareCopied, setShareCopied] = useState(false);
+  const [confirmReoptimize, setConfirmReoptimize] = useState(false);
 
   // Sync view mode when user role changes (e.g. after login via UI)
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -407,7 +408,7 @@ function App() {
                       Start Route
                     </button>
                   )}
-                  {needsGeocoding && (
+                  {needsGeocoding && sessionStatus === "not_started" && (
                     <button
                       className="btn btn-primary"
                       onClick={geocode}
@@ -429,7 +430,7 @@ function App() {
                       )}
                     </button>
                   )}
-                  {canOptimize && !isOptimized && (
+                  {canOptimize && sessionStatus === "not_started" && (
                     <button
                       className="btn btn-primary"
                       onClick={() => optimize(
@@ -438,7 +439,7 @@ function App() {
                           : null
                       )}
                       disabled={isOptimizing}
-                      style={isOptimized ? undefined : { background: "var(--color-accent)" }}
+                      style={!isOptimized ? { background: "var(--color-accent)" } : undefined}
                     >
                       {isOptimizing ? (
                         <>
@@ -450,10 +451,44 @@ function App() {
                           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                             <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
                           </svg>
-                          {isOptimized ? "Re-optimize Route" : "Optimize Route"}
+                          {isOptimized ? "Re-optimize" : "Optimize Route"}
                         </>
                       )}
                     </button>
+                  )}
+                  {canOptimize && isOptimized && sessionStatus === "in_progress" && (
+                    confirmReoptimize ? (
+                      <div className="reoptimize-confirm">
+                        <span>Re-optimize will change the route order. Continue?</span>
+                        <div className="reoptimize-confirm-actions">
+                          <button className="btn btn-sm btn-ghost" onClick={() => setConfirmReoptimize(false)}>Cancel</button>
+                          <button
+                            className="btn btn-sm btn-primary"
+                            disabled={isOptimizing}
+                            onClick={() => {
+                              setConfirmReoptimize(false);
+                              optimize(
+                                settings.homeLat != null && settings.homeLng != null
+                                  ? { lat: settings.homeLat, lng: settings.homeLng }
+                                  : null
+                              );
+                            }}
+                          >
+                            {isOptimizing ? "Optimizing..." : "Re-optimize"}
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <button
+                        className="btn btn-ghost btn-sm"
+                        onClick={() => setConfirmReoptimize(true)}
+                      >
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+                        </svg>
+                        Re-optimize Route
+                      </button>
+                    )
                   )}
                 </div>
 
