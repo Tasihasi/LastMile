@@ -56,7 +56,7 @@ test.describe("Clustering", () => {
       timeout: 20_000,
     });
 
-    const splitBtn = page.locator(".btn-cluster").first();
+    const splitBtn = page.locator(".cluster-banner").first();
     await expect(splitBtn).toBeVisible({ timeout: 20_000 });
   });
 
@@ -73,7 +73,7 @@ test.describe("Clustering", () => {
     });
 
     // Click Split into Routes — KMeans on 300 stops takes time
-    const splitBtn = page.locator(".btn-cluster").first();
+    const splitBtn = page.locator(".cluster-banner").first();
     await expect(splitBtn).toBeVisible({ timeout: 20_000 });
     await splitBtn.click();
 
@@ -117,7 +117,7 @@ test.describe("Clustering", () => {
       timeout: 20_000,
     });
 
-    const splitBtn = page.locator(".btn-cluster").first();
+    const splitBtn = page.locator(".cluster-banner").first();
     await expect(splitBtn).toBeVisible({ timeout: 20_000 });
     await splitBtn.click();
 
