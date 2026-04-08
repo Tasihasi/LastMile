@@ -2443,11 +2443,19 @@ body {
 
   .dashboard-layout {
     flex-direction: column;
+    align-items: center;
     gap: 12px;
   }
 
   .dashboard-unassigned {
     width: 100%;
+    max-width: 480px;
+  }
+
+  .dashboard-split {
+    width: 100%;
+    max-width: 480px;
+    margin-bottom: 12px;
   }
 
   .dashboard-column-header {
@@ -2492,8 +2500,13 @@ body {
     gap: 4px;
   }
 
-  .dashboard-split {
-    margin-bottom: 12px;
+  .dashboard-bikers {
+    align-items: center;
+  }
+
+  .dashboard-bikers .dashboard-column {
+    width: 100%;
+    max-width: 480px;
   }
 
   /* Show hamburger toggle */
