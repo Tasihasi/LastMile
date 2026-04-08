@@ -2496,6 +2496,15 @@ body {
     margin-bottom: 12px;
   }
 
+  .dashboard-bikers {
+    align-items: center;
+  }
+
+  .dashboard-bikers .dashboard-column {
+    width: 100%;
+    max-width: 480px;
+  }
+
   /* Show hamburger toggle */
   .sidebar-toggle {
     display: flex;
