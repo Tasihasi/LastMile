@@ -407,7 +407,7 @@ function App() {
                       Start Route
                     </button>
                   )}
-                  {needsGeocoding && (
+                  {needsGeocoding && sessionStatus === "not_started" && (
                     <button
                       className="btn btn-primary"
                       onClick={geocode}
@@ -429,7 +429,7 @@ function App() {
                       )}
                     </button>
                   )}
-                  {canOptimize && !isOptimized && (
+                  {canOptimize && !isOptimized && sessionStatus === "not_started" && (
                     <button
                       className="btn btn-primary"
                       onClick={() => optimize(
@@ -438,7 +438,7 @@ function App() {
                           : null
                       )}
                       disabled={isOptimizing}
-                      style={isOptimized ? undefined : { background: "var(--color-accent)" }}
+                      style={{ background: "var(--color-accent)" }}
                     >
                       {isOptimizing ? (
                         <>
@@ -450,7 +450,7 @@ function App() {
                           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                             <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
                           </svg>
-                          {isOptimized ? "Re-optimize Route" : "Optimize Route"}
+                          Optimize Route
                         </>
                       )}
                     </button>
