@@ -1,11 +1,14 @@
 import hashlib
+import logging
 import time
 
 import requests
 from django.conf import settings
 
+logger = logging.getLogger(__name__)
+
 NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
-USER_AGENT = "DeliveryPlannerDemo/1.0"
+USER_AGENT = "DeliveryPlannerDemo/1.0 (lastmile-c07a.onrender.com)"
 
 _last_request_time = 0.0
 
@@ -54,9 +57,14 @@ def geocode_address(address: str) -> tuple[float, float] | None:
         results = response.json()
 
         if not results:
+            logger.warning("Nominatim returned no results for: %s", address)
             return None
 
         return float(results[0]["lat"]), float(results[0]["lon"])
 
-    except (requests.RequestException, KeyError, ValueError, IndexError):
+    except requests.RequestException as e:
+        logger.error("Nominatim request failed for '%s': %s", address, e)
+        return None
+    except (KeyError, ValueError, IndexError) as e:
+        logger.error("Nominatim response parse error for '%s': %s", address, e)
         return None
