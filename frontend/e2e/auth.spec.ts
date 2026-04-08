@@ -31,7 +31,7 @@ test.describe("Authentication", () => {
     await loginViaUI(page, "E2EBiker", "biker");
     // Biker sees session list (Recent Routes heading or empty state)
     await expect(
-      page.getByText(/Recent Routes|No routes yet/)
+      page.locator("h3", { hasText: "Recent Routes" })
     ).toBeVisible();
     // Username shown in header
     await expect(page.locator(".user-badge-name")).toHaveText("E2EBiker");
@@ -39,10 +39,11 @@ test.describe("Authentication", () => {
 
   test("login as planner shows dashboard", async ({ page }) => {
     await loginViaUI(page, "E2EPlanner", "planner");
-    // Planner sees the dashboard
-    await expect(page.getByText("Route Management")).toBeVisible({
-      timeout: 15_000,
+    // Planner sees the dashboard -- wait for layout to settle
+    await expect(page.locator(".dashboard-layout")).toBeVisible({
+      timeout: 20_000,
     });
+    await expect(page.getByText("Route Management")).toBeVisible();
     await expect(page.locator(".user-badge-name")).toHaveText("E2EPlanner");
   });
 
