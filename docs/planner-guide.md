@@ -11,7 +11,9 @@ After logging in as a planner, you see the management dashboard instead of the m
 - **Biker columns**: One column per registered biker, showing their assigned routes
 - **Finished section**: Finished routes (collapsed by default)
 
-On mobile, columns stack vertically and are centered (max-width 480px) for easy scrolling. Drag handles are hidden on mobile -- use the assign button instead.
+On iPad-portrait viewports (640-768px) the dashboard shows a **2-column** layout. Below 640px columns stack vertically and are centered (max-width 480px) for easy scrolling. Drag handles are hidden on mobile -- use the assign button instead.
+
+> **Action feedback:** rename, delete, assign/unassign, share-link creation, and undo-split all now show a toast notification in the lower-right corner so you know the action actually succeeded. Errors surface as red toasts.
 
 ### Filtering Bikers
 
@@ -36,7 +38,7 @@ Each card shows:
 
 ### Split Banner
 
-Routes with more than 48 stops display a **Split into Routes** banner above the session card. The banner shows the calculated number of sub-routes (e.g., "Split into 7 Routes"). Click it to trigger KMeans clustering -- a spinner shows while clustering is in progress.
+Routes with more than 48 stops display a **Split into Routes** banner above the session card. Click it to trigger KMeans clustering -- a spinner shows while clustering is in progress. The actual number of sub-routes depends on how many stops were successfully geocoded, so the banner label stays generic.
 
 After splitting, the parent route moves to the **Split Routes** section and its status changes to `split`. The child sub-routes appear in the cluster review view.
 
@@ -64,7 +66,7 @@ Click **Upload Route** in the dashboard header. To upload directly for a specifi
 
 ## Renaming Routes
 
-Click the pencil icon on a route card. The name becomes an editable text field. Press **Enter** to save or **Escape** to cancel.
+Click the pencil icon on a route card. The name becomes an editable text field. Press **Enter** to save or **Escape** to cancel. Long names scroll to the start automatically so you can see the beginning of the name while editing. A toast confirms the rename.
 
 ## Deleting Routes
 
@@ -123,12 +125,19 @@ This is useful for fine-tuning cluster boundaries -- for example, moving a stop 
 
 ### Undo Split
 
-Click **Undo Split** in the cluster review header to revert the clustering:
+Click **Undo Split** in the cluster review header to revert the clustering. A confirmation dialog appears first (`"This will delete all sub-routes and restore stops to the parent. Continue?"`) because the action is destructive.
+
+After confirming:
 - All child sub-routes are deleted
 - Stops are restored to the parent session
 - Parent status resets to `not_started`
+- A toast confirms the undo
 
-> **Blocked if active:** Undo is blocked if any sub-route has status `in_progress` (a biker is actively delivering). You must wait for all active sub-routes to finish before undoing.
+> **Blocked if active:** Undo is blocked if any sub-route has status `in_progress` (a biker is actively delivering). You must wait for all active sub-routes to finish before undoing. The server returns a 409 and the UI surfaces an error toast.
+
+### Compact Optimize All button
+
+On narrow viewports (below 480px) the **Optimize All** button shrinks to a compact "Optimize (N)" label where N is the number of sub-routes that still need optimization. This keeps the remaining-count visible even when the cluster review sidebar is cramped.
 
 ---
 

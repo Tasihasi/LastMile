@@ -1,6 +1,6 @@
 # LastMile
 
-> **Beta 1.0** -- [Changelog](CHANGELOG.md) | [Live Demo](https://lastmile-c07a.onrender.com)
+> **Beta 1.0.1** -- [Changelog](CHANGELOG.md) | [Live Demo](https://lastmile-c07a.onrender.com)
 
 A full-stack delivery route planner for bicycle couriers. Upload delivery addresses, geocode them on a map, optimize route order, split large uploads into sub-routes, and track deliveries in real time. Supports two roles: **bikers** (execute routes) and **planners** (manage, assign, and monitor).
 
@@ -23,7 +23,18 @@ Full user guides and API reference are in the [`docs/`](docs/) folder:
 - [API Reference](docs/api-reference.md) -- all REST endpoints with request/response examples
 - [Changelog](CHANGELOG.md) -- version history and new features
 
-## What's New in Beta 1.0
+## What's New in Beta 1.0.1
+
+- **Toast notifications** for share, rename, delete, assign, and undo-split actions
+- **Header user menu** -- kebab dropdown consolidates Help, Theme, and Sign Out; the username is no longer an instant-logout button
+- **Undo Split confirmation** prevents accidental destructive cascades
+- **Auto-select in-progress route** drops bikers straight into their active delivery on login
+- **Sorted stop list** in the biker sidebar matches the numbered map markers after optimization
+- **Esc key** closes stop-detail and finished-route modals
+- **Tablet kanban** -- the planner dashboard stays 2-column on iPad-portrait viewports (640-768px)
+- **Mobile header kebab** below 380px keeps Sign Out reachable on ultra-narrow screens
+
+### Beta 1.0 Highlights
 
 - Bulk clustering: split large uploads (50+ stops) into geographic sub-routes with KMeans
 - Cluster review view: color-coded map, move stops between routes, optimize/assign per sub-route
@@ -264,21 +275,23 @@ LastMile/
 │   │   │   ├── useAuth.ts        # Auth context + token management
 │   │   │   ├── useDeliveryPlanner.ts  # Central state management
 │   │   │   ├── useSettings.ts    # Route settings (depot, time, speed)
-│   │   │   └── useTheme.ts       # Light/dark theme toggle
+│   │   │   ├── useTheme.ts       # Light/dark theme toggle
+│   │   │   └── useToast.ts       # Toast notification context + hook
 │   │   ├── components/
 │   │   │   ├── LoginScreen.tsx       # Auth UI (username + role picker)
 │   │   │   ├── FileUpload.tsx        # Drag-drop file upload
 │   │   │   ├── DeliveryMap.tsx       # Leaflet map (markers, route line)
-│   │   │   ├── AddressList.tsx       # Sidebar stop list
-│   │   │   ├── StopDetail.tsx        # Stop info popup
+│   │   │   ├── AddressList.tsx       # Sidebar stop list (sorted by sequence_order)
+│   │   │   ├── StopDetail.tsx        # Stop info popup (Esc to close)
 │   │   │   ├── SettingsPanel.tsx     # Route config (depot, time, speed)
-│   │   │   ├── SessionList.tsx       # Biker's route history
+│   │   │   ├── SessionList.tsx       # Biker's route history (auto-selects in-progress route)
 │   │   │   ├── BikerPicker.tsx       # Biker filter dropdown
 │   │   │   ├── PlannerDashboard.tsx  # Kanban dashboard + cluster triggers
 │   │   │   ├── ClusterReviewView.tsx # Cluster review (color-coded map)
 │   │   │   ├── PlannerMapView.tsx    # Live aggregate map
 │   │   │   ├── SharedRouteView.tsx   # Public read-only route view
-│   │   │   └── FinishedRouteDetail.tsx # Delivery stats modal
+│   │   │   ├── FinishedRouteDetail.tsx # Delivery stats modal (Esc to close)
+│   │   │   └── ToastContainer.tsx    # Renders queued toast notifications
 │   │   └── utils/
 │   │       └── format.ts         # Duration, distance, time formatting
 │   ├── e2e/                      # Playwright E2E tests
