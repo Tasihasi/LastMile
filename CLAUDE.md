@@ -80,21 +80,23 @@ delivery_planner/
 │   │   │   ├── useAuth.ts        # Auth context provider + hook
 │   │   │   ├── useDeliveryPlanner.ts  # Central state (stops, sessions, optimization)
 │   │   │   ├── useSettings.ts    # Route settings (start time, dwell, speed, depot)
-│   │   │   └── useTheme.ts       # Light/dark theme toggle
+│   │   │   ├── useTheme.ts       # Light/dark theme toggle
+│   │   │   └── useToast.ts       # Toast notification context provider + hook
 │   │   ├── components/
 │   │   │   ├── LoginScreen.tsx       # Auth UI (username + role picker)
 │   │   │   ├── FileUpload.tsx        # Drag-drop file upload
 │   │   │   ├── DeliveryMap.tsx       # Leaflet map (markers, route line, auto-zoom)
-│   │   │   ├── AddressList.tsx       # Sidebar stop list (status, actions)
-│   │   │   ├── StopDetail.tsx        # Modal popup with stop info
+│   │   │   ├── AddressList.tsx       # Sidebar stop list (sorted by sequence_order, status, actions)
+│   │   │   ├── StopDetail.tsx        # Modal popup with stop info (Esc to close)
 │   │   │   ├── SettingsPanel.tsx     # Route config (depot, time, speed)
-│   │   │   ├── SessionList.tsx       # Biker's route history
+│   │   │   ├── SessionList.tsx       # Biker's route history (auto-selects sole in-progress route)
 │   │   │   ├── BikerPicker.tsx       # Dropdown to filter by biker
 │   │   │   ├── PlannerDashboard.tsx  # Kanban-style route management + cluster triggers
 │   │   │   ├── ClusterReviewView.tsx # Cluster review: color-coded map, move stops, optimize/assign per route
 │   │   │   ├── PlannerMapView.tsx    # Aggregate live map (all active routes)
 │   │   │   ├── SharedRouteView.tsx   # Public read-only route view
-│   │   │   └── FinishedRouteDetail.tsx # Modal with delivery stats
+│   │   │   ├── FinishedRouteDetail.tsx # Modal with delivery stats (Esc to close)
+│   │   │   └── ToastContainer.tsx    # Renders queued toast notifications
 │   │   └── utils/
 │   │       └── format.ts         # Duration, distance, time formatting
 │   ├── index.html                # HTML entry (Inter font, "LastMile" title)
@@ -258,6 +260,7 @@ Auto-advances `current_stop_index` to next pending stop. Auto-finishes route whe
 - **useDeliveryPlanner** -- Central hook: current session, stops, upload/geocode/optimize state, status tracking
 - **useSettings** -- Route parameters persisted to localStorage (start time, dwell, speed, depot)
 - **useTheme** -- Light/dark mode toggle (localStorage + OS preference)
+- **ToastContext** (useToast.ts) -- Global queue of toast notifications; `showToast(message, kind)` from anywhere; rendered by `ToastContainer` in `main.tsx`. Used for share/rename/delete/assign/undo-split feedback.
 
 ### View Modes (App.tsx)
 The app has 4 main view modes controlled by state in App.tsx:
@@ -279,9 +282,13 @@ LoginScreen -> POST /api/auth/login/ -> token in localStorage
 - **Polling**: Live map polls `GET /api/sessions/active/` every 30 seconds (not WebSockets).
 - **Stop-based tracking**: Position = next pending stop's sequence_order, not GPS.
 - **Cluster colors**: 10 distinct colors for cluster markers (red, blue, green, purple, orange, teal, pink, brown, indigo, cyan), cycled by cluster index.
-- **ClusterBanner**: Extracted component in PlannerDashboard -- renders above SessionCard in a `.session-card-wrapper`, uses connected border-radius pattern (banner rounded top, card rounded bottom).
+- **ClusterBanner**: Extracted component in PlannerDashboard -- renders above SessionCard in a `.session-card-wrapper`, uses connected border-radius pattern (banner rounded top, card rounded bottom). Label is "Split into Routes" (no count) since the actual sub-route count depends on geocoded stops.
 - **Re-optimize confirmation**: In-progress routes show a ghost "Re-optimize Route" button with inline confirm/cancel bar before executing.
 - **Mobile back button**: Bikers get a back button in mobile upload view to return to map/session view.
+- **User identity reset**: App.tsx watches `user.id` and resets `useDeliveryPlanner` state + view mode whenever it changes, so the previous user's selected route never leaks across logins.
+- **Sidebar sort order**: `AddressList` re-sorts stops by `sequence_order` ascending whenever the route is optimized, so bikers see them in travel order regardless of API ordering.
+- **Modal Esc handlers**: `StopDetail` and `FinishedRouteDetail` listen for `Escape` to close.
+- **Auto-select in-progress route**: `SessionList` auto-calls `onSelectSession` after first load when the biker has exactly one in-progress route, so they don't land on an empty map.
 
 ---
 

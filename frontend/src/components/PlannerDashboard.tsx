@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { SessionSummary, User } from "../types";
 import { formatDuration, formatDistance, formatTime } from "../utils/format";
 import { useSettings } from "../hooks/useSettings";
+import { useToast } from "../hooks/useToast";
 import {
   listBikers,
   listSessions,
@@ -37,6 +38,7 @@ export function PlannerDashboard({ onViewSession, onOpenLiveMap, onOpenMapView, 
   const [clusteringId, setClusteringId] = useState<string | null>(null);
 
   const { settings } = useSettings();
+  const { showToast } = useToast();
   const [bikerFilter, setBikerFilter] = useState<"active" | "inactive" | "all">("active");
 
   const [refreshKey, setRefreshKey] = useState(0);
@@ -59,7 +61,10 @@ export function PlannerDashboard({ onViewSession, onOpenLiveMap, onOpenMapView, 
     try {
       await deleteSession(sessionId);
       setSessions((prev) => prev.filter((s) => s.id !== sessionId));
-    } catch { /* ignore */ }
+      showToast("Route deleted");
+    } catch {
+      showToast("Failed to delete route", "error");
+    }
     setConfirmDelete(null);
   };
 
@@ -67,7 +72,11 @@ export function PlannerDashboard({ onViewSession, onOpenLiveMap, onOpenMapView, 
     try {
       await assignSession(sessionId, ownerId);
       refresh();
-    } catch { /* ignore */ }
+      const biker = ownerId == null ? null : bikers.find((b) => b.id === ownerId);
+      showToast(biker ? `Assigned to ${biker.username}` : "Route unassigned");
+    } catch {
+      showToast("Failed to assign route", "error");
+    }
     setAssignDropdown(null);
   };
 
@@ -75,7 +84,10 @@ export function PlannerDashboard({ onViewSession, onOpenLiveMap, onOpenMapView, 
     try {
       await renameSession(sessionId, name);
       setSessions((prev) => prev.map((s) => (s.id === sessionId ? { ...s, name } : s)));
-    } catch { /* ignore */ }
+      showToast("Route renamed");
+    } catch {
+      showToast("Failed to rename route", "error");
+    }
   };
 
   const handleUploadClick = (bikerId?: number) => {
@@ -509,7 +521,14 @@ function SessionCard({
     e.stopPropagation();
     setEditName(session.name);
     setIsEditing(true);
-    setTimeout(() => inputRef.current?.select(), 0);
+    setTimeout(() => {
+      const input = inputRef.current;
+      if (!input) return;
+      input.focus();
+      // Start the cursor at the beginning so long names are not scrolled to the end.
+      input.setSelectionRange(0, input.value.length);
+      input.scrollLeft = 0;
+    }, 0);
   };
 
   const commitRename = () => {
@@ -698,6 +717,9 @@ function ClusterBanner({ session, clusteringId, onCluster }: {
       className="cluster-banner"
       onClick={onCluster}
       disabled={clusteringId === session.id}
+      // Stop count includes ungeocoded stops, but clustering only operates on
+      // located ones — so the actual sub-route count is decided server-side.
+      title="Split this large route into smaller sub-routes"
     >
       {clusteringId === session.id ? (
         <>
@@ -713,7 +735,7 @@ function ClusterBanner({ session, clusteringId, onCluster }: {
             <circle cx="5" cy="18" r="2" />
             <circle cx="19" cy="18" r="2" />
           </svg>
-          Split into {Math.ceil(session.stop_count / 48)} Routes
+          Split into Routes
         </>
       )}
     </button>

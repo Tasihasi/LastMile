@@ -81,10 +81,19 @@ function deliveryBadge(ds: DeliveryStopStatus) {
   }
 }
 
-export function AddressList({ stops, selectedStopId, onSelectStop, routeSegments, arrivalTimes, speedKmh, depot, sessionStatus, currentStopIndex, onMarkStop }: AddressListProps) {
-  if (stops.length === 0) return null;
+export function AddressList({ stops: rawStops, selectedStopId, onSelectStop, routeSegments, arrivalTimes, speedKmh, depot, sessionStatus, currentStopIndex, onMarkStop }: AddressListProps) {
+  if (rawStops.length === 0) return null;
 
-  const isOptimized = stops.some((s) => s.sequence_order != null);
+  const isOptimized = rawStops.some((s) => s.sequence_order != null);
+  // Sort by sequence_order when available so bikers see stops in travel order,
+  // not whatever ordering the API returned.
+  const stops = isOptimized
+    ? [...rawStops].sort((a, b) => {
+        const ao = a.sequence_order ?? Number.MAX_SAFE_INTEGER;
+        const bo = b.sequence_order ?? Number.MAX_SAFE_INTEGER;
+        return ao - bo;
+      })
+    : rawStops;
   const isRouteActive = sessionStatus === "in_progress";
   const isRouteFinished = sessionStatus === "finished";
   const completedCount = stops.filter((s) => s.delivery_status !== "pending").length;

@@ -13,6 +13,7 @@ import {
   unclusterSession,
 } from "../api/client";
 import { useSettings } from "../hooks/useSettings";
+import { useToast } from "../hooks/useToast";
 import { formatDuration, formatDistance } from "../utils/format";
 import "leaflet/dist/leaflet.css";
 
@@ -61,6 +62,7 @@ export function ClusterReviewView({
   const [unclustering, setUnclustering] = useState(false);
 
   const { settings } = useSettings();
+  const { showToast } = useToast();
 
   const loadData = useCallback(async () => {
     try {
@@ -187,12 +189,18 @@ export function ClusterReviewView({
   };
 
   const handleUncluster = async () => {
+    const ok = window.confirm(
+      `This will delete all ${subRoutes.length} sub-route${subRoutes.length !== 1 ? "s" : ""} and revert to the original file. Continue?`
+    );
+    if (!ok) return;
     setUnclustering(true);
     try {
       await unclusterSession(parentSessionId);
+      showToast("Split undone — sub-routes deleted");
       onBack();
     } catch {
       setError("Failed to undo split. A sub-route may be in progress.");
+      showToast("Failed to undo split", "error");
       setUnclustering(false);
     }
   };
@@ -201,8 +209,10 @@ export function ClusterReviewView({
     try {
       await deleteSession(routeId);
       setSubRoutes((prev) => prev.filter((r) => r.session.id !== routeId));
+      showToast("Route deleted");
     } catch {
       setError("Failed to delete route.");
+      showToast("Failed to delete route", "error");
     }
   };
 

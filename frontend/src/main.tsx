@@ -2,6 +2,8 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthContext, useAuthProvider } from "./hooks/useAuth";
+import { ToastContext, useToastProvider } from "./hooks/useToast";
+import { ToastContainer } from "./components/ToastContainer";
 import { SharedRouteView } from "./components/SharedRouteView";
 import { DocsPage } from "./components/DocsPage";
 import "./index.css";
@@ -10,6 +12,7 @@ import App from "./App.tsx";
 // eslint-disable-next-line react-refresh/only-export-components
 function Root() {
   const auth = useAuthProvider();
+  const toast = useToastProvider();
 
   if (auth.loading) {
     return (
@@ -21,13 +24,16 @@ function Root() {
 
   return (
     <AuthContext.Provider value={auth}>
-      <BrowserRouter>
-        <Routes>
-          <Route path="/shared/:shareId" element={<SharedRouteView />} />
-          <Route path="/docs" element={<DocsPage />} />
-          <Route path="*" element={<App />} />
-        </Routes>
-      </BrowserRouter>
+      <ToastContext.Provider value={toast}>
+        <BrowserRouter>
+          <Routes>
+            <Route path="/shared/:shareId" element={<SharedRouteView />} />
+            <Route path="/docs" element={<DocsPage />} />
+            <Route path="*" element={<App />} />
+          </Routes>
+        </BrowserRouter>
+        <ToastContainer />
+      </ToastContext.Provider>
     </AuthContext.Provider>
   );
 }

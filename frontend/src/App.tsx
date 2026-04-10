@@ -4,6 +4,7 @@ import { useDeliveryPlanner } from "./hooks/useDeliveryPlanner";
 import { useTheme } from "./hooks/useTheme";
 import { useSettings } from "./hooks/useSettings";
 import { useAuth } from "./hooks/useAuth";
+import { useToast } from "./hooks/useToast";
 import { FileUpload } from "./components/FileUpload";
 import { AddressList } from "./components/AddressList";
 import { DeliveryMap } from "./components/DeliveryMap";
@@ -46,6 +47,7 @@ function App() {
 
   const { theme, toggle: toggleTheme } = useTheme();
   const { settings, update: updateSettings } = useSettings();
+  const { showToast } = useToast();
   const [selectedStopId, setSelectedStopId] = useState<number | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -55,6 +57,7 @@ function App() {
   const [shareLoading, setShareLoading] = useState(false);
   const [shareCopied, setShareCopied] = useState(false);
   const [confirmReoptimize, setConfirmReoptimize] = useState(false);
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
 
   // Sync view mode when user role changes (e.g. after login via UI)
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -63,6 +66,21 @@ function App() {
       setViewMode("dashboard");
     }
   }, [isPlanner]);
+
+  // Reset planner state and view when the user identity changes (login/switch).
+  // Without this, the previous user's selected route/view leaks across logins.
+  const userId = user?.id ?? null;
+  useEffect(() => {
+    if (userId == null) return;
+    reset();
+    setSelectedStopId(null);
+    setShowUpload(false);
+    setClusterReviewId(null);
+    setViewMode(isPlanner ? "dashboard" : "map");
+    // Intentionally only re-run when the user id changes — isPlanner and reset
+    // are stable for a given user and would otherwise cause spurious resets.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId]);
 
   const locatedCount = stops.filter(
     (s) => s.lat != null && s.lng != null
@@ -116,9 +134,10 @@ function App() {
       const url = `${window.location.origin}/shared/${shareId}`;
       await navigator.clipboard.writeText(url);
       setShareCopied(true);
+      showToast("Share link copied to clipboard");
       setTimeout(() => setShareCopied(false), 2000);
     } catch {
-      // fallback
+      showToast("Failed to create share link", "error");
     } finally {
       setShareLoading(false);
     }
@@ -254,14 +273,46 @@ function App() {
               </svg>
             )}
           </button>
-          <button className="btn btn-ghost user-badge" onClick={logout} title="Sign out">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-              <polyline points="16 17 21 12 16 7" />
-              <line x1="21" y1="12" x2="9" y2="12" />
-            </svg>
-            <span className="user-badge-name">{user.username}</span>
-          </button>
+          <div className="user-menu-wrap">
+            <button
+              className="btn btn-ghost user-badge"
+              onClick={() => setUserMenuOpen((v) => !v)}
+              aria-haspopup="menu"
+              aria-expanded={userMenuOpen}
+              title="Account menu"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                <circle cx="12" cy="7" r="4" />
+              </svg>
+              <span className="user-badge-name">{user.username}</span>
+            </button>
+            {userMenuOpen && (
+              <>
+                <div className="user-menu-overlay" onClick={() => setUserMenuOpen(false)} />
+                <div className="user-menu-dropdown" role="menu">
+                  <div className="user-menu-header">
+                    <span className="user-menu-username">{user.username}</span>
+                    <span className="user-menu-role">{user.role}</span>
+                  </div>
+                  <button
+                    className="user-menu-item user-menu-item--danger"
+                    onClick={() => {
+                      setUserMenuOpen(false);
+                      logout();
+                    }}
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                      <polyline points="16 17 21 12 16 7" />
+                      <line x1="21" y1="12" x2="9" y2="12" />
+                    </svg>
+                    Sign out
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
         </div>
       </header>
 

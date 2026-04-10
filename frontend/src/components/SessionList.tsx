@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { SessionSummary } from "../types";
 import { listSessions } from "../api/client";
 import { formatDuration, formatDistance } from "../utils/format";
@@ -23,15 +23,28 @@ function formatDate(iso: string): string {
 export function SessionList({ ownerId, onSelectSession, onNewRoute }: SessionListProps) {
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
   const [loading, setLoading] = useState(true);
+  const autoSelectedRef = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
     listSessions(ownerId)
-      .then((data) => { if (!cancelled) setSessions(data); })
+      .then((data) => {
+        if (cancelled) return;
+        setSessions(data);
+        // If the biker has exactly one in-progress route, auto-select it so
+        // they don't land on an empty map after login.
+        if (!autoSelectedRef.current) {
+          const inProgress = data.filter((s) => s.status === "in_progress");
+          if (inProgress.length === 1) {
+            autoSelectedRef.current = true;
+            onSelectSession(inProgress[0].id);
+          }
+        }
+      })
       .catch(() => {})
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [ownerId]);
+  }, [ownerId, onSelectSession]);
 
   return (
     <div className="session-list">
