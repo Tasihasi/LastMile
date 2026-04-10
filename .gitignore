@@ -31,7 +31,13 @@ claude_exec_plan/
 # Claude docs (local only)
 claude_docs/
 
+# Claude Code local state & instructions (local only)
+CLAUDE.md
+**/CLAUDE.md
+.claude/
+
 # Playwright
 frontend/test-results/
 frontend/playwright-report/
 frontend/blob-report/
+.playwright-mcp/

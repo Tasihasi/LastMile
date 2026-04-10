@@ -1,6 +1,10 @@
 # API Reference
 
-Base URL: `http://localhost:8000/api/`
+> **Beta 1.0** -- 20 endpoints
+
+**Base URL:**
+- Local development: `http://localhost:8000/api/`
+- Production: `https://lastmile-c07a.onrender.com/api/`
 
 All authenticated endpoints require the header: `Authorization: Token <token>`
 
@@ -140,12 +144,14 @@ Check geocoding progress without streaming.
 
 ### POST /sessions/{id}/optimize/
 
-Optimize the stop order and generate route geometry.
+Optimize the stop order and generate route geometry. Can be called on routes in any status -- for in-progress routes, this re-optimizes the remaining stops.
 
 **Request** (optional):
 ```json
-{ "depot": { "lat": 47.5003, "lng": 19.0841 } }
+{ "depot_lat": 47.5003, "depot_lng": 19.0841 }
 ```
+
+Depot coordinates are optional. If omitted, the route is optimized without a fixed start/end point.
 
 **Response** `200`:
 ```json
