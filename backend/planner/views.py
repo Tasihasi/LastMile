@@ -4,6 +4,7 @@ import json
 import requests
 from django.conf import settings as django_settings
 from django.contrib.auth.models import User
+from django.db import transaction
 from django.db.models import Count, OuterRef, Q, Subquery
 from django.http import StreamingHttpResponse
 from django.utils import timezone
@@ -40,13 +41,11 @@ def _get_user_session(request, session_id):
     except DeliverySession.DoesNotExist:
         return None
 
-    # Planners can access any session; bikers only their own
+    # Planners can access any session (including unowned)
     if hasattr(request.user, "profile") and request.user.profile.role == "planner":
         return session
+    # Bikers can only access sessions they own
     if session.owner == request.user:
-        return session
-    # Unowned sessions (legacy) are accessible to anyone
-    if session.owner is None:
         return session
     return None
 
@@ -492,13 +491,15 @@ def rename_session(request, session_id):
 
 
 @api_view(["POST"])
+@transaction.atomic
 def cluster_session(request, session_id):
     """Split a large session into clustered sub-routes using KMeans."""
     if not _require_planner(request):
         return Response({"error": "Planner access required."}, status=status.HTTP_403_FORBIDDEN)
 
+    # Lock the session row to prevent concurrent clustering of the same session
     try:
-        session = DeliverySession.objects.get(id=session_id)
+        session = DeliverySession.objects.select_for_update().get(id=session_id)
     except DeliverySession.DoesNotExist:
         return Response({"error": "Session not found."}, status=status.HTTP_404_NOT_FOUND)
 
@@ -594,13 +595,14 @@ def cluster_session(request, session_id):
 
 
 @api_view(["POST"])
+@transaction.atomic
 def move_stop(request, session_id):
     """Move a stop from one sub-route to a sibling sub-route."""
     if not _require_planner(request):
         return Response({"error": "Planner access required."}, status=status.HTTP_403_FORBIDDEN)
 
     try:
-        source_session = DeliverySession.objects.get(id=session_id)
+        source_session = DeliverySession.objects.select_for_update().get(id=session_id)
     except DeliverySession.DoesNotExist:
         return Response({"error": "Session not found."}, status=status.HTTP_404_NOT_FOUND)
 
@@ -619,7 +621,7 @@ def move_stop(request, session_id):
         return Response({"error": "Stop not found in this session."}, status=status.HTTP_404_NOT_FOUND)
 
     try:
-        target_session = DeliverySession.objects.get(id=to_session_id)
+        target_session = DeliverySession.objects.select_for_update().get(id=to_session_id)
     except DeliverySession.DoesNotExist:
         return Response({"error": "Target session not found."}, status=status.HTTP_404_NOT_FOUND)
 
@@ -667,13 +669,14 @@ def move_stop(request, session_id):
 
 
 @api_view(["DELETE"])
+@transaction.atomic
 def uncluster_session(request, session_id):
     """Undo a split: delete all sub-routes and reset parent to not_started."""
     if not _require_planner(request):
         return Response({"error": "Planner access required."}, status=status.HTTP_403_FORBIDDEN)
 
     try:
-        session = DeliverySession.objects.get(id=session_id)
+        session = DeliverySession.objects.select_for_update().get(id=session_id)
     except DeliverySession.DoesNotExist:
         return Response({"error": "Session not found."}, status=status.HTTP_404_NOT_FOUND)
 
