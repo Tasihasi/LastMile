@@ -25,7 +25,8 @@ function Root() {
         <Routes>
           <Route path="/shared/:shareId" element={<SharedRouteView />} />
           <Route path="/docs" element={<DocsPage />} />
-          <Route path="*" element={<App />} />
+          {/* Remount App on login/logout so no state leaks between users. */}
+          <Route path="*" element={<App key={auth.user?.id ?? "anon"} />} />
         </Routes>
       </BrowserRouter>
     </AuthContext.Provider>

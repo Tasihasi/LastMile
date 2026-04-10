@@ -263,9 +263,10 @@ export function ClusterReviewView({
         <div className="cluster-review-header-actions">
           {!allOptimized && (
             <button
-              className="btn btn-primary btn-sm"
+              className="btn btn-primary btn-sm cluster-optimize-all-btn"
               onClick={handleOptimizeAll}
               disabled={optimizeAllRunning}
+              title={`Optimize all ${subRoutes.length - optimizedCount} remaining routes`}
             >
               {optimizeAllRunning ? (
                 <>
@@ -276,7 +277,14 @@ export function ClusterReviewView({
                   Optimizing...
                 </>
               ) : (
-                <>Optimize All ({subRoutes.length - optimizedCount} remaining)</>
+                <>
+                  <span className="cluster-optimize-all-full">
+                    Optimize All ({subRoutes.length - optimizedCount} remaining)
+                  </span>
+                  <span className="cluster-optimize-all-compact">
+                    Optimize ({subRoutes.length - optimizedCount})
+                  </span>
+                </>
               )}
             </button>
           )}
