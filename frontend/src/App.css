@@ -891,6 +891,24 @@ body {
   gap: 4px;
 }
 
+/* Header overflow menu — inline on desktop, kebab dropdown on narrow screens */
+.header-overflow {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  position: relative;
+}
+
+.header-overflow-toggle {
+  display: none;
+}
+
+.header-overflow-items {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
 /* ============================================
    Route Summary (after optimization)
    ============================================ */
@@ -2408,7 +2426,7 @@ body {
    Responsive -- Mobile (≤768px)
    ============================================ */
 @media (max-width: 768px) {
-  /* Dashboard responsive */
+  /* Dashboard responsive — minor touch-up only; full collapse is below 640px */
   .dashboard {
     padding: 12px;
   }
@@ -2439,23 +2457,6 @@ body {
     padding: 6px 8px;
     font-size: 0.72rem;
     text-align: center;
-  }
-
-  .dashboard-layout {
-    flex-direction: column;
-    align-items: center;
-    gap: 12px;
-  }
-
-  .dashboard-unassigned {
-    width: 100%;
-    max-width: 480px;
-  }
-
-  .dashboard-split {
-    width: 100%;
-    max-width: 480px;
-    margin-bottom: 12px;
   }
 
   .dashboard-column-header {
@@ -2500,13 +2501,17 @@ body {
     gap: 4px;
   }
 
+  /* Tablet-portrait dashboard (640-768px): 2-column kanban avoids wasting
+     horizontal space on iPad-portrait viewports. */
   .dashboard-bikers {
-    align-items: center;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
   }
 
   .dashboard-bikers .dashboard-column {
     width: 100%;
-    max-width: 480px;
+    max-width: none;
   }
 
   /* Show hamburger toggle */
@@ -2629,6 +2634,42 @@ body {
 }
 
 /* ============================================
+   Responsive -- Dashboard collapse (≤640px)
+   Single-column dashboard kicks in only once the kanban
+   truly can't fit 2 columns anymore.
+   ============================================ */
+@media (max-width: 640px) {
+  .dashboard-layout {
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .dashboard-unassigned {
+    width: 100%;
+    max-width: 480px;
+  }
+
+  .dashboard-split {
+    width: 100%;
+    max-width: 480px;
+    margin-bottom: 12px;
+  }
+
+  .dashboard-bikers {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    grid-template-columns: none;
+  }
+
+  .dashboard-bikers .dashboard-column {
+    width: 100%;
+    max-width: 480px;
+  }
+}
+
+/* ============================================
    Responsive -- Small Mobile (≤480px)
    ============================================ */
 @media (max-width: 480px) {
@@ -2654,6 +2695,76 @@ body {
 
   .stat-value {
     font-size: 1rem;
+  }
+
+  /* Compact Optimize All button: show short label instead of the
+     "(1 remaining)" long form to prevent clipping. */
+  .cluster-optimize-all-full {
+    display: none;
+  }
+
+  .cluster-optimize-all-compact {
+    display: inline;
+  }
+}
+
+/* Desktop / wider mobile: show the full label by default */
+.cluster-optimize-all-full {
+  display: inline;
+}
+
+.cluster-optimize-all-compact {
+  display: none;
+}
+
+/* ============================================
+   Responsive -- Tiny Mobile (≤380px)
+   Collapses header secondary actions into a kebab menu so Sign Out
+   never gets clipped off-screen on narrow phones.
+   ============================================ */
+@media (max-width: 380px) {
+  .app-header h1 {
+    display: none;
+  }
+
+  .header-overflow-toggle {
+    display: flex;
+  }
+
+  .header-overflow-items {
+    display: none;
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
+    flex-direction: column;
+    gap: 2px;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    padding: 6px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+    z-index: 950;
+    min-width: 160px;
+  }
+
+  [data-theme="dark"] .header-overflow-items {
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  }
+
+  .header-overflow--open .header-overflow-items {
+    display: flex;
+  }
+
+  .header-overflow--open .header-overflow-items .theme-toggle,
+  .header-overflow--open .header-overflow-items .user-badge {
+    width: 100%;
+    justify-content: flex-start;
+    padding: 8px 10px;
+    gap: 10px;
+  }
+
+  .header-overflow--open .header-overflow-items .user-badge-name {
+    display: inline;
   }
 }
 

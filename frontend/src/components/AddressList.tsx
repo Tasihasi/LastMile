@@ -81,19 +81,21 @@ function deliveryBadge(ds: DeliveryStopStatus) {
   }
 }
 
-export function AddressList({ stops: rawStops, selectedStopId, onSelectStop, routeSegments, arrivalTimes, speedKmh, depot, sessionStatus, currentStopIndex, onMarkStop }: AddressListProps) {
-  if (rawStops.length === 0) return null;
+export function AddressList({ stops, selectedStopId, onSelectStop, routeSegments, arrivalTimes, speedKmh, depot, sessionStatus, currentStopIndex, onMarkStop }: AddressListProps) {
+  if (stops.length === 0) return null;
 
-  const isOptimized = rawStops.some((s) => s.sequence_order != null);
-  // Sort by sequence_order when available so bikers see stops in travel order,
-  // not whatever ordering the API returned.
-  const stops = isOptimized
-    ? [...rawStops].sort((a, b) => {
-        const ao = a.sequence_order ?? Number.MAX_SAFE_INTEGER;
-        const bo = b.sequence_order ?? Number.MAX_SAFE_INTEGER;
-        return ao - bo;
+  const isOptimized = stops.some((s) => s.sequence_order != null);
+
+  // After optimization, show stops in route order so the list matches the
+  // numbered markers on the map. Before optimization, preserve upload order.
+  const orderedStops = isOptimized
+    ? [...stops].sort((a, b) => {
+        const ao = a.sequence_order ?? Number.POSITIVE_INFINITY;
+        const bo = b.sequence_order ?? Number.POSITIVE_INFINITY;
+        if (ao !== bo) return ao - bo;
+        return a.id - b.id;
       })
-    : rawStops;
+    : stops;
   const isRouteActive = sessionStatus === "in_progress";
   const isRouteFinished = sessionStatus === "finished";
   const completedCount = stops.filter((s) => s.delivery_status !== "pending").length;
@@ -110,7 +112,7 @@ export function AddressList({ stops: rawStops, selectedStopId, onSelectStop, rou
         </span>
       </div>
       <ul>
-        {stops.map((stop, i) => {
+        {orderedStops.map((stop, i) => {
           const isCurrentStop = isRouteActive && stop.sequence_order === currentStopIndex;
           const isCompleted = stop.delivery_status !== "pending";
           const arrival = stop.sequence_order != null && arrivalTimes

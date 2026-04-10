@@ -51,13 +51,13 @@ function App() {
   const [selectedStopId, setSelectedStopId] = useState<number | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [overflowMenuOpen, setOverflowMenuOpen] = useState(false);
   const [showUpload, setShowUpload] = useState(false);
   const [viewMode, setViewMode] = useState<"dashboard" | "map" | "live-map" | "cluster-review">(isPlanner ? "dashboard" : "map");
   const [clusterReviewId, setClusterReviewId] = useState<string | null>(null);
   const [shareLoading, setShareLoading] = useState(false);
   const [shareCopied, setShareCopied] = useState(false);
   const [confirmReoptimize, setConfirmReoptimize] = useState(false);
-  const [userMenuOpen, setUserMenuOpen] = useState(false);
 
   // Sync view mode when user role changes (e.g. after login via UI)
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -67,20 +67,18 @@ function App() {
     }
   }, [isPlanner]);
 
-  // Reset planner state and view when the user identity changes (login/switch).
-  // Without this, the previous user's selected route/view leaks across logins.
-  const userId = user?.id ?? null;
+  // Close the header overflow menu when clicking outside of it.
   useEffect(() => {
-    if (userId == null) return;
-    reset();
-    setSelectedStopId(null);
-    setShowUpload(false);
-    setClusterReviewId(null);
-    setViewMode(isPlanner ? "dashboard" : "map");
-    // Intentionally only re-run when the user id changes — isPlanner and reset
-    // are stable for a given user and would otherwise cause spurious resets.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userId]);
+    if (!overflowMenuOpen) return;
+    const onDocClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest(".header-overflow")) {
+        setOverflowMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", onDocClick);
+    return () => document.removeEventListener("mousedown", onDocClick);
+  }, [overflowMenuOpen]);
 
   const locatedCount = stops.filter(
     (s) => s.lat != null && s.lng != null
@@ -216,18 +214,28 @@ function App() {
             </button>
           )}
           {!isPlanner && stops.length > 0 && sessionStatus === "not_started" && (
-            <button className="btn btn-ghost btn-ghost--start-over" onClick={handleStartOver}>
+            <button
+              className="btn btn-ghost btn-ghost--start-over"
+              onClick={handleStartOver}
+              aria-label="Start over — clear current route"
+              title="Start Over"
+            >
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <polyline points="1 4 1 10 7 10" />
                 <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
               </svg>
-              Start Over
+              <span className="btn-ghost--start-over-label">Start Over</span>
             </button>
           )}
           {stops.length > 0 && (
             <button
               className={`theme-toggle ${settingsOpen ? "theme-toggle--active" : ""}`}
-              onClick={() => setSettingsOpen(!settingsOpen)}
+              onClick={() => {
+                setSettingsOpen((open) => !open);
+                // On mobile the sidebar can be hidden — ensure the settings
+                // panel becomes visible when opened.
+                if (!settingsOpen) setSidebarOpen(true);
+              }}
               aria-label="Route settings"
               title="Route settings"
             >
@@ -237,83 +245,71 @@ function App() {
               </svg>
             </button>
           )}
-          <button
-            className="theme-toggle"
-            onClick={() => navigate("/docs")}
-            aria-label="Help & Documentation"
-            title="Help & Documentation"
-          >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="12" r="10" />
-              <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
-              <line x1="12" y1="17" x2="12.01" y2="17" />
-            </svg>
-          </button>
-          <button
-            className="theme-toggle"
-            onClick={toggleTheme}
-            aria-label={`Switch to ${theme === "light" ? "dark" : "light"} mode`}
-            title={`Switch to ${theme === "light" ? "dark" : "light"} mode`}
-          >
-            {theme === "light" ? (
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
-              </svg>
-            ) : (
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="12" cy="12" r="5" />
-                <line x1="12" y1="1" x2="12" y2="3" />
-                <line x1="12" y1="21" x2="12" y2="23" />
-                <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
-                <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
-                <line x1="1" y1="12" x2="3" y2="12" />
-                <line x1="21" y1="12" x2="23" y2="12" />
-                <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
-                <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
-              </svg>
-            )}
-          </button>
-          <div className="user-menu-wrap">
+          <div className={`header-overflow ${overflowMenuOpen ? "header-overflow--open" : ""}`}>
             <button
-              className="btn btn-ghost user-badge"
-              onClick={() => setUserMenuOpen((v) => !v)}
-              aria-haspopup="menu"
-              aria-expanded={userMenuOpen}
-              title="Account menu"
+              className="theme-toggle header-overflow-toggle"
+              onClick={() => setOverflowMenuOpen((o) => !o)}
+              aria-label="More options"
+              aria-expanded={overflowMenuOpen}
+              title="More"
             >
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-                <circle cx="12" cy="7" r="4" />
+                <circle cx="12" cy="5" r="1" />
+                <circle cx="12" cy="12" r="1" />
+                <circle cx="12" cy="19" r="1" />
               </svg>
-              <span className="user-badge-name">{user.username}</span>
             </button>
-            {userMenuOpen && (
-              <>
-                <div className="user-menu-overlay" onClick={() => setUserMenuOpen(false)} />
-                <div className="user-menu-dropdown" role="menu">
-                  <div className="user-menu-header">
-                    <span className="user-menu-username">{user.username}</span>
-                    <span className="user-menu-role">{user.role}</span>
-                  </div>
-                  <button
-                    className="user-menu-item user-menu-item--danger"
-                    role="menuitem"
-                    title="Sign out"
-                    onClick={() => {
-                      setUserMenuOpen(false);
-                      logout();
-                    }}
-                  >
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-                      <polyline points="16 17 21 12 16 7" />
-                      <line x1="21" y1="12" x2="9" y2="12" />
-                    </svg>
-                    Sign out
-                  </button>
-                </div>
-              </>
-            )}
+            <div className="header-overflow-items">
+              <button
+                className="theme-toggle"
+                onClick={() => { setOverflowMenuOpen(false); navigate("/docs"); }}
+                aria-label="Help & Documentation"
+                title="Help & Documentation"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="10" />
+                  <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+                  <line x1="12" y1="17" x2="12.01" y2="17" />
+                </svg>
+              </button>
+              <button
+                className="theme-toggle"
+                onClick={() => { setOverflowMenuOpen(false); toggleTheme(); }}
+                aria-label={`Switch to ${theme === "light" ? "dark" : "light"} mode`}
+                title={`Switch to ${theme === "light" ? "dark" : "light"} mode`}
+              >
+                {theme === "light" ? (
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+                  </svg>
+                ) : (
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="5" />
+                    <line x1="12" y1="1" x2="12" y2="3" />
+                    <line x1="12" y1="21" x2="12" y2="23" />
+                    <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
+                    <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
+                    <line x1="1" y1="12" x2="3" y2="12" />
+                    <line x1="21" y1="12" x2="23" y2="12" />
+                    <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
+                    <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
+                  </svg>
+                )}
+              </button>
+              <button
+                className="btn btn-ghost user-badge"
+                onClick={() => { setOverflowMenuOpen(false); logout(); }}
+                aria-label={`Sign out ${user.username}`}
+                title="Sign out"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                  <polyline points="16 17 21 12 16 7" />
+                  <line x1="21" y1="12" x2="9" y2="12" />
+                </svg>
+                <span className="user-badge-name">{user.username}</span>
+              </button>
+            </div>
           </div>
         </div>
       </header>

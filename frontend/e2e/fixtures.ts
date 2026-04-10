@@ -50,15 +50,12 @@ async function uploadTestFile(page: Page, fileName: string) {
   await fileInput.setInputFiles(filePath);
 }
 
-/** Helper: open the user menu dropdown and click Sign out. */
+/** Helper: clean up test user via API */
 async function logoutViaUI(page: Page) {
-  // The username badge in the header now opens an account dropdown rather
-  // than logging out instantly. Click it, then click the Sign out menu item.
-  const userBadge = page.locator(".user-badge");
-  if (!(await userBadge.isVisible())) return;
-  await userBadge.click();
-  const signOutItem = page.locator('.user-menu-item[title="Sign out"]');
-  await signOutItem.click();
+  const signOutBtn = page.locator('[title="Sign out"]');
+  if (await signOutBtn.isVisible()) {
+    await signOutBtn.click();
+  }
 }
 
 /** Paths to test data files */

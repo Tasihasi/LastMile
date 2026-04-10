@@ -6,9 +6,12 @@ After logging in as a planner, you see the management dashboard instead of the m
 
 ### Layout
 
-- **Left column**: Unassigned routes (not assigned to any biker)
+- **Unassigned column**: Routes not assigned to any biker
+- **Split Routes section**: Parent sessions that have been clustered into sub-routes (click to review)
 - **Biker columns**: One column per registered biker, showing their assigned routes
-- **Bottom section**: Finished routes (collapsed by default)
+- **Finished section**: Finished routes (collapsed by default)
+
+On mobile, columns stack vertically and are centered (max-width 480px) for easy scrolling. Drag handles are hidden on mobile -- use the assign button instead.
 
 ### Filtering Bikers
 
@@ -31,11 +34,19 @@ Each card shows:
 - **Estimated return time**: "Back by ~14:30" on in-progress routes (calculated from start time + route duration + dwell time per stop)
 - **Not received count**: warning badge on finished routes if any stops were not received
 
+### Split Banner
+
+Routes with more than 48 stops display a **Split into Routes** banner above the session card. The banner shows the calculated number of sub-routes (e.g., "Split into 7 Routes"). Click it to trigger KMeans clustering -- a spinner shows while clustering is in progress.
+
+After splitting, the parent route moves to the **Split Routes** section and its status changes to `split`. The child sub-routes appear in the cluster review view.
+
 ## Assigning Routes
 
 ### Drag and drop
 
 Drag a route card from one column to another. The route is reassigned to the target biker. You can also drag a route back to the **Unassigned** column to unassign it.
+
+> Drag handles are hidden on mobile. Use the assign button instead.
 
 ### Assign button
 
@@ -61,13 +72,69 @@ Click the trash icon on a route card. A confirmation dialog appears. This perman
 
 ## Viewing a Route
 
-Click the eye icon on a route card to open the full map view for that route. A **Back to Dashboard** button appears in the header to return.
+Click the eye icon on a route card to open the full map view for that route. From there you can geocode, optimize, adjust settings, and share -- just like the biker view. A **Dashboard** button appears in the header to return to the management view.
 
-From the map view you can geocode, optimize, adjust settings, and share -- just like the biker view. A **Dashboard** button appears in the header to return to the management view.
+---
+
+## Bulk Clustering
+
+For large uploads (50+ stops), LastMile splits deliveries into manageable sub-routes using geographic clustering.
+
+### Triggering a Split
+
+1. Upload a file with more than 48 stops
+2. A **Split into Routes** banner appears above the route card in the Unassigned column
+3. Click the banner -- KMeans clustering runs on the geocoded stops
+4. The parent session moves to the **Split Routes** section with status `split`
+
+The number of sub-routes is auto-calculated: `ceil(stop_count / 48)`. Each sub-route respects the ORS 48-stop optimization limit. Non-geocoded stops are skipped during clustering and reported in the review view.
+
+### Cluster Review View
+
+Click a split parent session in the **Split Routes** section to open the cluster review. This view shows:
+
+**Header:**
+- Session name and cluster summary stats (total stops, number of routes, skipped stops)
+- **Undo Split** button -- reverts clustering, restores all stops to the parent session
+- **Back to Dashboard** button
+
+**Color-coded Map:**
+- Each sub-route's stops are shown in a distinct color (10 colors: red, blue, green, purple, orange, teal, pink, brown, indigo, cyan)
+- Click a marker to see stop details and which sub-route it belongs to
+- Route geometry is drawn when a sub-route is optimized
+
+**Sub-route Cards (sidebar):**
+- One collapsible card per sub-route, color-coded to match the map
+- Shows stop count, optimization status, and assignment
+- Click the card header to expand and see the stop list
+- **Optimize** button: run VROOM optimization on this sub-route
+- **Assign** dropdown: assign this sub-route to a biker
+- **Move stop** controls: move individual stops to a different sub-route
+- Empty sub-routes show a warning and a **Delete** button
+
+**Optimize All:**
+- An **Optimize All** button appears at the top to optimize every sub-route in one click
+
+### Moving Stops Between Sub-routes
+
+In the cluster review, each stop in an expanded sub-route card has a move control. Select a target sub-route from the dropdown and click the move button. The stop is transferred immediately and both stop counts update.
+
+This is useful for fine-tuning cluster boundaries -- for example, moving a stop that's geographically closer to a different sub-route.
+
+### Undo Split
+
+Click **Undo Split** in the cluster review header to revert the clustering:
+- All child sub-routes are deleted
+- Stops are restored to the parent session
+- Parent status resets to `not_started`
+
+> **Blocked if active:** Undo is blocked if any sub-route has status `in_progress` (a biker is actively delivering). You must wait for all active sub-routes to finish before undoing.
+
+---
 
 ## Live Map
 
-When any routes are in progress, a **Live Map** button appears in the dashboard header showing the number of active routes.
+When any routes are in progress, a **Live Map** button appears in the dashboard header showing the number of active routes (e.g., "Live Map (3)").
 
 The live map shows:
 - All active biker routes on one map
@@ -78,7 +145,7 @@ The live map shows:
 
 ### Auto-refresh
 
-The map refreshes every 30 seconds. Click the refresh button for a manual update.
+The map refreshes every 30 seconds by polling `GET /api/sessions/active/`. Click the refresh button for a manual update.
 
 ### Interacting with markers
 
@@ -90,6 +157,8 @@ Click a biker's current-stop marker to see a popup with:
 - Route stats
 
 Click **View Route** in the popup to jump directly to that biker's route on the map.
+
+---
 
 ## Finished Routes
 

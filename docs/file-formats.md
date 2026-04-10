@@ -69,9 +69,18 @@ Standard Excel file. Use the first sheet with column headers in row 1.
 </deliveries>
 ```
 
+## Limits
+
+- **Maximum file size**: 10 MB
+- **Supported extensions**: `.csv`, `.xlsx`, `.txt`, `.xml` (auto-detected by extension)
+- Rows without a `name` or without both address and coordinates are silently skipped
+- There is no hard row limit, but uploads with more than 48 stops will need clustering to optimize (ORS limit)
+
 ## Tips
 
 - Empty address fields are fine if coordinates are provided (and vice versa)
 - Rows without a `name` or without both address and coordinates are silently skipped
 - The file is auto-detected by extension -- make sure your file has the correct one
 - Route is automatically named from the filename (e.g., `monday_run.csv` becomes "Monday Run")
+- Column names are case-insensitive and spaces are normalized to underscores (e.g., "Recipient Name" matches `recipient_name`)
+- You can pre-geocode stops by including `lat`/`lng` columns -- these skip the geocoding step entirely

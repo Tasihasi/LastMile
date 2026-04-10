@@ -7,8 +7,15 @@ After logging in, you see your assigned routes. Routes are sorted with active (i
 - **In-progress routes** show a pulsing green dot and progress (e.g., "3/7 stops done")
 - **Not-started routes** show creation date and route stats
 - **Finished routes** are collapsed under a toggle at the bottom
+- **Split routes** (parent sessions that have been clustered) are hidden from the biker view -- you only see the individual sub-routes assigned to you
 
 Click any route to open it on the map.
+
+## Uploading Your Own Route
+
+Click **New Route** in the route list, then select a file. See [File Format Reference](file-formats.md) for supported formats.
+
+On mobile, a **Back** button appears to return to the route list without uploading.
 
 ## Starting a Delivery Route
 
@@ -44,7 +51,15 @@ After marking a stop:
 
 ### Auto-finish
 
-When all stops have been marked (no pending stops remain), the route automatically finishes. You'll see a "Route completed" banner.
+When all stops have been marked (no pending stops remain), the route automatically finishes. You'll see a "Route completed" banner with delivery stats.
+
+## Re-optimizing an Active Route
+
+If you need to change the route order while delivering (e.g., road closure, priority change), a subtle **Re-optimize Route** button is available for in-progress routes.
+
+Clicking it shows a confirmation prompt: "Re-optimize will change the route order. Continue?" Click **Re-optimize** to confirm or **Cancel** to dismiss. This re-runs the VROOM optimization on remaining stops without affecting already-delivered stops.
+
+> The full Geocode and Optimize buttons are only available before a route is started. Once in progress, only re-optimize is available.
 
 ## Map Markers
 
@@ -65,7 +80,7 @@ Click any stop in the sidebar or tap a marker on the map to see details:
 - Travel time from previous stop
 - Address and coordinates
 - Product code, recipient name, phone number (if included in the upload file)
-- Geocoding status
+- Geocoding status (success, failed, skipped)
 
 The phone number is tappable (opens dialer) and has a copy button.
 
@@ -76,6 +91,21 @@ If stops have phone numbers, they also appear directly in the sidebar stop list 
 - A clickable link (opens dialer)
 - A copy-to-clipboard button
 
-## Uploading Your Own Route
+## Settings
 
-Click **New Route** in the route list, then select a file. See [File Format Reference](file-formats.md) for supported formats.
+Click the gear icon in the header to configure:
+
+- **Home/Depot** -- starting and ending point for route optimization
+- **Start time** -- when you begin the route (affects arrival estimates)
+- **Dwell time** -- minutes spent at each stop (default: 3 min)
+- **Travel speed** -- walk (5 km/h), bike (15 km/h), or car (40 km/h)
+
+Settings are saved in your browser and persist across sessions.
+
+## Theme
+
+Click the sun/moon icon in the header to toggle between light and dark mode. Your preference is saved in the browser. The map tiles automatically adjust brightness in dark mode.
+
+## Sharing
+
+Click **Share** in the route summary bar to generate a public link. Anyone with the link can view the route read-only without logging in.
