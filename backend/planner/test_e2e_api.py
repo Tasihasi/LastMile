@@ -713,9 +713,14 @@ class CrossRoleAccessE2E(TestCase):
         resp = self.planner.get(f"/api/sessions/{self.session_a.id}/")
         self.assertEqual(resp.status_code, 200)
 
-    def test_unowned_session_accessible_by_any_biker(self):
+    def test_unowned_session_not_accessible_by_biker(self):
         session = DeliverySession.objects.create(owner=None, name="Unowned")
         resp = self.biker_b.get(f"/api/sessions/{session.id}/")
+        self.assertEqual(resp.status_code, 404)
+
+    def test_unowned_session_accessible_by_planner(self):
+        session = DeliverySession.objects.create(owner=None, name="Unowned")
+        resp = self.planner.get(f"/api/sessions/{session.id}/")
         self.assertEqual(resp.status_code, 200)
 
 

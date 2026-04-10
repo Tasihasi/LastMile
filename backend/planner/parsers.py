@@ -1,7 +1,7 @@
 import csv
 import io
-import xml.etree.ElementTree as ET
 
+from defusedxml import ElementTree as ET
 from openpyxl import load_workbook
 
 
