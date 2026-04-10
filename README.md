@@ -36,8 +36,7 @@ Full user guides and API reference are in the [`docs/`](docs/) folder:
 
 ### Beta 1.0 Highlights
 
-- Bulk clustering: split large uploads (50+ stops) into geographic sub-routes with KMeans
-- Cluster review view: color-coded map, move stops between routes, optimize/assign per sub-route
+- Bulk clustering: split large uploads (50+ stops) into independent sub-route cards using KMeans
 - Mobile-optimized planner dashboard with centered columns and touch-friendly buttons
 - Re-optimize in-progress routes with confirmation prompt
 - E2E test suite (Playwright) covering all major user journeys
@@ -64,8 +63,7 @@ See [CHANGELOG.md](CHANGELOG.md) for the complete feature list.
 
 ### Planner Features
 - **Kanban dashboard** -- drag-and-drop route assignment across biker columns
-- **Bulk clustering** -- split large uploads into geographic sub-routes using KMeans (respects ORS 48-stop limit)
-- **Cluster review** -- color-coded map, move stops between sub-routes, optimize/assign individually
+- **Bulk clustering** -- split large uploads into independent sub-route cards (KMeans, respects ORS 48-stop limit). Sub-routes appear in the Unassigned column as `{parent}_1`, `{parent}_2`, ...
 - **Live map** -- aggregate view of all active routes with 30-second auto-refresh
 - **Route lifecycle management** -- rename, delete, assign, share routes
 
@@ -287,7 +285,6 @@ LastMile/
 │   │   │   ├── SessionList.tsx       # Biker's route history (auto-selects in-progress route)
 │   │   │   ├── BikerPicker.tsx       # Biker filter dropdown
 │   │   │   ├── PlannerDashboard.tsx  # Kanban dashboard + cluster triggers
-│   │   │   ├── ClusterReviewView.tsx # Cluster review (color-coded map)
 │   │   │   ├── PlannerMapView.tsx    # Live aggregate map
 │   │   │   ├── SharedRouteView.tsx   # Public read-only route view
 │   │   │   ├── FinishedRouteDetail.tsx # Delivery stats modal (Esc to close)

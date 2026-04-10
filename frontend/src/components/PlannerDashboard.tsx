@@ -18,13 +18,12 @@ interface PlannerDashboardProps {
   onViewSession: (sessionId: string) => void;
   onOpenLiveMap?: () => void;
   onOpenMapView?: () => void;
-  onClusterReview?: (parentSessionId: string) => void;
 }
 
 // Drop zone identifier: biker id or "unassigned"
 type DropTarget = number | "unassigned";
 
-export function PlannerDashboard({ onViewSession, onOpenLiveMap, onOpenMapView, onClusterReview }: PlannerDashboardProps) {
+export function PlannerDashboard({ onViewSession, onOpenLiveMap, onOpenMapView }: PlannerDashboardProps) {
   const [bikers, setBikers] = useState<User[]>([]);
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
   const [loading, setLoading] = useState(true);
@@ -108,12 +107,8 @@ export function PlannerDashboard({ onViewSession, onOpenLiveMap, onOpenMapView, 
   const handleCluster = async (sessionId: string) => {
     setClusteringId(sessionId);
     try {
-      const result = await clusterSession(sessionId);
-      if (onClusterReview) {
-        onClusterReview(result.parent_id);
-      } else {
-        refresh();
-      }
+      await clusterSession(sessionId);
+      refresh();
     } catch {
       // ignore
     } finally {
@@ -155,13 +150,9 @@ export function PlannerDashboard({ onViewSession, onOpenLiveMap, onOpenMapView, 
     await handleAssign(draggingId, target);
   };
 
-  // Separate finished, split, and child routes
+  // Split parents are hidden by the backend; children render as independent cards.
   const finishedSessions = sessions.filter((s) => s.status === "finished");
-  const splitSessions = sessions.filter((s) => s.status === "split");
-  const childSessionIds = new Set(sessions.filter((s) => s.parent_id != null).map((s) => s.id));
-  const activeSessions = sessions.filter(
-    (s) => s.status !== "finished" && s.status !== "split" && !childSessionIds.has(s.id)
-  );
+  const activeSessions = sessions.filter((s) => s.status !== "finished");
   const activeCount = sessions.filter((s) => s.status === "in_progress").length;
 
   // Group active sessions by owner, in_progress always first
@@ -285,54 +276,6 @@ export function PlannerDashboard({ onViewSession, onOpenLiveMap, onOpenMapView, 
                       onDelete={() => handleDelete(s.id)}
                       onRename={(name) => handleRename(s.id, name)}
                     />
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Split sessions */}
-        {splitSessions.length > 0 && (
-          <div className="dashboard-split">
-            <div className="dashboard-column">
-              <div className="dashboard-column-header">
-                <div className="dashboard-column-biker">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <circle cx="12" cy="12" r="3" />
-                    <circle cx="5" cy="6" r="2" />
-                    <circle cx="19" cy="6" r="2" />
-                    <circle cx="5" cy="18" r="2" />
-                    <circle cx="19" cy="18" r="2" />
-                  </svg>
-                  <span className="dashboard-column-title">Split Routes</span>
-                </div>
-                <span className="dashboard-column-count">{splitSessions.length}</span>
-              </div>
-              <div className="dashboard-column-cards">
-                {splitSessions.map((s) => (
-                  <div
-                    key={s.id}
-                    className="session-card session-card--split"
-                    onClick={() => onClusterReview?.(s.id)}
-                    role="button"
-                    tabIndex={0}
-                    onKeyDown={(e) => { if (e.key === "Enter") onClusterReview?.(s.id); }}
-                  >
-                    <div className="session-card-info">
-                      <div className="session-card-name-row">
-                        <span className="session-card-name">{s.name || "Untitled Route"}</span>
-                        <span className="session-card-status session-card-status--split">
-                          {s.sub_route_count} routes
-                        </span>
-                      </div>
-                      <div className="session-card-meta">
-                        <span className="session-card-stops">{s.stop_count} stops total</span>
-                      </div>
-                    </div>
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ width: 20, height: 20, flexShrink: 0, opacity: 0.5 }}>
-                      <polyline points="9 18 15 12 9 6" />
-                    </svg>
                   </div>
                 ))}
               </div>

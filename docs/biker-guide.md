@@ -7,7 +7,8 @@ After logging in, you see your assigned routes. Routes are sorted with active (i
 - **In-progress routes** show a pulsing green dot and progress (e.g., "3/7 stops done")
 - **Not-started routes** show creation date and route stats
 - **Finished routes** are collapsed under a toggle at the bottom
-- **Split routes** (parent sessions that have been clustered) are hidden from the biker view -- you only see the individual sub-routes assigned to you
+
+Routes produced by splitting a large upload appear exactly like any other route -- they carry the parent name with a numeric suffix (e.g. `big_monday_delivery_2`) and behave identically once assigned.
 
 Click any route to open it on the map.
 

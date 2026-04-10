@@ -6,6 +6,15 @@ Format: features are grouped by category. Each version includes a release date a
 
 ---
 
+## Unreleased
+
+### Clustering
+- **Sub-routes are now first-class cards.** Splitting a large upload no longer stashes the children behind a special "Split Routes" section or a separate cluster-review screen. Each sub-route lands directly in the **Unassigned** column as a normal route card named `{parent_name}_1`, `{parent_name}_2`, ..., and can be assigned, optimized, renamed, or deleted like any other route.
+- Split parent sessions are now hidden from the planner session list (bikers already ignored them) so the dashboard shows one entry per route rather than a redundant parent + children layout.
+- The standalone cluster review view and the "Undo Split" / "Optimize All" / move-stops-between-clusters flows are no longer reachable from the UI. The backend endpoints (`uncluster/`, `move-stop/`) are unchanged and still work if called directly.
+
+---
+
 ## Beta 1.0.1 (2026-04-10)
 
 UX polish release addressing findings from the 2026-04-10 desktop and mobile usability reports. No new features -- existing flows were hardened for discoverability, consistency, and accident prevention.
