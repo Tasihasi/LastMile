@@ -6,6 +6,38 @@ Format: features are grouped by category. Each version includes a release date a
 
 ---
 
+## Beta 1.0.1 (2026-04-10)
+
+UX polish release addressing findings from the 2026-04-10 desktop and mobile usability reports. No new features -- existing flows were hardened for discoverability, consistency, and accident prevention.
+
+### Feedback & Notifications
+- **Toast notifications** for share-link creation, route rename, delete, assign/unassign, and undo-split (previously these actions succeeded silently)
+- **Confirmation dialog** before **Undo Split** -- the destructive cascade no longer fires on a single click
+
+### Navigation & Sign-out
+- **Header user menu**: Help, Theme toggle, and Sign Out now live in a single kebab dropdown. The username button no longer logs you out on click -- Sign Out is an explicit dropdown item
+- **Mobile header overflow**: below 380px the entire header toolbar collapses to a kebab menu so Sign Out can never get clipped off-screen (the LastMile wordmark is also hidden on ultra-narrow viewports)
+- **Auto-select route on login**: bikers with exactly one in-progress route are dropped straight into that route's map view instead of the empty session list
+- **Cross-user state reset**: logging out and back in as a different user no longer leaks the previous account's selected route, sidebar state, or dashboard view
+
+### Biker Route View
+- **Stop list sorted by sequence**: after optimization, the sidebar stop list is re-sorted to match the numbered map markers
+- **Escape closes modals**: pressing `Esc` closes the StopDetail and Finished Route stats modals
+- **Settings auto-opens sidebar**: tapping the gear while the mobile sidebar is collapsed now opens the sidebar so the settings panel is visible
+
+### Planner Dashboard
+- **Inline rename scroll**: the rename text field now scrolls to the beginning so long route names are visible from the start
+- **Split button label**: the "Split into Routes" banner no longer shows a (frequently wrong) cluster count
+- **Tablet kanban**: at 640-768px viewports (iPad portrait) the dashboard now shows 2 columns instead of collapsing to one
+
+### Cluster Review
+- **Compact Optimize All**: below 480px the button shows as "Optimize (N)" so the remaining-count stays visible
+
+### Seed Data
+- Test data now uses realistic Hungarian recipient names, phone numbers, and product codes
+
+---
+
 ## Beta 1.0 (2026-04-08)
 
 First public beta release. Full delivery planning workflow for bikers and planners.

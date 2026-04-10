@@ -11,6 +11,8 @@ After logging in, you see your assigned routes. Routes are sorted with active (i
 
 Click any route to open it on the map.
 
+> **Auto-select on login:** If you have exactly one in-progress route when you sign in, the app drops you straight into that route's map view so you can resume delivering without clicking through the list.
+
 ## Uploading Your Own Route
 
 Click **New Route** in the route list, then select a file. See [File Format Reference](file-formats.md) for supported formats.
@@ -84,6 +86,12 @@ Click any stop in the sidebar or tap a marker on the map to see details:
 
 The phone number is tappable (opens dialer) and has a copy button.
 
+> Press **Esc** or tap outside the popup to close it. The same shortcut closes the finished-route stats panel.
+
+### Stop order
+
+Once a route is optimized, the sidebar list is re-sorted to match the numbered markers on the map -- so the first stop in the list is always the first stop you'll visit.
+
 ### Phone number in sidebar
 
 If stops have phone numbers, they also appear directly in the sidebar stop list (no need to open the detail popup). Each phone number shows:
@@ -102,9 +110,17 @@ Click the gear icon in the header to configure:
 
 Settings are saved in your browser and persist across sessions.
 
-## Theme
+> On mobile, tapping the gear while the sidebar is collapsed auto-opens the sidebar so the settings panel is visible.
 
-Click the sun/moon icon in the header to toggle between light and dark mode. Your preference is saved in the browser. The map tiles automatically adjust brightness in dark mode.
+## Header Menu (Kebab)
+
+The header has a **kebab** (`⋮`) button that opens a dropdown with:
+
+- **Help & Documentation** -- opens the in-app docs
+- **Theme toggle** -- switch between light and dark mode (the map tiles adjust brightness automatically)
+- **Sign Out** -- shows your username and signs you out of the app
+
+On very narrow viewports (below 380px) the entire header collapses to this kebab so Sign Out never gets clipped off-screen. Your theme preference is saved in the browser and respects your OS preference on first visit.
 
 ## Sharing
 

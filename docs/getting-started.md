@@ -77,16 +77,20 @@ Routes with more than 48 stops show a **Split into Routes** banner above the car
 
 ## Switching Themes
 
-Click the sun/moon icon in the header to toggle between light and dark mode. Your preference is saved in the browser. The app also respects your OS theme preference on first visit.
+Click the **kebab** (`⋮`) button in the header to open the overflow menu, then click the sun/moon icon to toggle between light and dark mode. Your preference is saved in the browser. The app also respects your OS theme preference on first visit.
 
 ## Mobile Navigation
 
 On mobile devices:
-- The **sidebar** collapses by default -- tap the toggle button to show/hide it
-- The **dashboard** columns stack vertically and are centered for easy scrolling
+- The **sidebar** collapses by default -- tap the toggle button to show/hide it (tapping the gear icon also opens the sidebar so the settings panel is visible)
+- The **dashboard** shows 2 columns between 640-768px and a single stacked column below 640px
+- Dashboard columns are centered (max-width 480px) on single-column layouts
 - All buttons are touch-friendly (minimum 32px targets)
 - Drag handles are hidden on mobile (use the assign button instead)
+- Below 380px the header collapses to a kebab-only menu so Sign Out never gets clipped off-screen
 
 ## Logging Out
 
-Click the user icon in the header and select **Logout**. This deletes your auth token on the server.
+Click the **kebab** (`⋮`) button in the header to open the overflow menu, then click the **Sign Out** button (shows your username). This deletes your auth token on the server and returns you to the login screen.
+
+> Signing out and back in as a different user fully resets the app state -- the next user will not see the previous user's selected route, sidebar state, or dashboard view.
