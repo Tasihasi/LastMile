@@ -1,15 +1,17 @@
 import { test, expect, loginViaAPI } from "./fixtures";
 
 test.describe("Session List (Biker)", () => {
-  test("shows seeded sessions for Anna", async ({ page }) => {
-    await loginViaAPI(page, "Anna", "biker");
+  test("shows seeded sessions for Csilla", async ({ page }) => {
+    // Csilla has seeded routes but none in_progress, so the SessionList stays
+    // visible (Anna would be auto-selected into her in-progress route).
+    await loginViaAPI(page, "Csilla", "biker");
 
     // Should see session list
     await expect(page.getByText("Recent Routes")).toBeVisible({
       timeout: 15_000,
     });
 
-    // Anna has seeded routes — may be active or all finished (collapsed)
+    // Csilla has seeded routes — may be active or all finished (collapsed)
     const activeSessions = page.locator(".session-list-item:not(.session-list-item--finished)");
     const finishedToggle = page.locator(".session-list-finished-toggle");
 
@@ -27,7 +29,9 @@ test.describe("Session List (Biker)", () => {
   });
 
   test("shows new route button", async ({ page }) => {
-    await loginViaAPI(page, "Anna", "biker");
+    // Csilla has seeded routes but none in_progress, so the SessionList stays
+    // visible (Anna would be auto-selected into her in-progress route).
+    await loginViaAPI(page, "Csilla", "biker");
     await expect(page.getByText("Recent Routes")).toBeVisible({
       timeout: 15_000,
     });
@@ -38,12 +42,14 @@ test.describe("Session List (Biker)", () => {
   });
 
   test("active sessions show green dot", async ({ page }) => {
-    await loginViaAPI(page, "Anna", "biker");
+    // Csilla has seeded routes but none in_progress, so the SessionList stays
+    // visible (Anna would be auto-selected into her in-progress route).
+    await loginViaAPI(page, "Csilla", "biker");
     await expect(page.getByText("Recent Routes")).toBeVisible({
       timeout: 15_000,
     });
 
-    // Anna has an in_progress route from seed data
+    // Csilla has no in_progress route in seed data, so the dot may be absent.
     const activeDot = page.locator(".session-list-item-dot");
     if (await activeDot.first().isVisible()) {
       // Active session shows progress text
@@ -54,12 +60,14 @@ test.describe("Session List (Biker)", () => {
   });
 
   test("finished routes are in collapsible section", async ({ page }) => {
-    await loginViaAPI(page, "Anna", "biker");
+    // Csilla has seeded routes but none in_progress, so the SessionList stays
+    // visible (Anna would be auto-selected into her in-progress route).
+    await loginViaAPI(page, "Csilla", "biker");
     await expect(page.getByText("Recent Routes")).toBeVisible({
       timeout: 15_000,
     });
 
-    // Anna has a finished route from seed data
+    // Csilla has a finished route from seed data
     const finishedToggle = page.locator(".session-list-finished-toggle");
     if (await finishedToggle.isVisible()) {
       await finishedToggle.click();
@@ -70,7 +78,9 @@ test.describe("Session List (Biker)", () => {
   });
 
   test("clicking session loads route view", async ({ page }) => {
-    await loginViaAPI(page, "Anna", "biker");
+    // Csilla has seeded routes but none in_progress, so the SessionList stays
+    // visible (Anna would be auto-selected into her in-progress route).
+    await loginViaAPI(page, "Csilla", "biker");
     await expect(page.getByText("Recent Routes")).toBeVisible({
       timeout: 15_000,
     });

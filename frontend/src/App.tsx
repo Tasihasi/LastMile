@@ -297,6 +297,8 @@ function App() {
                   </div>
                   <button
                     className="user-menu-item user-menu-item--danger"
+                    role="menuitem"
+                    title="Sign out"
                     onClick={() => {
                       setUserMenuOpen(false);
                       logout();
