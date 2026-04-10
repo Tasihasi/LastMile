@@ -545,7 +545,7 @@ class OptimizeAPIKeyTest(TestCase):
         self.user, self.client = _make_biker("ors_biker")
         self.session = _make_optimized_session(self.user, num_stops=3)
 
-    @patch("planner.views.django_settings")
+    @patch("planner.views.sessions.django_settings")
     def test_optimize_missing_api_key(self, mock_settings):
         mock_settings.ORS_API_KEY = ""
         mock_settings.E2E_MOCK = False
@@ -555,7 +555,7 @@ class OptimizeAPIKeyTest(TestCase):
         self.assertIn("ORS_API_KEY", error)
         self.assertIn("not configured", error)
 
-    @patch("planner.views.optimize_route")
+    @patch("planner.views.sessions.optimize_route")
     def test_optimize_invalid_api_key(self, mock_optimize):
         mock_response = MagicMock()
         mock_response.status_code = 403
@@ -568,7 +568,7 @@ class OptimizeAPIKeyTest(TestCase):
         self.assertIn("ORS_API_KEY", error)
         self.assertIn("invalid or expired", error)
 
-    @patch("planner.views.optimize_route")
+    @patch("planner.views.sessions.optimize_route")
     def test_optimize_unauthorized_api_key(self, mock_optimize):
         mock_response = MagicMock()
         mock_response.status_code = 401
@@ -973,8 +973,8 @@ class FullLifecycleIntegrationTest(TestCase):
         target_stop_ids = [s["id"] for s in target_stops]
 
         with (
-            patch("planner.views.optimize_route") as mock_opt,
-            patch("planner.views.get_route_details") as mock_details,
+            patch("planner.views.sessions.optimize_route") as mock_opt,
+            patch("planner.views.sessions.get_route_details") as mock_details,
         ):
             # Mock optimize to return stops in original order
             mock_opt.return_value = target_stop_ids

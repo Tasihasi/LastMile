@@ -20,6 +20,19 @@ export function formatTime(date: Date): string {
   return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
 }
 
+export function formatDateTime(iso: string | null | undefined, fallback = "—"): string {
+  if (!iso) return fallback;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return fallback;
+  return d.toLocaleDateString([], {
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+}
+
 /**
  * Calculate travel time in seconds for a segment using custom speed.
  * distance is in meters, speedKmh is in km/h.

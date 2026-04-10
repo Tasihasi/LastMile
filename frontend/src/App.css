@@ -4881,3 +4881,41 @@ body {
 .user-menu-item--danger {
   color: var(--color-danger);
 }
+
+.error-boundary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 24px;
+  background: var(--color-bg, #0f172a);
+}
+
+.error-boundary-card {
+  max-width: 480px;
+  width: 100%;
+  padding: 32px;
+  border-radius: 12px;
+  background: var(--color-surface, #1e293b);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+  text-align: center;
+}
+
+.error-boundary-title {
+  margin: 0 0 12px;
+  font-size: 22px;
+  color: var(--color-danger, #dc2626);
+}
+
+.error-boundary-message {
+  margin: 0 0 24px;
+  color: var(--color-text-muted, #94a3b8);
+  word-break: break-word;
+}
+
+.error-boundary-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
