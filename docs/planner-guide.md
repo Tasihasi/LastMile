@@ -6,8 +6,7 @@ After logging in as a planner, you see the management dashboard instead of the m
 
 ### Layout
 
-- **Unassigned column**: Routes not assigned to any biker
-- **Split Routes section**: Parent sessions that have been clustered into sub-routes (click to review)
+- **Unassigned column**: Routes not assigned to any biker (including sub-routes produced by clustering a large upload)
 - **Biker columns**: One column per registered biker, showing their assigned routes
 - **Finished section**: Finished routes (collapsed by default)
 
@@ -40,7 +39,7 @@ Each card shows:
 
 Routes with more than 48 stops display a **Split into Routes** banner above the session card. Click it to trigger KMeans clustering -- a spinner shows while clustering is in progress. The actual number of sub-routes depends on how many stops were successfully geocoded, so the banner label stays generic.
 
-After splitting, the parent route moves to the **Split Routes** section and its status changes to `split`. The child sub-routes appear in the cluster review view.
+After splitting, the parent route disappears from the dashboard and each sub-route appears in the **Unassigned** column as an independent route card named `{parent_name}_1`, `{parent_name}_2`, etc. Sub-routes behave like any other route -- assign, optimize, rename, or delete them individually from the kanban.
 
 ## Assigning Routes
 
@@ -87,57 +86,22 @@ For large uploads (50+ stops), LastMile splits deliveries into manageable sub-ro
 1. Upload a file with more than 48 stops
 2. A **Split into Routes** banner appears above the route card in the Unassigned column
 3. Click the banner -- KMeans clustering runs on the geocoded stops
-4. The parent session moves to the **Split Routes** section with status `split`
+4. The parent session is hidden and each resulting sub-route is inserted into the **Unassigned** column as a normal route card named `{parent_name}_1`, `{parent_name}_2`, ...
 
-The number of sub-routes is auto-calculated: `ceil(stop_count / 48)`. Each sub-route respects the ORS 48-stop optimization limit. Non-geocoded stops are skipped during clustering and reported in the review view.
+The number of sub-routes is auto-calculated: `ceil(stop_count / 48)`. Each sub-route respects the ORS 48-stop optimization limit. Non-geocoded stops are skipped during clustering.
 
-### Cluster Review View
+### Working with sub-routes
 
-Click a split parent session in the **Split Routes** section to open the cluster review. This view shows:
+Sub-routes are first-class routes. From the kanban you can:
 
-**Header:**
-- Session name and cluster summary stats (total stops, number of routes, skipped stops)
-- **Undo Split** button -- reverts clustering, restores all stops to the parent session
-- **Back to Dashboard** button
+- **Assign** to a biker (drag-and-drop or the assign dropdown)
+- **Optimize** individually by opening the route view
+- **Rename** or **delete** via the card action icons
+- **Track** progress once a biker starts one
 
-**Color-coded Map:**
-- Each sub-route's stops are shown in a distinct color (10 colors: red, blue, green, purple, orange, teal, pink, brown, indigo, cyan)
-- Click a marker to see stop details and which sub-route it belongs to
-- Route geometry is drawn when a sub-route is optimized
+There is no separate "cluster review" UI -- a planner cannot tell whether a route was created by clustering or by a normal upload. Sub-routes are visually identical to simple routes.
 
-**Sub-route Cards (sidebar):**
-- One collapsible card per sub-route, color-coded to match the map
-- Shows stop count, optimization status, and assignment
-- Click the card header to expand and see the stop list
-- **Optimize** button: run VROOM optimization on this sub-route
-- **Assign** dropdown: assign this sub-route to a biker
-- **Move stop** controls: move individual stops to a different sub-route
-- Empty sub-routes show a warning and a **Delete** button
-
-**Optimize All:**
-- An **Optimize All** button appears at the top to optimize every sub-route in one click
-
-### Moving Stops Between Sub-routes
-
-In the cluster review, each stop in an expanded sub-route card has a move control. Select a target sub-route from the dropdown and click the move button. The stop is transferred immediately and both stop counts update.
-
-This is useful for fine-tuning cluster boundaries -- for example, moving a stop that's geographically closer to a different sub-route.
-
-### Undo Split
-
-Click **Undo Split** in the cluster review header to revert the clustering. A confirmation dialog appears first (`"This will delete all sub-routes and restore stops to the parent. Continue?"`) because the action is destructive.
-
-After confirming:
-- All child sub-routes are deleted
-- Stops are restored to the parent session
-- Parent status resets to `not_started`
-- A toast confirms the undo
-
-> **Blocked if active:** Undo is blocked if any sub-route has status `in_progress` (a biker is actively delivering). You must wait for all active sub-routes to finish before undoing. The server returns a 409 and the UI surfaces an error toast.
-
-### Compact Optimize All button
-
-On narrow viewports (below 480px) the **Optimize All** button shrinks to a compact "Optimize (N)" label where N is the number of sub-routes that still need optimization. This keeps the remaining-count visible even when the cluster review sidebar is cramped.
+> **Undo:** Because sub-routes are independent once created, there is no single "undo split" action. Delete the sub-routes you no longer want and re-upload or re-cluster if needed.
 
 ---
 

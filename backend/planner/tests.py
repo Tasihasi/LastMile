@@ -931,6 +931,19 @@ class FullLifecycleIntegrationTest(TestCase):
         resp = self.planner_client.get(f"/api/sessions/{session_id}/")
         self.assertEqual(resp.json()["status"], "split")
 
+        # Split parents should be hidden from the planner session list too —
+        # the sub-routes take their place in the dashboard.
+        resp = self.planner_client.get("/api/sessions/")
+        planner_ids = [s["id"] for s in resp.json()]
+        self.assertNotIn(session_id, planner_ids)
+        for sr_id in sub_route_ids:
+            self.assertIn(sr_id, planner_ids)
+
+        # Sub-route names follow the "{parent_name}_N" convention.
+        sub_routes_in_list = [s for s in resp.json() if s["id"] in sub_route_ids]
+        for sr in sub_routes_in_list:
+            self.assertRegex(sr["name"], r"_\d+$")
+
         # ── Step 4: Verify sub-routes are accessible ──
         for sr_id in sub_route_ids:
             resp = self.planner_client.get(f"/api/sessions/{sr_id}/")

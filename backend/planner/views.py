@@ -142,12 +142,11 @@ def _annotate_session_list(qs):
 def list_sessions(request):
     """List sessions. Bikers see their own; planners see all (optionally filtered by owner_id)."""
     if hasattr(request.user, "profile") and request.user.profile.role == "planner":
-        qs = DeliverySession.objects.all()
+        qs = DeliverySession.objects.exclude(status=DeliverySession.Status.SPLIT)
         owner_id = request.query_params.get("owner_id")
         if owner_id:
             qs = qs.filter(owner_id=owner_id)
     else:
-        # Bikers see only their own sessions, excluding split parents (which have no deliverable stops)
         qs = DeliverySession.objects.filter(owner=request.user).exclude(status=DeliverySession.Status.SPLIT)
 
     qs = _annotate_session_list(qs).order_by("-created_at")
@@ -543,7 +542,7 @@ def cluster_session(request, session_id):
         child = DeliverySession.objects.create(
             parent=session,
             owner=None,
-            name=f"Route {i} of {len(clusters)}",
+            name=f"{(session.name or 'Route')[:248]}_{i}",
             original_file=session.original_file,
         )
 

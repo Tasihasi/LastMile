@@ -60,7 +60,9 @@ test.describe("Clustering", () => {
     await expect(splitBtn).toBeVisible({ timeout: 20_000 });
   });
 
-  test("cluster, review, and undo split", async ({ page }) => {
+  test("split produces independent sub-route cards in Unassigned", async ({
+    page,
+  }) => {
     await expect(page.locator(".dashboard-layout")).toBeVisible({
       timeout: 20_000,
     });
@@ -72,70 +74,31 @@ test.describe("Clustering", () => {
       timeout: 20_000,
     });
 
-    // Click Split into Routes — KMeans on 300 stops takes time
+    // Count unassigned cards before split
+    const unassignedCards = page.locator(".dashboard-unassigned .session-card");
+    const beforeCount = await unassignedCards.count();
+
     const splitBtn = page.locator(".cluster-banner").first();
     await expect(splitBtn).toBeVisible({ timeout: 20_000 });
     await splitBtn.click();
 
-    // Wait for cluster review view (heading shows session name)
-    await expect(page.locator(".cluster-review-header")).toBeVisible({
-      timeout: 30_000,
-    });
-
-    await expect(page.locator(".cluster-route-card").first()).toBeVisible({
-      timeout: 15_000,
-    });
-
-    await expect(page.locator(".cluster-review-stat").first()).toBeVisible();
-    await expect(page.locator(".leaflet-container")).toBeVisible();
-
-    // Expand first route card
-    await page.locator(".cluster-route-card-header").first().click();
-    await expect(
-      page.locator(".cluster-route-stops").first()
-    ).toBeVisible({ timeout: 10_000 });
-
-    // Undo split — the UI now shows a window.confirm before deleting sub-routes.
-    page.once("dialog", (dialog) => dialog.accept());
-    const undoBtn = page.getByRole("button", { name: "Undo Split" });
-    await expect(undoBtn).toBeVisible();
-    await undoBtn.click();
-
+    // After split: stay on the dashboard (no cluster review navigation)
+    // and sub-route cards show up in the Unassigned column.
     await expect(page.getByText("Route Management")).toBeVisible({
-      timeout: 20_000,
-    });
-  });
-
-  test("optimize sub-route from cluster review", async ({ page }) => {
-    await expect(page.locator(".dashboard-layout")).toBeVisible({
-      timeout: 20_000,
-    });
-
-    await createLargeSession(page);
-    await page.reload();
-    await page.waitForLoadState("networkidle");
-    await expect(page.locator(".dashboard-layout")).toBeVisible({
-      timeout: 20_000,
-    });
-
-    const splitBtn = page.locator(".cluster-banner").first();
-    await expect(splitBtn).toBeVisible({ timeout: 20_000 });
-    await splitBtn.click();
-
-    await expect(page.locator(".cluster-review-header")).toBeVisible({
       timeout: 30_000,
     });
 
-    // Click Optimize All if visible
-    const optimizeAllBtn = page.getByRole("button", {
-      name: /Optimize All/,
-    });
-    if (await optimizeAllBtn.isVisible({ timeout: 10_000 }).catch(() => false)) {
-      await optimizeAllBtn.click();
+    // Parent card should be gone; sub-routes replace it.
+    await expect
+      .poll(async () => unassignedCards.count(), { timeout: 30_000 })
+      .toBeGreaterThan(beforeCount);
 
-      await expect(
-        page.locator(".cluster-review-stat", { hasText: "Optimized" })
-      ).toBeVisible({ timeout: 60_000 });
-    }
+    // Sub-routes use the "{parent_name}_N" naming convention.
+    const subRouteCard = page
+      .locator(".dashboard-unassigned .session-card-name", {
+        hasText: /_\d+$/,
+      })
+      .first();
+    await expect(subRouteCard).toBeVisible({ timeout: 10_000 });
   });
 });
