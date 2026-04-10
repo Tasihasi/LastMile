@@ -4,6 +4,7 @@ import { useDeliveryPlanner } from "./hooks/useDeliveryPlanner";
 import { useTheme } from "./hooks/useTheme";
 import { useSettings } from "./hooks/useSettings";
 import { useAuth } from "./hooks/useAuth";
+import { useToast } from "./hooks/useToast";
 import { FileUpload } from "./components/FileUpload";
 import { AddressList } from "./components/AddressList";
 import { DeliveryMap } from "./components/DeliveryMap";
@@ -46,6 +47,7 @@ function App() {
 
   const { theme, toggle: toggleTheme } = useTheme();
   const { settings, update: updateSettings } = useSettings();
+  const { showToast } = useToast();
   const [selectedStopId, setSelectedStopId] = useState<number | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -130,9 +132,10 @@ function App() {
       const url = `${window.location.origin}/shared/${shareId}`;
       await navigator.clipboard.writeText(url);
       setShareCopied(true);
+      showToast("Share link copied to clipboard");
       setTimeout(() => setShareCopied(false), 2000);
     } catch {
-      // fallback
+      showToast("Failed to create share link", "error");
     } finally {
       setShareLoading(false);
     }

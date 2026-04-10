@@ -75,6 +75,14 @@ export function FinishedRouteDetail({ sessionId, onClose, onViewMap }: FinishedR
     return () => { cancelled = true; };
   }, [sessionId]);
 
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
   if (loading) {
     return (
       <div className="frd-overlay" onClick={onClose}>

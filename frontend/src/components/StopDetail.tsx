@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { DeliveryStop, RouteSegment } from "../types";
 import { formatDuration, formatDistance, formatTime, travelSeconds } from "../utils/format";
 
@@ -45,6 +45,14 @@ function CopyButton({ text }: { text: string }) {
 
 export function StopDetail({ stop, onClose, routeSegments, stops, arrivalTimes, speedKmh }: StopDetailProps) {
   const hasDetails = stop.product_code || stop.recipient_name || stop.recipient_phone;
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
 
   // Find the segment leading to this stop
   let segmentToHere: RouteSegment | null = null;

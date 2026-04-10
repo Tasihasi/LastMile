@@ -55,8 +55,10 @@ test.describe("Biker Journey", () => {
     test("full delivery lifecycle: start, deliver stops, finish", async ({
       page,
     }) => {
-      // Login as biker and upload a fresh route (seeded routes may be consumed by earlier tests)
-      await loginViaAPI(page, "Anna", "biker");
+      // Use Csilla — she has no in_progress route in the seed, so the
+      // SessionList stays visible and the "New Route" button is reachable.
+      // (Anna would be auto-selected straight into her in-progress route.)
+      await loginViaAPI(page, "Csilla", "biker");
       await page.getByRole("button", { name: "New Route" }).click();
       await expect(page.locator('input[type="file"]')).toBeAttached({
         timeout: 10_000,

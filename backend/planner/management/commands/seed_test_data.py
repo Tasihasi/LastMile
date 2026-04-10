@@ -34,6 +34,49 @@ BUDAPEST_STOPS = [
     ("Rákóczi Square Market", "Rákóczi tér, Budapest 1084", 47.4924, 19.0740),
 ]
 
+# Realistic Hungarian recipient names for seeded delivery stops.
+RECIPIENT_NAMES = [
+    "Nagy Péter",
+    "Kovács Anna",
+    "Szabó László",
+    "Tóth Eszter",
+    "Horváth Gábor",
+    "Varga Katalin",
+    "Kiss Tamás",
+    "Molnár Júlia",
+    "Németh Bence",
+    "Farkas Zsófia",
+    "Balogh Márton",
+    "Papp Réka",
+    "Takács Dániel",
+    "Juhász Eszter",
+    "Lakatos Ádám",
+    "Mészáros Petra",
+    "Oláh Krisztián",
+    "Simon Hanna",
+    "Fekete Levente",
+    "Rácz Lilla",
+]
+
+PRODUCT_CODES = [
+    "PKG-A1024",
+    "BOX-7251",
+    "ENV-3309",
+    "PKG-B0418",
+    "PKG-C9912",
+    "BOX-1188",
+    "ENV-4471",
+    "PKG-D7702",
+    "BOX-6620",
+    "PKG-E0033",
+]
+
+
+def _fake_phone(rng: random.Random) -> str:
+    """Return a Hungarian-format mobile number for demo data."""
+    operator = rng.choice(["20", "30", "70"])
+    return f"+36 {operator} {rng.randint(100, 999)} {rng.randint(1000, 9999)}"
+
 
 class Command(BaseCommand):
     help = "Seed test bikers and delivery routes with varied statuses"
@@ -134,6 +177,9 @@ class Command(BaseCommand):
                         session=session,
                         name=sname,
                         raw_address=saddr,
+                        product_code=random.choice(PRODUCT_CODES),
+                        recipient_name=random.choice(RECIPIENT_NAMES),
+                        recipient_phone=_fake_phone(random),
                         lat=slat,
                         lng=slng,
                         geocode_status="skipped",

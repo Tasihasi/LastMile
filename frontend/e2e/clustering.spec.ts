@@ -95,7 +95,8 @@ test.describe("Clustering", () => {
       page.locator(".cluster-route-stops").first()
     ).toBeVisible({ timeout: 10_000 });
 
-    // Undo split
+    // Undo split — the UI now shows a window.confirm before deleting sub-routes.
+    page.once("dialog", (dialog) => dialog.accept());
     const undoBtn = page.getByRole("button", { name: "Undo Split" });
     await expect(undoBtn).toBeVisible();
     await undoBtn.click();
