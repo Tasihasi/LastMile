@@ -58,6 +58,12 @@ def _get_user_session(request, session_id):
 @api_view(["POST"])
 @permission_classes([AllowAny])
 def login_view(request):
+    """Create-or-fetch a demo user and return an auth token.
+
+    No password is set: this endpoint exists for the demo's username +
+    role flow. If a user already exists with a different role, the role
+    is updated to match the request.
+    """
     username = request.data.get("username", "").strip()
     role = request.data.get("role", "biker").strip()
 
@@ -89,11 +95,13 @@ def login_view(request):
 
 @api_view(["GET"])
 def me_view(request):
+    """Return the authenticated user's profile (id, username, role)."""
     return Response(UserSerializer(request.user).data)
 
 
 @api_view(["POST"])
 def logout_view(request):
+    """Revoke the caller's auth token. Idempotent; safe to call without an active token."""
     Token.objects.filter(user=request.user).delete()
     return Response({"message": "Logged out."})
 
@@ -105,6 +113,10 @@ def logout_view(request):
 
 @api_view(["GET"])
 def list_bikers(request):
+    """Return all biker users for the planner's assignment dropdown.
+
+    Planner-only. Returns 403 for any other role.
+    """
     if not hasattr(request.user, "profile") or request.user.profile.role != "planner":
         return Response({"error": "Planner access required."}, status=status.HTTP_403_FORBIDDEN)
 
@@ -161,6 +173,13 @@ def list_sessions(request):
 @api_view(["POST"])
 @parser_classes([MultiPartParser])
 def upload_file(request):
+    """Parse an uploaded stop list and create a new session with its stops.
+
+    Stops with pre-supplied coordinates are marked `skipped` (geocoding
+    is unnecessary); stops with only an address are left `pending` for a
+    later geocode pass. Planners may pass `owner_id` to assign the session
+    on creation; bikers can only create sessions owned by themselves.
+    """
     file = request.FILES.get("file")
     if not file:
         return Response(
@@ -223,6 +242,10 @@ def upload_file(request):
 
 @api_view(["GET"])
 def get_session(request, session_id):
+    """Return a session detail payload (stops, geometry, segments) for the caller.
+
+    Returns 404 if the session does not exist *or* the biker does not own it.
+    """
     session = _get_user_session(request, session_id)
     if not session:
         return Response({"error": "Session not found."}, status=status.HTTP_404_NOT_FOUND)
@@ -267,6 +290,12 @@ def _geocode_stream(session_id):
 
 @api_view(["POST"])
 def geocode_stops(request, session_id):
+    """Stream NDJSON progress while geocoding the session's pending stops.
+
+    Returns one JSON line per stop as it resolves, plus a `progress`
+    counter. Each stop is also persisted to the DB as it completes, so
+    a dropped client connection still preserves partial progress.
+    """
     session = _get_user_session(request, session_id)
     if not session:
         return Response({"error": "Session not found."}, status=status.HTTP_404_NOT_FOUND)
@@ -284,6 +313,7 @@ def geocode_stops(request, session_id):
 
 @api_view(["GET"])
 def geocode_status(request, session_id):
+    """Return geocoding progress counts plus the full stop list snapshot."""
     session = _get_user_session(request, session_id)
     if not session:
         return Response({"error": "Session not found."}, status=status.HTTP_404_NOT_FOUND)
@@ -307,6 +337,14 @@ def geocode_status(request, session_id):
 
 @api_view(["POST"])
 def optimize(request, session_id):
+    """Optimize stop order, fetch road geometry, and persist totals on the session.
+
+    Calls ORS VROOM for the order and ORS Directions for the polyline +
+    per-segment timing. Returns 503 if `ORS_API_KEY` is unset and 502 on
+    any ORS-side failure (with a clearer message for invalid keys).
+    Optional `depot_lat` / `depot_lng` in the body anchors the route's
+    start and end at the depot.
+    """
     session = _get_user_session(request, session_id)
     if not session:
         return Response({"error": "Session not found."}, status=status.HTTP_404_NOT_FOUND)
@@ -397,6 +435,11 @@ def optimize(request, session_id):
 
 @api_view(["POST"])
 def share_session(request, session_id):
+    """Mint an anonymous public share token for the session.
+
+    Each call creates a *new* `SharedRoute`; existing shares are not
+    revoked or deduplicated. Returns the share UUID for the URL slug.
+    """
     session = _get_user_session(request, session_id)
     if not session:
         return Response({"error": "Session not found."}, status=status.HTTP_404_NOT_FOUND)
@@ -408,6 +451,7 @@ def share_session(request, session_id):
 @api_view(["GET"])
 @permission_classes([AllowAny])
 def get_shared_route(request, share_id):
+    """Return a session payload via its public share token. No auth required."""
     try:
         share = SharedRoute.objects.select_related("session").get(id=share_id)
     except SharedRoute.DoesNotExist:
@@ -427,6 +471,10 @@ def _require_planner(request):
 
 @api_view(["DELETE"])
 def delete_session(request, session_id):
+    """Permanently delete a session (planner only).
+
+    Cascades to all stops, sub-routes, and share tokens. Cannot be undone.
+    """
     if not _require_planner(request):
         return Response({"error": "Planner access required."}, status=status.HTTP_403_FORBIDDEN)
 
@@ -441,6 +489,12 @@ def delete_session(request, session_id):
 
 @api_view(["PATCH"])
 def assign_session(request, session_id):
+    """Assign or unassign a session's owner (planner only).
+
+    `owner_id` null/missing unassigns; otherwise the value must reference
+    an existing user. The assignment changes nothing else about the
+    session's lifecycle.
+    """
     if not _require_planner(request):
         return Response({"error": "Planner access required."}, status=status.HTTP_403_FORBIDDEN)
 
@@ -468,6 +522,7 @@ def assign_session(request, session_id):
 
 @api_view(["PATCH"])
 def rename_session(request, session_id):
+    """Rename a session (planner only). Empty names are rejected with 400."""
     if not _require_planner(request):
         return Response({"error": "Planner access required."}, status=status.HTTP_403_FORBIDDEN)
 

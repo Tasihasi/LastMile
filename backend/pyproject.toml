@@ -1,0 +1,14 @@
+[tool.pydoclint]
+style = "google"
+# Validate that docstring arg/return/raise *names* match the signature.
+# Do NOT require type hints to be duplicated between signature and docstring;
+# the project convention (see CLAUDE.md "Docstring Style") is to keep type
+# information in the signature alone and use the docstring for semantic intent.
+arg-type-hints-in-signature = false
+arg-type-hints-in-docstring = false
+check-return-types = false
+check-yield-types = false
+check-arg-order = true
+# Be strict about "no orphan args" — a docstring listing args that no longer
+# exist in the signature is a maintenance smell we want to catch.
+allow-init-docstring = true

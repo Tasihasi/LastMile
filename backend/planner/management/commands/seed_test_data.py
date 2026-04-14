@@ -79,9 +79,17 @@ def _fake_phone(rng: random.Random) -> str:
 
 
 class Command(BaseCommand):
+    """Seed deterministic demo data: 3 bikers and 9 routes across all lifecycle states.
+
+    Idempotent — re-running updates existing demo bikers in place rather than
+    duplicating users. Uses a fixed RNG seed so the seeded data is stable
+    across runs (important for E2E tests that assert on stop counts/names).
+    """
+
     help = "Seed test bikers and delivery routes with varied statuses"
 
     def handle(self, *args, **options):
+        """Create or refresh the demo bikers and the canonical set of routes."""
         # Create bikers
         biker_names = ["Anna", "Balazs", "Csilla"]
         bikers = []

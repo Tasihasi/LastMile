@@ -32,6 +32,10 @@ jobs:
       - name: Format check with ruff
         run: ruff format --check .
 
+      - name: Validate docstrings match signatures (pydoclint)
+        # Configuration lives in backend/pyproject.toml under [tool.pydoclint].
+        run: pydoclint planner/
+
       - name: Run Django system checks
         run: python manage.py check --fail-level WARNING
         env:

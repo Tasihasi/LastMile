@@ -32,10 +32,12 @@ def _mock_geocode(address: str) -> tuple[float, float]:
 
 
 def geocode_address(address: str) -> tuple[float, float] | None:
-    """
-    Geocode a single address via Nominatim.
-    Returns (lat, lng) or None if not found.
-    In E2E mock mode, returns deterministic fake coordinates.
+    """Geocode a single address via Nominatim, returning (lat, lng) or None.
+
+    Honors the 1 req/sec Nominatim rate limit via `_rate_limit()`. In
+    E2E mock mode (`settings.E2E_MOCK`), returns deterministic
+    Budapest-area coordinates without contacting the network so tests
+    stay hermetic.
     """
     if settings.E2E_MOCK:
         return _mock_geocode(address)

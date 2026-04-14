@@ -5,6 +5,8 @@ from .models import DeliverySession, DeliveryStop, SharedRoute, UserProfile
 
 
 class UserProfileSerializer(serializers.ModelSerializer):
+    """Surface a `UserProfile` with its parent username flattened into one payload."""
+
     username = serializers.CharField(source="user.username", read_only=True)
     user_id = serializers.IntegerField(source="user.id", read_only=True)
 
@@ -14,6 +16,8 @@ class UserProfileSerializer(serializers.ModelSerializer):
 
 
 class UserSerializer(serializers.ModelSerializer):
+    """Auth response payload: id, username, and the profile-derived role."""
+
     role = serializers.CharField(source="profile.role", read_only=True)
 
     class Meta:
@@ -22,6 +26,8 @@ class UserSerializer(serializers.ModelSerializer):
 
 
 class DeliveryStopSerializer(serializers.ModelSerializer):
+    """Full stop payload used inside session detail responses."""
+
     class Meta:
         model = DeliveryStop
         fields = [
@@ -41,6 +47,12 @@ class DeliveryStopSerializer(serializers.ModelSerializer):
 
 
 class DeliverySessionSerializer(serializers.ModelSerializer):
+    """Full session payload with embedded stops, geometry, and segments.
+
+    Used for the session detail endpoint. Heavier than `SessionListSerializer`
+    because it includes every stop and the route geometry blob.
+    """
+
     stops = DeliveryStopSerializer(many=True, read_only=True)
     needs_geocoding = serializers.SerializerMethodField()
     owner_name = serializers.CharField(source="owner.username", read_only=True, default=None)
@@ -69,6 +81,7 @@ class DeliverySessionSerializer(serializers.ModelSerializer):
         ]
 
     def get_needs_geocoding(self, obj):
+        """Return True if any stop is still pending geocoding."""
         return obj.stops.filter(geocode_status="pending").exists()
 
 
@@ -109,26 +122,31 @@ class SessionListSerializer(serializers.ModelSerializer):
         ]
 
     def get_stop_count(self, obj):
+        """Total stops in the session (uses annotated `_stop_count` when present)."""
         if hasattr(obj, "_stop_count"):
             return obj._stop_count
         return obj.stops.count()
 
     def get_sub_route_count(self, obj):
+        """Number of child sessions for a split parent (annotated when available)."""
         if hasattr(obj, "_sub_route_count"):
             return obj._sub_route_count
         return obj.sub_routes.count()
 
     def get_delivered_count(self, obj):
+        """Stops marked `delivered` (annotated when available)."""
         if hasattr(obj, "_delivered_count"):
             return obj._delivered_count
         return obj.stops.filter(delivery_status="delivered").count()
 
     def get_not_received_count(self, obj):
+        """Stops marked `not_received` (annotated when available)."""
         if hasattr(obj, "_not_received_count"):
             return obj._not_received_count
         return obj.stops.filter(delivery_status="not_received").count()
 
     def get_current_stop_name(self, obj):
+        """Display name of the next pending stop, or None when no progress yet."""
         if hasattr(obj, "_current_stop_name"):
             return obj._current_stop_name
         if obj.current_stop_index is None:
@@ -182,13 +200,16 @@ class ActiveSessionSerializer(serializers.ModelSerializer):
         return list(obj.stops.all())
 
     def get_stop_count(self, obj):
+        """Total stops, computed from the prefetched stop list."""
         return len(self._get_cached_stops(obj))
 
     def get_delivered_count(self, obj):
+        """Count of stops in any terminal state (delivered, not_received, or skipped)."""
         done_statuses = {"delivered", "not_received", "skipped"}
         return sum(1 for s in self._get_cached_stops(obj) if s.delivery_status in done_statuses)
 
     def get_current_stop_name(self, obj):
+        """Name of the current in-progress stop, resolved from the prefetched list."""
         if obj.current_stop_index is None:
             return None
         for s in self._get_cached_stops(obj):
@@ -198,6 +219,8 @@ class ActiveSessionSerializer(serializers.ModelSerializer):
 
 
 class SharedRouteSerializer(serializers.ModelSerializer):
+    """Public anonymous-share payload: full embedded session, no auth-bearing fields."""
+
     session = DeliverySessionSerializer(read_only=True)
 
     class Meta:

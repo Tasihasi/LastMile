@@ -5,6 +5,12 @@ from django.db import models
 
 
 class UserProfile(models.Model):
+    """Per-user role attachment.
+
+    Auth uses Django's built-in `User`; this profile carries the role flag
+    that drives biker vs planner UI gating across the frontend.
+    """
+
     class Role(models.TextChoices):
         BIKER = "biker", "Biker"
         PLANNER = "planner", "Planner"
@@ -17,6 +23,15 @@ class UserProfile(models.Model):
 
 
 class DeliverySession(models.Model):
+    """A single uploaded delivery route.
+
+    Holds the route's lifecycle state (`status`), optimization output
+    (`route_geometry`, `route_segments`), and biker progress
+    (`current_stop_index`, `started_at`, `finished_at`). A session may be
+    a leaf route (no `parent`) or a parent that has been split into
+    sub-routes via clustering (`status="split"`, children link via `parent`).
+    """
+
     class Status(models.TextChoices):
         NOT_STARTED = "not_started", "Not Started"
         IN_PROGRESS = "in_progress", "In Progress"
@@ -45,6 +60,13 @@ class DeliverySession(models.Model):
 
 
 class DeliveryStop(models.Model):
+    """One delivery stop within a session.
+
+    Carries both the geocoding lifecycle (`geocode_status` -> lat/lng) and
+    the delivery lifecycle (`delivery_status`). `sequence_order` is set
+    by the optimizer and is the canonical ordering for biker UI display.
+    """
+
     class GeocodeStatus(models.TextChoices):
         PENDING = "pending", "Pending"
         SUCCESS = "success", "Success"
@@ -88,6 +110,12 @@ class DeliveryStop(models.Model):
 
 
 class SharedRoute(models.Model):
+    """Anonymous public share token for a session.
+
+    The UUID `id` is the URL slug used in `/api/shared/<id>/`. No expiry
+    is enforced; deleting the row revokes access.
+    """
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     session = models.ForeignKey(DeliverySession, on_delete=models.CASCADE, related_name="shares")
     created_at = models.DateTimeField(auto_now_add=True)

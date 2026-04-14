@@ -61,6 +61,11 @@ def _normalize_header(header: str) -> str:
 
 
 def parse_csv(file) -> list[dict]:
+    """Parse a comma-separated upload into normalized stop dicts.
+
+    Strips a UTF-8 BOM if present so spreadsheets exported by Excel parse
+    cleanly. Headers are case- and whitespace-insensitive.
+    """
     content = file.read().decode("utf-8-sig")
     reader = csv.DictReader(io.StringIO(content))
     reader.fieldnames = [_normalize_header(f) for f in reader.fieldnames]
@@ -69,6 +74,10 @@ def parse_csv(file) -> list[dict]:
 
 
 def parse_txt(file) -> list[dict]:
+    """Parse a tab-delimited upload into normalized stop dicts.
+
+    Same header handling as `parse_csv` but uses tab as the delimiter.
+    """
     content = file.read().decode("utf-8-sig")
     reader = csv.DictReader(io.StringIO(content), delimiter="\t")
     reader.fieldnames = [_normalize_header(f) for f in reader.fieldnames]
@@ -77,6 +86,11 @@ def parse_txt(file) -> list[dict]:
 
 
 def parse_xlsx(file) -> list[dict]:
+    """Parse the active sheet of an XLSX upload into normalized stop dicts.
+
+    Reads the workbook in read-only mode for memory efficiency on large files.
+    Only the *first* (active) sheet is parsed; additional sheets are ignored.
+    """
     wb = load_workbook(file, read_only=True)
     ws = wb.active
     rows_iter = ws.iter_rows(values_only=True)
@@ -92,6 +106,11 @@ def parse_xlsx(file) -> list[dict]:
 
 
 def parse_xml(file) -> list[dict]:
+    """Parse an XML upload (root with `<stop>` children) into normalized stop dicts.
+
+    Uses defusedxml to defend against XXE / billion-laughs payloads from
+    user-supplied files.
+    """
     content = file.read()
     root = ET.fromstring(content)
 

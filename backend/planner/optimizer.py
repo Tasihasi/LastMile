@@ -63,11 +63,12 @@ def _mock_route_details(ordered_stops, depot=None) -> dict | None:
 
 
 def optimize_route(stops, depot=None) -> list[int]:
-    """
-    Call ORS optimization (VROOM) to get optimal stop order.
-    depot is an optional (lat, lng) tuple for start/end location.
-    Returns list of stop IDs in optimized order.
-    In E2E mock mode, returns angle-sorted order without calling ORS.
+    """Return stop IDs in ORS-optimized travel order via the VROOM endpoint.
+
+    `depot` is an optional `(lat, lng)` tuple anchoring the route's start
+    and end. In E2E mock mode (`settings.E2E_MOCK`), returns an
+    angle-sorted approximation without contacting ORS so tests stay
+    hermetic.
     """
     if settings.E2E_MOCK:
         return _mock_optimize(stops, depot)
@@ -111,11 +112,12 @@ def optimize_route(stops, depot=None) -> list[int]:
 
 
 def get_route_details(ordered_stops, depot=None) -> dict | None:
-    """
-    Call ORS directions to get route geometry and segment durations/distances.
-    depot is an optional (lat, lng) tuple -- if provided, route starts and ends there.
-    Returns {geometry, segments, total_duration, total_distance} or None.
-    In E2E mock mode, returns straight-line geometry without calling ORS.
+    """Return road-following geometry plus per-segment timing for the ordered stops.
+
+    `depot` is an optional `(lat, lng)` tuple. When set, the route starts
+    and ends at the depot; otherwise it starts and ends at the first and
+    last stops. In E2E mock mode (`settings.E2E_MOCK`), returns
+    straight-line geometry instead of calling ORS so tests stay hermetic.
     """
     if settings.E2E_MOCK:
         return _mock_route_details(ordered_stops, depot)

@@ -5,8 +5,7 @@ from sklearn.cluster import KMeans
 
 
 def cluster_stops(stops, n_clusters, max_stops_per_cluster=48, random_state=42):
-    """
-    Cluster geocoded stops into n geographic groups using KMeans.
+    """Cluster geocoded stops into n geographic groups using KMeans.
 
     Args:
         stops: list of DeliveryStop with lat/lng (must be geocoded)
@@ -42,9 +41,10 @@ def cluster_stops(stops, n_clusters, max_stops_per_cluster=48, random_state=42):
 
 
 def _enforce_max_size(clusters, max_size):
-    """
-    If any cluster exceeds max_size, split it by re-running KMeans on that cluster.
-    Repeats until all clusters are within the limit.
+    """Recursively split oversized clusters until every cluster respects max_size.
+
+    Re-runs KMeans on each oversized cluster, splitting into
+    ceil(len / max_size) sub-clusters until the constraint holds.
     """
     result = []
     for cluster in clusters:
