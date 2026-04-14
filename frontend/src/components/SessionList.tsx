@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { SessionSummary } from "../types";
 import { listSessions } from "../api/client";
-import { formatDuration, formatDistance } from "../utils/format";
+import { formatDuration, formatDistance, formatDateTime } from "../utils/format";
 
 function statusOrder(s: SessionSummary): number {
   if (s.status === "in_progress") return 0;
@@ -13,11 +13,6 @@ interface SessionListProps {
   ownerId?: number;
   onSelectSession: (sessionId: string) => void;
   onNewRoute: () => void;
-}
-
-function formatDate(iso: string): string {
-  const d = new Date(iso);
-  return d.toLocaleDateString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false });
 }
 
 export function SessionList({ ownerId, onSelectSession, onNewRoute }: SessionListProps) {
@@ -99,7 +94,7 @@ export function SessionList({ ownerId, onSelectSession, onNewRoute }: SessionLis
                         </span>
                       )}
                       {s.status !== "in_progress" && (
-                        <span className="session-list-item-date">{formatDate(s.created_at)}</span>
+                        <span className="session-list-item-date">{formatDateTime(s.created_at)}</span>
                       )}
                       {s.total_duration != null && (
                         <span className="session-list-item-duration">
@@ -129,7 +124,7 @@ export function SessionList({ ownerId, onSelectSession, onNewRoute }: SessionLis
                       >
                         <div className="session-list-item-info">
                           <span className="session-list-item-name">{s.name || "Untitled Route"}</span>
-                          <span className="session-list-item-date">{formatDate(s.created_at)}</span>
+                          <span className="session-list-item-date">{formatDateTime(s.created_at)}</span>
                         </div>
                         <span className="session-list-item-count">
                           {s.stop_count} stop{s.stop_count !== 1 ? "s" : ""}
