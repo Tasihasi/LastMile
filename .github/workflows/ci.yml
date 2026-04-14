@@ -42,10 +42,27 @@ jobs:
         env:
           ORS_API_KEY: test-key
 
-      - name: Run tests
-        run: python manage.py test --verbosity 2
+      - name: Run tests with coverage
+        run: |
+          coverage run --source=planner manage.py test --verbosity 2
+          coverage report
+          coverage xml
         env:
           ORS_API_KEY: test-key
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: backend-coverage
+          path: backend/coverage.xml
+          retention-days: 7
+
+      - name: Security scan (pip-audit)
+        # Non-blocking for now -- surfaces vulns without breaking the build.
+        # Flip to `continue-on-error: false` once the baseline is clean.
+        continue-on-error: true
+        run: pip-audit --requirement requirements.txt --requirement requirements-dev.txt
 
   frontend:
     name: Frontend
@@ -74,6 +91,12 @@ jobs:
 
       - name: Build
         run: npm run build
+
+      - name: Security scan (npm audit)
+        # Non-blocking for now -- surfaces vulns without breaking the build.
+        # Flip to `continue-on-error: false` once the baseline is clean.
+        continue-on-error: true
+        run: npm audit --audit-level=high
 
   e2e:
     name: E2E Tests
