@@ -183,6 +183,19 @@ python manage.py runserver
 
 The API will be available at `http://localhost:8000/api/`.
 
+### 2a. Secret-scanning hooks (recommended)
+
+Install the pre-commit hooks so secrets can't be committed by accident. They run
+gitleaks (plus private-key / large-file guards) on every commit:
+
+```bash
+pip install pre-commit   # included in backend/requirements-dev.txt
+pre-commit install       # run once per clone, from the repo root
+```
+
+CI runs the same gitleaks scan on every push and PR. See
+[PRODUCTION_READINESS.md](PRODUCTION_READINESS.md) for details.
+
 ### 3. Frontend
 
 ```bash

@@ -1,0 +1,28 @@
+# Gitleaks configuration for LastMile.
+# Extends the built-in ruleset and allowlists known non-secret placeholders
+# so the scan stays signal-only (no false positives on templates/dev fallbacks).
+#
+# Used by both the pre-commit hook and the CI secret-scan workflow.
+
+title = "LastMile gitleaks config"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Non-secret placeholders, templates, and dev-only fallbacks"
+
+# Files that are intentionally committed and contain only placeholders.
+paths = [
+  '''(^|/)\.env\.example$''',
+  '''(^|/)\.env\.development$''',
+]
+
+# Placeholder / dev-only strings that look like secrets but are not.
+regexes = [
+  '''your_openrouteservice_api_key_here''',
+  '''replace-with-a-50-plus-character-random-string''',
+  '''django-insecure-dev-only-do-not-use-in-production''',
+  '''test-key''',
+  '''e2e-mock-key''',
+]

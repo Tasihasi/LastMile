@@ -12,8 +12,13 @@ db.sqlite3
 backend/media/
 backend/staticfiles/
 
-# Environment
+# Environment — secrets must NEVER be committed.
+# Allowed (non-secret templates only): .env.example, .env.development
 .env
+.env.*
+*.env
+!.env.example
+!.env.development
 
 # Node
 node_modules/
