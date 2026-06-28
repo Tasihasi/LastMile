@@ -162,5 +162,35 @@ test.describe("Biker Journey", () => {
         page.getByRole("button", { name: "Optimize Route" })
       ).toBeVisible({ timeout: 30_000 });
     });
+
+    test("geocodes a large route fully (well past the old ~31 cap)", async ({
+      page,
+    }) => {
+      await loginViaAPI(page, "BikerBigGeocode", "biker");
+      await page.getByRole("button", { name: "New Route" }).click();
+
+      // 60 address-only stops — more than the old single-pass cutoff.
+      await uploadTestFile(page, "needs_geocoding_60.csv");
+      await expect(page.locator(".stop-item")).toHaveCount(60, {
+        timeout: 20_000,
+      });
+
+      await page.getByRole("button", { name: "Geocode Addresses" }).click();
+
+      // Resumable geocoding must finish ALL of them: the Optimize button only
+      // appears once nothing is left pending.
+      await expect(
+        page.getByRole("button", { name: "Optimize Route" })
+      ).toBeVisible({ timeout: 60_000 });
+
+      // Optimize and confirm every one of the 60 stops made it onto the map.
+      await page.getByRole("button", { name: "Optimize Route" }).click();
+      await expect(page.locator(".route-summary")).toBeVisible({
+        timeout: 30_000,
+      });
+      await expect(page.locator(".numbered-marker")).toHaveCount(60, {
+        timeout: 15_000,
+      });
+    });
   });
 });
