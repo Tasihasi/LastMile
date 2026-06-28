@@ -4,11 +4,109 @@ import io
 from defusedxml import ElementTree as ET
 from openpyxl import load_workbook
 
+# Maps real-world (notably Hungarian courier) column headers onto the canonical
+# field names this app understands. Keyed by the output of `_normalize_header`
+# (lowercased, stripped, spaces -> underscores). This is what lets an untouched
+# operational file such as the UPS courier route sheet
+# (headers: város, irszám, u, hsz, megj, Cím, kör, <courier names>) upload
+# without the user having to re-shape it first.
+HEADER_ALIASES = {
+    # locality
+    "város": "city",
+    "telepules": "city",
+    "település": "city",
+    "irszám": "zip",
+    "irsz": "zip",
+    "iranyitoszam": "zip",
+    # street components
+    "u": "street",  # "u " (utca, abbreviated) -> "u"
+    "utca": "street",
+    "közterület": "street",
+    "hsz": "house_number",
+    "házszám": "house_number",
+    "hazszam": "house_number",
+    # full address + note
+    "cím": "address",
+    "cim": "address",
+    "megj": "note",
+    "megjegyzés": "note",
+    "megjegyzes": "note",
+    # assignment / round (the courier a stop belongs to)
+    "kör": "route",
+    "kor": "route",
+    # people
+    "név": "name",
+    "nev": "name",
+    "címzett": "recipient_name",
+    "cimzett": "recipient_name",
+    "telefon": "recipient_phone",
+}
+
+
+def _stringify(value) -> str:
+    """Coerce a cell value to a clean string, dropping the .0 on whole-number floats.
+
+    openpyxl reads numeric cells (e.g. the postal code 1011 or a numeric house
+    number) as floats, which would otherwise render as "1011.0" inside a
+    geocodable address string. Uncalculated Excel formula strings (those
+    starting with "=") are treated as empty: real operational sheets often use
+    a formula such as `=C3&" "&D3` to build the address column, which is
+    meaningless once exported, so we recompose it from the source columns
+    instead.
+    """
+    if value is None:
+        return ""
+    if isinstance(value, float) and value.is_integer():
+        return str(int(value))
+    text = str(value)
+    if text.startswith("="):
+        return ""
+    return text
+
+
+def _compose_address(row: dict) -> str:
+    """Build a single geocodable address string from whatever location columns exist.
+
+    Prefers an explicit full-address column; otherwise assembles street + house
+    number. When a separate city/postal-code column is present (as in the UPS
+    courier sheet, where `Cím` is just "Pala utca 6"), the locality is appended
+    so Nominatim has enough context to resolve the right city — but only if the
+    address does not already name that city, to avoid duplicating it.
+
+    Args:
+        row: Raw row keyed by canonical field names.
+
+    Returns:
+        A trimmed address string, or "" if no location data is present.
+    """
+    address = _stringify(row.get("address")).strip()
+    if not address:
+        street = _stringify(row.get("street")).strip()
+        house = _stringify(row.get("house_number")).strip()
+        address = " ".join(p for p in (street, house) if p).strip()
+
+    city = (row.get("city") or "").strip()
+    zipcode = _stringify(row.get("zip")).strip()
+    locality = " ".join(p for p in (zipcode, city) if p).strip()
+
+    if address and locality and (not city or city.lower() not in address.lower()):
+        address = f"{address}, {locality}"
+
+    return address
+
 
 def _normalize_row(row: dict) -> dict:
-    """Normalize a parsed row into {name, address, lat, lng, product_code, recipient_name, recipient_phone}."""
-    name = (row.get("name") or "").strip()
-    address = (row.get("address") or "").strip()
+    """Normalize a parsed row into {name, address, lat, lng, product_code, recipient_name, recipient_phone}.
+
+    Accepts both the app's native columns and aliased real-world columns (see
+    `HEADER_ALIASES`). The stop `name` falls back to the free-text note column
+    and finally to the composed address, so operational files that carry no
+    explicit "name" column (only an address + a `megj` remark) still yield
+    usefully labelled, geocodable stops.
+    """
+    address = _compose_address(row)
+    note = _stringify(row.get("note")).strip()
+    name = _stringify(row.get("name")).strip() or note or address
     product_code = (row.get("product_code") or "").strip()
     recipient_name = (row.get("recipient_name") or "").strip()
     recipient_phone = (row.get("recipient_phone") or row.get("phone") or "").strip()
@@ -56,8 +154,14 @@ def _validate_rows(rows: list[dict]) -> list[dict]:
 
 
 def _normalize_header(header: str) -> str:
-    """Normalize a header name to lowercase, stripped."""
-    return header.strip().lower().replace(" ", "_")
+    """Normalize a header to a canonical field name.
+
+    Lowercases, trims, collapses spaces to underscores, then maps known
+    real-world aliases (see `HEADER_ALIASES`) onto canonical field names.
+    Unknown headers pass through unchanged so native columns keep working.
+    """
+    norm = header.strip().lower().replace(" ", "_")
+    return HEADER_ALIASES.get(norm, norm)
 
 
 def parse_csv(file) -> list[dict]:
@@ -90,8 +194,12 @@ def parse_xlsx(file) -> list[dict]:
 
     Reads the workbook in read-only mode for memory efficiency on large files.
     Only the *first* (active) sheet is parsed; additional sheets are ignored.
+    `data_only=True` returns the last value Excel cached for formula cells (real
+    sheets often build the address column with a formula like `=C3&" "&D3`); if
+    no cache exists, `_compose_address` rebuilds the address from the street and
+    house-number columns instead.
     """
-    wb = load_workbook(file, read_only=True)
+    wb = load_workbook(file, read_only=True, data_only=True)
     ws = wb.active
     rows_iter = ws.iter_rows(values_only=True)
 
