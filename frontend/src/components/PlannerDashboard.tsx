@@ -23,6 +23,12 @@ interface PlannerDashboardProps {
 // Drop zone identifier: biker id or "unassigned"
 type DropTarget = number | "unassigned";
 
+/** Pull the backend's `{error}` message off a failed upload, with a fallback. */
+function uploadErrorMessage(err: unknown): string {
+  const data = (err as { response?: { data?: { error?: string } } })?.response?.data;
+  return data?.error || "Upload failed. Check the file format and try again.";
+}
+
 export function PlannerDashboard({ onViewSession, onOpenLiveMap, onOpenMapView }: PlannerDashboardProps) {
   const [bikers, setBikers] = useState<User[]>([]);
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
@@ -31,6 +37,7 @@ export function PlannerDashboard({ onViewSession, onOpenLiveMap, onOpenMapView }
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploadTarget, setUploadTarget] = useState<number | undefined>();
+  const [uploading, setUploading] = useState(false);
   const [dragOverTarget, setDragOverTarget] = useState<DropTarget | null>(null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [finishedDetailId, setFinishedDetailId] = useState<string | null>(null);
@@ -96,12 +103,20 @@ export function PlannerDashboard({ onViewSession, onOpenLiveMap, onOpenMapView }
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file) return;
-    try {
-      await apiUpload(file, uploadTarget);
-      refresh();
-    } catch { /* ignore */ }
+    // Reset the input up front so re-selecting the same file still fires change.
     if (fileInputRef.current) fileInputRef.current.value = "";
+    if (!file) return;
+    setUploading(true);
+    try {
+      const session = await apiUpload(file, uploadTarget);
+      refresh();
+      const count = session.stops?.length ?? 0;
+      showToast(`Uploaded "${session.name}" — ${count} stop${count === 1 ? "" : "s"}`);
+    } catch (err) {
+      showToast(uploadErrorMessage(err), "error");
+    } finally {
+      setUploading(false);
+    }
   };
 
   const handleCluster = async (sessionId: string) => {
@@ -225,12 +240,16 @@ export function PlannerDashboard({ onViewSession, onOpenLiveMap, onOpenMapView }
               Live Map ({activeCount})
             </button>
           )}
-          <button className="btn btn-primary btn-sm" onClick={() => handleUploadClick()}>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="12" y1="5" x2="12" y2="19" />
-              <line x1="5" y1="12" x2="19" y2="12" />
-            </svg>
-            Upload Route
+          <button className="btn btn-primary btn-sm" onClick={() => handleUploadClick()} disabled={uploading}>
+            {uploading ? (
+              <span className="upload-spinner" style={{ width: 12, height: 12, borderWidth: 2 }} />
+            ) : (
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="12" y1="5" x2="12" y2="19" />
+                <line x1="5" y1="12" x2="19" y2="12" />
+              </svg>
+            )}
+            {uploading ? "Uploading..." : "Upload Route"}
           </button>
         </div>
       </div>
@@ -345,6 +364,7 @@ export function PlannerDashboard({ onViewSession, onOpenLiveMap, onOpenMapView }
                 <button
                   className="btn btn-ghost dashboard-upload-btn"
                   onClick={() => handleUploadClick(biker.id)}
+                  disabled={uploading}
                 >
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <line x1="12" y1="5" x2="12" y2="19" />
