@@ -36,11 +36,10 @@ test.describe("UPS courier file — full journey", () => {
     const geocodeBtn = page.getByRole("button", { name: "Geocode Addresses" });
     await expect(geocodeBtn).toBeVisible();
     await geocodeBtn.click();
-    // Progress span reads e.g. "Geocoding 2/14..." (distinct from the disabled
-    // "Geocoding..." button label).
-    await expect(page.getByText(/Geocoding \d+\/\d+/)).toBeVisible();
-
-    // Once geocoded (mock mode is instant), optimization becomes available.
+    // Don't assert on the transient "Geocoding X/Y" progress text: in mock mode
+    // geocoding finishes almost instantly, so that span can come and go before
+    // it's observed (flaky in CI). Wait for the meaningful end state instead —
+    // the Optimize button only appears once every stop is geocoded.
     const optimizeBtn = page.getByRole("button", { name: "Optimize Route" });
     await expect(optimizeBtn).toBeVisible({ timeout: 30_000 });
     await optimizeBtn.click();
