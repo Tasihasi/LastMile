@@ -25,6 +25,9 @@ frontend/dist/
 *.swp
 *.swo
 
+# Real company example files (local only — never push to remote)
+example_files/
+
 # Claude execution plans (local only)
 claude_exec_plan/
 
