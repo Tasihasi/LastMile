@@ -168,6 +168,27 @@ jobs:
       DEBUG: "False"
       SECRET_KEY: "ci-smoke-placeholder-not-a-real-secret"
       ORS_API_KEY: "test-key"
+      # DEBUG=False makes DATABASE_URL mandatory (no silent SQLite fallback).
+      # Point at the local Postgres service below; it's plain (no SSL), and
+      # settings only force sslmode=require for remote hosts, so this connects.
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/test
+
+    # Production parity uses PostgreSQL (build.sh runs migrate; gunicorn needs a
+    # reachable DB), mirroring the backend job's service container.
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
 
     steps:
       - uses: actions/checkout@v4

@@ -101,7 +101,7 @@ WSGI_APPLICATION = "config.wsgi.application"
 #   - DEBUG=False (production, e.g. Render): DATABASE_URL is MANDATORY and points
 #     at Neon Postgres. We fail loud if it's missing so a misconfigured deploy
 #     can't silently fall back to an ephemeral SQLite file.
-# conn_max_age reuses connections; ssl_require is on in production (Neon needs SSL).
+# conn_max_age reuses connections across requests (survives Neon idle suspend).
 if not DEBUG and not os.getenv("DATABASE_URL"):
     raise RuntimeError(
         "DATABASE_URL must be set when DEBUG=False (production requires PostgreSQL)."
@@ -112,9 +112,21 @@ DATABASES = {
         default=f"sqlite:///{BASE_DIR / 'db.sqlite3'}",
         conn_max_age=600,
         conn_health_checks=True,
-        ssl_require=not DEBUG,
     )
 }
+
+# Require SSL for a *remote* Postgres (e.g. Neon in production), but not for a
+# local Postgres (CI service container / local dev), which doesn't speak SSL.
+# Tying SSL to host instead of DEBUG lets the production-parity smoke test run
+# DEBUG=False against a throwaway local Postgres without sslmode=require failing.
+_default_db = DATABASES["default"]
+_db_host = _default_db.get("HOST", "")
+if _default_db.get("ENGINE", "").endswith("postgresql") and _db_host not in (
+    "",
+    "localhost",
+    "127.0.0.1",
+):
+    _default_db.setdefault("OPTIONS", {})["sslmode"] = "require"
 
 
 # Password validation
