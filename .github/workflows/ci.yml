@@ -134,6 +134,55 @@ jobs:
           path: frontend/playwright-report/
           retention-days: 7
 
+  # Production-parity smoke test: runs the REAL deploy path (build.sh →
+  # collectstatic → gunicorn + WhiteNoise serving the built SPA) which nothing
+  # else in CI exercises. E2E uses the Vite dev server + dev Django, so this is
+  # the only job that catches build.sh / collectstatic / catch-all-SPA-route /
+  # same-origin-/api regressions before they hit Render.
+  smoke:
+    name: Production Smoke
+    runs-on: ubuntu-latest
+    needs: [backend, frontend]
+    env:
+      DEBUG: "False"
+      SECRET_KEY: "ci-smoke-placeholder-not-a-real-secret"
+      ORS_API_KEY: "test-key"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Run production build (build.sh)
+        run: ./build.sh
+
+      - name: Boot gunicorn and smoke-check
+        working-directory: backend
+        run: |
+          gunicorn config.wsgi --bind 127.0.0.1:8000 --daemon --log-file -
+          # Wait for the socket to accept connections (max ~15s).
+          for i in $(seq 1 15); do
+            curl -fsS -o /dev/null http://127.0.0.1:8000/ && break
+            sleep 1
+          done
+          # SPA index served by WhiteNoise + catch-all URL (proves the frontend
+          # build is wired into Django, not just built into dist/).
+          curl -fsS http://127.0.0.1:8000/ | grep -q "LastMile"
+          # API is mounted under gunicorn and auth is wired: unauthenticated
+          # /api/auth/me/ must return 401, not 5xx / connection refused.
+          code=$(curl -sS -o /dev/null -w "%{http_code}" http://127.0.0.1:8000/api/auth/me/)
+          test "$code" = "401"
+
   # Static security scans (no live app needed). All non-blocking for now:
   # review the baseline, then remove `continue-on-error` to make them gate.
   # DAST (ZAP/Wapiti) is intentionally NOT here — it needs real auth first
