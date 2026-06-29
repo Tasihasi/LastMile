@@ -6,6 +6,7 @@ import { ToastContext, useToastProvider } from "./hooks/useToast";
 import { ToastContainer } from "./components/ToastContainer";
 import { SharedRouteView } from "./components/SharedRouteView";
 import { DocsPage } from "./components/DocsPage";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 import "./index.css";
 import App from "./App.tsx";
 
@@ -41,6 +42,8 @@ function Root() {
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <Root />
+    <ErrorBoundary>
+      <Root />
+    </ErrorBoundary>
   </StrictMode>
 );

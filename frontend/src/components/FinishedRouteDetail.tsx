@@ -1,20 +1,12 @@
 import { useEffect, useState } from "react";
 import type { DeliveryStop, SessionResponse } from "../types";
 import { getSession } from "../api/client";
-import { formatDuration, formatDistance } from "../utils/format";
+import { formatDuration, formatDistance, formatDateTime } from "../utils/format";
 
 interface FinishedRouteDetailProps {
   sessionId: string;
   onClose: () => void;
   onViewMap: (sessionId: string) => void;
-}
-
-function formatDateTime(iso: string | null): string {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  return d.toLocaleDateString([], {
-    month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false,
-  });
 }
 
 function elapsedTime(start: string | null, end: string | null): string | null {

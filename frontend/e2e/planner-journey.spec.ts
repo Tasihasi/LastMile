@@ -125,6 +125,61 @@ test.describe("Planner Journey", () => {
       });
     });
 
+    test("Upload Route button works: opens chooser, uploads, shows toast + new card", async ({
+      page,
+    }) => {
+      await expect(page.locator(".dashboard-layout")).toBeVisible({
+        timeout: 15_000,
+      });
+      const cardsBefore = await page.locator(".session-card").count();
+
+      // Drive the real button (not the hidden input directly): clicking it must
+      // open the native file chooser. If the button were wired wrong, no
+      // filechooser event fires and this Promise.all times out.
+      const [chooser] = await Promise.all([
+        page.waitForEvent("filechooser", { timeout: 5_000 }),
+        page.getByRole("button", { name: "Upload Route" }).click(),
+      ]);
+      await chooser.setFiles(
+        path.resolve(__dirname, "test-data", "ups_terkep_teszt.xlsx")
+      );
+
+      // A success toast confirms the upload and reports the stop count...
+      await expect(page.locator(".toast--success")).toBeVisible({
+        timeout: 15_000,
+      });
+      await expect(page.locator(".toast--success")).toContainText("14 stops");
+
+      // ...and the uploaded route actually lands on the dashboard as a new card.
+      await expect(page.locator(".session-card")).toHaveCount(cardsBefore + 1, {
+        timeout: 15_000,
+      });
+    });
+
+    test("rejected upload surfaces an error toast (no silent failure)", async ({
+      page,
+    }) => {
+      await expect(page.locator(".dashboard-layout")).toBeVisible({
+        timeout: 15_000,
+      });
+
+      const [chooser] = await Promise.all([
+        page.waitForEvent("filechooser", { timeout: 5_000 }),
+        page.getByRole("button", { name: "Upload Route" }).click(),
+      ]);
+      // Unsupported format -> backend 400; the button must report it, not
+      // swallow it silently.
+      await chooser.setFiles({
+        name: "bad.json",
+        mimeType: "application/json",
+        buffer: Buffer.from('{"not":"a stop list"}'),
+      });
+
+      await expect(page.locator(".toast--error")).toBeVisible({
+        timeout: 15_000,
+      });
+    });
+
     test("view session from dashboard", async ({ page }) => {
       await expect(page.locator(".dashboard-layout")).toBeVisible({
         timeout: 15_000,

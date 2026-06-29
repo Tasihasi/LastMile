@@ -4,6 +4,7 @@ import {
   uploadFile as apiUpload,
   getSession as apiGetSession,
   geocodeStops as apiGeocode,
+  geocodeStatus as apiGeocodeStatus,
   optimizeRoute as apiOptimize,
   startRoute as apiStartRoute,
   updateStopStatus as apiUpdateStopStatus,
@@ -78,12 +79,41 @@ export function useDeliveryPlanner() {
     setGeocodeProgress("");
 
     try {
-      await apiGeocode(sessionId, ({ stop, progress }) => {
-        setGeocodeProgress(`Geocoding ${progress.current}/${progress.total}...`);
-        setStops((prev) =>
-          prev.map((s) => (s.id === stop.id ? stop : s))
-        );
-      });
+      // The geocode endpoint streams one stop per second (Nominatim's rate
+      // limit), so a large route can outlive a single request — a server worker
+      // timeout or proxy will cut the stream mid-flight (this is why uploads of
+      // a few hundred stops appeared to "stop" partway). Each stop is persisted
+      // as it resolves, so we drive the stream in resumable passes: re-open it
+      // until the server reports zero pending stops. This handles an arbitrary
+      // number of points regardless of any single-connection limit.
+      const { pending: grandTotal } = await apiGeocodeStatus(sessionId);
+      let done = 0;
+
+      // Safety cap: bounded by the work to do, so a permanently-stuck stop
+      // can never spin forever.
+      for (let pass = 0; pass <= grandTotal; pass++) {
+        let advanced = 0;
+        try {
+          await apiGeocode(sessionId, ({ stop }) => {
+            advanced++;
+            done++;
+            setGeocodeProgress(`Geocoding ${done}/${grandTotal}...`);
+            setStops((prev) => prev.map((s) => (s.id === stop.id ? stop : s)));
+          });
+        } catch {
+          // Stream dropped (e.g. server worker timeout). Progress so far is
+          // already saved server-side; fall through to check what remains.
+        }
+
+        const status = await apiGeocodeStatus(sessionId);
+        if (status.pending === 0) break;
+        // No stop resolved this pass yet work remains -> genuine failure
+        // (e.g. server/network down), not just a cut-off stream. Stop trying.
+        if (advanced === 0) {
+          throw new Error("Geocoding stalled with stops still pending.");
+        }
+      }
+
       setNeedsGeocoding(false);
       setGeocodeProgress("");
     } catch {

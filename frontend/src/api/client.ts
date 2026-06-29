@@ -146,6 +146,23 @@ export async function geocodeStops(
   }
 }
 
+export interface GeocodeStatus {
+  total: number;
+  pending: number;
+  success: number;
+  failed: number;
+}
+
+/** Count how many of a session's stops are still pending/done geocoding. */
+export async function geocodeStatus(
+  sessionId: string
+): Promise<GeocodeStatus> {
+  const { data } = await api.get<GeocodeStatus>(
+    `/sessions/${sessionId}/geocode-status/`
+  );
+  return data;
+}
+
 // ============================================
 // Sharing
 // ============================================

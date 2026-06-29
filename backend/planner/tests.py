@@ -1,5 +1,6 @@
 import io
 import os
+import unittest
 from unittest.mock import MagicMock, patch
 
 from django.contrib.auth.models import User
@@ -421,6 +422,112 @@ class ParserXLSXTest(TestCase):
         self.assertEqual(rows[0]["recipient_phone"], "+36301234567")
 
 
+class ParserUPSSignatureTest(TestCase):
+    """Parsing the real-world Hungarian UPS courier route sheet signature.
+
+    Mirrors `example_files/UPS térkép teszt.xlsx` (gitignored company data):
+    Hungarian headers, a per-courier summary count row, a numeric postal code,
+    an address column built from an uncalculated Excel formula, and notes that
+    stand in for the stop name.
+    """
+
+    # Headers exactly as in the source file (note the trailing space on "u ").
+    HEADERS = ["város", "irszám", "u ", "hsz", "megj", "Cím", "kör", "bálint", "marci"]
+
+    def _make_ups_xlsx(self):
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Munkalap1"
+        ws.append(self.HEADERS)
+        # Summary count row: only the courier columns carry values.
+        ws.append([None] * 7 + [4, 3])
+        # Data rows. Cím is an uncalculated formula -> parser must recompose it
+        # from the street (col C) + house number (col D) columns.
+        ws["A3"], ws["B3"], ws["C3"], ws["D3"] = "Budapest", 1011, "Pala utca", "6"
+        ws["E3"], ws["F3"], ws["G3"] = None, '=C3&" "&D3', "bálint"
+        ws["A4"], ws["B4"], ws["C4"], ws["D4"] = "Budapest", 1011, "Markovits Iván utca", "4"
+        ws["E4"], ws["F4"], ws["G4"] = "coyote cafe laverde", '=C4&" "&D4', "bálint"
+        ws["A5"], ws["B5"], ws["C5"], ws["D5"] = "Budapest", 1117, "Gábor Dénes utca", "4"
+        ws["E5"], ws["F5"], ws["G5"] = "icenter", '=C5&" "&D5', "fel"
+        buf = io.BytesIO()
+        wb.save(buf)
+        buf.seek(0)
+        return buf
+
+    def test_summary_row_dropped_real_stops_kept(self):
+        rows = parse_xlsx(self._make_ups_xlsx())
+        # The summary count row carries no address, so it is filtered out.
+        self.assertEqual(len(rows), 3)
+
+    def test_address_recomposed_from_components_with_locality(self):
+        rows = parse_xlsx(self._make_ups_xlsx())
+        # Uncalculated "=C3&..." formula must not leak; address is rebuilt from
+        # street + house number, with the numeric postal code and city appended
+        # (no trailing ".0" on the postal code).
+        addr = rows[0]["address"]
+        self.assertEqual(addr, "Pala utca 6, 1011 Budapest")
+        self.assertFalse(any(r["address"].startswith("=") for r in rows))
+        self.assertFalse(any(".0" in r["address"] for r in rows))
+
+    def test_note_becomes_name_else_address(self):
+        rows = parse_xlsx(self._make_ups_xlsx())
+        by_addr = {r["address"]: r for r in rows}
+        # Row with a megj note uses it as the stop name...
+        self.assertEqual(
+            by_addr["Markovits Iván utca 4, 1011 Budapest"]["name"],
+            "coyote cafe laverde",
+        )
+        # ...and a row with no note falls back to the address as the name.
+        self.assertEqual(
+            by_addr["Pala utca 6, 1011 Budapest"]["name"],
+            "Pala utca 6, 1011 Budapest",
+        )
+
+    def test_committed_fixture_matches_signature(self):
+        """The committed e2e fixture parses cleanly to its 14 courier stops."""
+        fixture = os.path.join(
+            os.path.dirname(__file__),
+            "..",
+            "..",
+            "frontend",
+            "e2e",
+            "test-data",
+            "ups_terkep_teszt.xlsx",
+        )
+        with open(fixture, "rb") as f:
+            rows = parse_xlsx(f)
+        self.assertEqual(len(rows), 14)
+        self.assertTrue(all(r["name"] and r["address"] for r in rows))
+        self.assertTrue(all("Budapest" in r["address"] for r in rows))
+
+    @unittest.skipUnless(
+        os.path.exists(
+            os.path.join(
+                os.path.dirname(__file__),
+                "..",
+                "..",
+                "example_files",
+                "UPS térkép teszt.xlsx",
+            )
+        ),
+        "real company file is gitignored / not present",
+    )
+    def test_real_company_file_when_present(self):
+        """When the real (gitignored) file is present locally, it parses cleanly."""
+        path = os.path.join(
+            os.path.dirname(__file__),
+            "..",
+            "..",
+            "example_files",
+            "UPS térkép teszt.xlsx",
+        )
+        with open(path, "rb") as f:
+            rows = parse_xlsx(f)
+        self.assertGreater(len(rows), 100)
+        self.assertTrue(all(r["name"] and r["address"] for r in rows))
+        self.assertFalse(any(r["address"].startswith("=") for r in rows))
+
+
 # ============================================
 # Priority 6: Geocoder & Optimizer Mocked Tests
 # ============================================
@@ -545,7 +652,7 @@ class OptimizeAPIKeyTest(TestCase):
         self.user, self.client = _make_biker("ors_biker")
         self.session = _make_optimized_session(self.user, num_stops=3)
 
-    @patch("planner.views.django_settings")
+    @patch("planner.views.sessions.django_settings")
     def test_optimize_missing_api_key(self, mock_settings):
         mock_settings.ORS_API_KEY = ""
         mock_settings.E2E_MOCK = False
@@ -555,7 +662,7 @@ class OptimizeAPIKeyTest(TestCase):
         self.assertIn("ORS_API_KEY", error)
         self.assertIn("not configured", error)
 
-    @patch("planner.views.optimize_route")
+    @patch("planner.views.sessions.optimize_route")
     def test_optimize_invalid_api_key(self, mock_optimize):
         mock_response = MagicMock()
         mock_response.status_code = 403
@@ -568,7 +675,7 @@ class OptimizeAPIKeyTest(TestCase):
         self.assertIn("ORS_API_KEY", error)
         self.assertIn("invalid or expired", error)
 
-    @patch("planner.views.optimize_route")
+    @patch("planner.views.sessions.optimize_route")
     def test_optimize_unauthorized_api_key(self, mock_optimize):
         mock_response = MagicMock()
         mock_response.status_code = 401
@@ -693,8 +800,20 @@ class ParserCSVTest(TestCase):
         self.assertIsNone(rows[1]["lat"])
         self.assertEqual(rows[1]["address"], "Main St")
 
-    def test_parse_csv_skips_rows_without_name(self):
+    def test_parse_csv_name_falls_back_to_address(self):
+        # A row with an address but no explicit name is a valid deliverable
+        # stop (real operational sheets often omit a name column): the name
+        # falls back to the address rather than dropping the row.
         content = b"name,address\n,Main St\nShop B,Vaci ut\n"
+        rows = parse_csv(io.BytesIO(content))
+        self.assertEqual(len(rows), 2)
+        self.assertEqual(rows[0]["name"], "Main St")
+        self.assertEqual(rows[1]["name"], "Shop B")
+
+    def test_parse_csv_skips_rows_without_name_or_address(self):
+        # With neither name, address, nor coordinates there is nothing to
+        # deliver to, so the row is dropped.
+        content = b"name,address\n,\nShop B,Vaci ut\n"
         rows = parse_csv(io.BytesIO(content))
         self.assertEqual(len(rows), 1)
         self.assertEqual(rows[0]["name"], "Shop B")
@@ -973,8 +1092,8 @@ class FullLifecycleIntegrationTest(TestCase):
         target_stop_ids = [s["id"] for s in target_stops]
 
         with (
-            patch("planner.views.optimize_route") as mock_opt,
-            patch("planner.views.get_route_details") as mock_details,
+            patch("planner.views.sessions.optimize_route") as mock_opt,
+            patch("planner.views.sessions.get_route_details") as mock_details,
         ):
             # Mock optimize to return stops in original order
             mock_opt.return_value = target_stop_ids
