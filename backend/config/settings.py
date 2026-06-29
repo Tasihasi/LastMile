@@ -103,9 +103,7 @@ WSGI_APPLICATION = "config.wsgi.application"
 #     can't silently fall back to an ephemeral SQLite file.
 # conn_max_age reuses connections across requests (survives Neon idle suspend).
 if not DEBUG and not os.getenv("DATABASE_URL"):
-    raise RuntimeError(
-        "DATABASE_URL must be set when DEBUG=False (production requires PostgreSQL)."
-    )
+    raise RuntimeError("DATABASE_URL must be set when DEBUG=False (production requires PostgreSQL).")
 
 DATABASES = {
     "default": dj_database_url.config(
