@@ -15,6 +15,9 @@ backend/staticfiles/
 # Environment
 .env
 
+# Real company operational files — local only, MUST never be committed
+example_files/
+
 # Node
 node_modules/
 frontend/dist/
