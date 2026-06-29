@@ -57,12 +57,15 @@ function App() {
   const [shareCopied, setShareCopied] = useState(false);
   const [confirmReoptimize, setConfirmReoptimize] = useState(false);
 
-  // Sync view mode when user role changes (e.g. after login via UI)
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+  // Sync view mode when user role changes (e.g. after login via UI).
+  // Intentionally keyed on isPlanner only: it redirects a planner away from
+  // an empty map view, and must not re-fire as stops/viewMode/showUpload change.
   useEffect(() => {
     if (isPlanner && viewMode === "map" && stops.length === 0 && !showUpload) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setViewMode("dashboard");
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isPlanner]);
 
   // Close the header overflow menu when clicking outside of it.
