@@ -98,6 +98,9 @@ export function ClusterReviewView({
   }, [parentSessionId]);
 
   useEffect(() => {
+    // Initial cluster-data fetch on mount; loadData sets loading/error state
+    // before awaiting, which is the intended behaviour for a data load.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     loadData();
   }, [loadData]);
 
