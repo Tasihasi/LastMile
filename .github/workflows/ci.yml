@@ -37,6 +37,18 @@ jobs:
         env:
           ORS_API_KEY: test-key
 
+      # Production-settings audit (SECRET_KEY, DEBUG, cookies, HSTS, SSL redirect).
+      # Runs with prod-like env (DEBUG=False) so it actually evaluates the
+      # deployment config. Non-blocking for now — review the baseline warnings,
+      # then drop `continue-on-error` to make it gate merges.
+      - name: Production settings audit (check --deploy, non-blocking)
+        run: python manage.py check --deploy --fail-level ERROR
+        continue-on-error: true
+        env:
+          DEBUG: "False"
+          SECRET_KEY: "ci-deploy-check-placeholder-not-a-real-secret"
+          ORS_API_KEY: test-key
+
       - name: Run migrations
         run: python manage.py migrate
         env:
@@ -121,3 +133,35 @@ jobs:
           name: playwright-report
           path: frontend/playwright-report/
           retention-days: 7
+
+  # Static security scans (no live app needed). All non-blocking for now:
+  # review the baseline, then remove `continue-on-error` to make them gate.
+  # DAST (ZAP/Wapiti) is intentionally NOT here — it needs real auth first
+  # and belongs in a separate scheduled workflow (see PRODUCTION_READINESS.md).
+  security:
+    name: Security Scans
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # gitleaks scans the full git history, not just the tip.
+          fetch-depth: 0
+
+      - name: Secret scan (gitleaks)
+        uses: gitleaks/gitleaks-action@v2
+        continue-on-error: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Trivy fs scan covers Python (requirements.txt) + npm (package-lock.json)
+      # CVEs and config issues in one pass — replaces separate pip-audit/npm audit.
+      # TODO: pin to a release tag once the baseline is reviewed.
+      - name: Dependency & config CVE scan (Trivy)
+        uses: aquasecurity/trivy-action@master
+        continue-on-error: true
+        with:
+          scan-type: fs
+          scan-ref: .
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "0"
