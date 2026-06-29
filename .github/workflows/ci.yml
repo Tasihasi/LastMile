@@ -14,6 +14,25 @@ jobs:
       run:
         working-directory: backend
 
+    # Run migrations + tests against real PostgreSQL (matches prod) instead of
+    # SQLite, so engine-specific behavior (case-sensitive lookups, strict types)
+    # is exercised in CI. The migrate/test steps set DATABASE_URL to point here;
+    # other steps (lint, static checks) don't touch the DB.
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     steps:
       - uses: actions/checkout@v7
 
@@ -53,11 +72,13 @@ jobs:
         run: python manage.py migrate
         env:
           ORS_API_KEY: test-key
+          DATABASE_URL: postgres://postgres:postgres@localhost:5432/test
 
       - name: Run tests
         run: python manage.py test --verbosity 2
         env:
           ORS_API_KEY: test-key
+          DATABASE_URL: postgres://postgres:postgres@localhost:5432/test
 
   frontend:
     name: Frontend

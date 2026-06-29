@@ -117,6 +117,7 @@ Upload 300 stops  -->  Geocode all  -->  Split into Routes  -->  Review clusters
 | Layer | Technology | Why |
 |-------|-----------|-----|
 | Backend | Django + Django REST Framework | Robust API framework with ORM |
+| Database | PostgreSQL (Neon) prod & CI · SQLite local dev | Persistent managed Postgres in production; zero-setup SQLite locally |
 | Frontend | React + Vite + TypeScript | Fast dev server, type safety |
 | Map | Leaflet + React-Leaflet + OpenStreetMap | Free, no API key needed |
 | Geocoding | Nominatim | Free, 1 req/sec rate limit |
@@ -173,6 +174,12 @@ ORS_API_KEY=your_openrouteservice_api_key_here
 ```
 
 > Get a free API key at [openrouteservice.org/dev/#/signup](https://openrouteservice.org/dev/#/signup)
+
+Local development uses **SQLite** automatically — no database setup required. To run against PostgreSQL locally (matching production), add a `DATABASE_URL` to `.env` (e.g. a free [Neon](https://neon.tech) branch):
+
+```
+DATABASE_URL=postgresql://USER:PASSWORD@HOST/DBNAME?sslmode=require
+```
 
 Run migrations and start the server:
 
@@ -316,7 +323,7 @@ Deployed on [Render](https://render.com) (free tier). Django serves both the API
 
 - **Build command**: `./build.sh`
 - **Start command**: `cd backend && gunicorn config.wsgi`
-- **Environment variables**: `DEBUG=False`, `SECRET_KEY`, `ORS_API_KEY`, `NODE_VERSION=20`
+- **Environment variables**: `DEBUG=False`, `SECRET_KEY`, `ORS_API_KEY`, `NODE_VERSION=20`, `DATABASE_URL` (PostgreSQL connection string — required when `DEBUG=False`; use the pooled Neon string)
 - Auto-deploys from `main` branch
 
 ## Technical Notes
@@ -324,7 +331,7 @@ Deployed on [Render](https://render.com) (free tier). Django serves both the API
 - **Authentication**: Token-based auth via DRF TokenAuthentication. Login creates a user with a role (biker/planner). Token stored in localStorage, sent via `Authorization: Token <token>` header.
 - **Coordinate order**: Leaflet uses `[lat, lng]`, ORS APIs use `[lng, lat]`. Conversion happens in `optimizer.py`.
 - **Geocoding streaming**: Uses Django's `StreamingHttpResponse` with NDJSON. The frontend reads with Fetch API `ReadableStream`, updating the UI as each address resolves.
-- **SQLite**: Development and demo database. Would need PostgreSQL for production scale.
+- **Database**: Selected by the `DATABASE_URL` env var (via `dj-database-url`). Local dev falls back to **SQLite** when `DATABASE_URL` is unset, so local work never touches production data. Production (Render) and CI use **PostgreSQL** managed by [Neon](https://neon.tech); when `DEBUG=False`, `DATABASE_URL` is mandatory — startup fails loudly if missing, preventing a silent fallback to ephemeral SQLite. Connections use `conn_max_age=600` + health checks to survive Neon's idle auto-suspend.
 - **Rate limiting**: Nominatim allows 1 request per second, enforced in `geocoder.py`.
 - **Clustering**: KMeans on geographic coordinates. Auto-splits clusters exceeding 48 stops (ORS VROOM limit). Parent session status becomes "split"; child sessions are independent routes.
 
