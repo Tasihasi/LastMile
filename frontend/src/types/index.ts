@@ -91,6 +91,27 @@ export interface ClusterSubRoute {
   id: string;
   name: string;
   stop_count: number;
+  owner_id: number | null;
+  owner_name: string | null;
+}
+
+/** Per-biker plan for the split planner UI. */
+export interface SplitAssignment {
+  biker_id: number | null;
+  target_stops: number;
+  district: number | null;
+}
+
+export interface DistrictInfo {
+  district: number;
+  label: string;
+  stop_count: number;
+}
+
+export interface DistrictsResponse {
+  districts: DistrictInfo[];
+  unknown_district_stops: number;
+  total_stops: number;
 }
 
 export interface ClusterSummary {

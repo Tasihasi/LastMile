@@ -1,11 +1,91 @@
+from django.contrib.auth.models import User
 from django.db import transaction
 from rest_framework import status
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 
-from ..clustering import calculate_n_clusters, cluster_stops
+from ..clustering import calculate_n_clusters, cluster_stops, cluster_stops_weighted, split_counts
+from ..districts import district_label, extract_district
 from ..models import DeliverySession, DeliveryStop
 from .helpers import require_planner
+
+
+def _parse_assignments(raw):
+    """Validate the split-planner assignments payload.
+
+    Each item: {"biker_id": int|null, "target_stops": int, "district": int|null}.
+    Returns (parsed_list, error_message).
+    """
+    if not isinstance(raw, list) or not raw:
+        return None, "assignments must be a non-empty list."
+
+    parsed = []
+    for item in raw:
+        if not isinstance(item, dict):
+            return None, "Each assignment must be an object."
+
+        owner = None
+        biker_id = item.get("biker_id")
+        if biker_id is not None:
+            try:
+                owner = User.objects.get(id=int(biker_id), profile__role="biker")
+            except (User.DoesNotExist, ValueError, TypeError):
+                return None, f"Biker {biker_id} not found."
+
+        try:
+            target = max(int(item.get("target_stops") or 0), 0)
+        except (ValueError, TypeError):
+            return None, "target_stops must be a number."
+
+        district = item.get("district")
+        if district is not None:
+            try:
+                district = int(district)
+            except (ValueError, TypeError):
+                return None, "district must be a number."
+            if not 1 <= district <= 23:
+                return None, "district must be between 1 and 23."
+
+        parsed.append({"owner": owner, "target_stops": target, "district": district})
+    return parsed, None
+
+
+def _build_assignment_clusters(geocoded_stops, assignments):
+    """Distribute stops across assignments honouring district locks and targets.
+
+    Returns (clusters, leftover) where clusters is index-aligned with
+    assignments and leftover holds stops no assignment can take (only when
+    every assignment is district-locked).
+    """
+    pool = list(geocoded_stops)
+    clusters = [[] for _ in assignments]
+
+    # District-locked bikers take every stop in their district.
+    district_groups = {}
+    for i, a in enumerate(assignments):
+        if a["district"] is not None:
+            district_groups.setdefault(a["district"], []).append(i)
+
+    for district, idxs in district_groups.items():
+        district_stops = [s for s in pool if extract_district(s.raw_address) == district]
+        pool = [s for s in pool if extract_district(s.raw_address) != district]
+        if len(idxs) == 1:
+            clusters[idxs[0]] = district_stops
+        else:
+            weights = [assignments[i]["target_stops"] for i in idxs]
+            counts = split_counts(len(district_stops), weights)
+            for i, group in zip(idxs, cluster_stops_weighted(district_stops, counts), strict=True):
+                clusters[i] = group
+
+    free_idxs = [i for i, a in enumerate(assignments) if a["district"] is None]
+    if not free_idxs:
+        return clusters, pool
+
+    weights = [assignments[i]["target_stops"] for i in free_idxs]
+    counts = split_counts(len(pool), weights)
+    for i, group in zip(free_idxs, cluster_stops_weighted(pool, counts), strict=True):
+        clusters[i] = group
+    return clusters, []
 
 
 @api_view(["POST"])
@@ -44,19 +124,31 @@ def cluster_session(request, session_id):
             status=status.HTTP_400_BAD_REQUEST,
         )
 
-    max_stops = int(request.data.get("max_stops_per_route", 48))
-    n_routes_param = request.data.get("n_routes")
-    n_routes = (
-        int(n_routes_param) if n_routes_param is not None else calculate_n_clusters(len(geocoded_stops), max_stops)
-    )
-
-    clusters = cluster_stops(geocoded_stops, n_routes, max_stops_per_cluster=max_stops)
+    assignments_raw = request.data.get("assignments")
+    if assignments_raw is not None:
+        assignments, err = _parse_assignments(assignments_raw)
+        if err:
+            return Response({"error": err}, status=status.HTTP_400_BAD_REQUEST)
+        clusters, leftover = _build_assignment_clusters(geocoded_stops, assignments)
+        owners = [a["owner"] for a in assignments]
+        if leftover:
+            # Every assignment was district-locked; keep the rest reviewable.
+            clusters.append(leftover)
+            owners.append(None)
+    else:
+        max_stops = int(request.data.get("max_stops_per_route", 48))
+        n_routes_param = request.data.get("n_routes")
+        n_routes = (
+            int(n_routes_param) if n_routes_param is not None else calculate_n_clusters(len(geocoded_stops), max_stops)
+        )
+        clusters = cluster_stops(geocoded_stops, n_routes, max_stops_per_cluster=max_stops)
+        owners = [None] * len(clusters)
 
     sub_routes = []
-    for i, cluster in enumerate(clusters, start=1):
+    for i, (cluster, owner) in enumerate(zip(clusters, owners, strict=True), start=1):
         child = DeliverySession.objects.create(
             parent=session,
-            owner=None,
+            owner=owner,
             name=f"{(session.name or 'Route')[:248]}_{i}",
             original_file=session.original_file,
         )
@@ -84,6 +176,8 @@ def cluster_session(request, session_id):
                 "id": str(child.id),
                 "name": child.name,
                 "stop_count": len(cluster),
+                "owner_id": owner.id if owner else None,
+                "owner_name": owner.username if owner else None,
             }
         )
 
@@ -208,3 +302,74 @@ def uncluster_session(request, session_id):
     session.save(update_fields=["status"])
 
     return Response({"parent_id": str(session.id), "deleted_routes": deleted_count})
+
+
+@api_view(["GET"])
+def session_districts(request, session_id):
+    """City districts present in a session's geocoded stops, for the split planner."""
+    if not require_planner(request):
+        return Response({"error": "Planner access required."}, status=status.HTTP_403_FORBIDDEN)
+
+    try:
+        session = DeliverySession.objects.get(id=session_id)
+    except DeliverySession.DoesNotExist:
+        return Response({"error": "Session not found."}, status=status.HTTP_404_NOT_FOUND)
+
+    stops = session.stops.filter(geocode_status__in=["success", "skipped"], lat__isnull=False, lng__isnull=False).only(
+        "raw_address"
+    )
+
+    counts = {}
+    unknown = 0
+    total = 0
+    for stop in stops:
+        total += 1
+        district = extract_district(stop.raw_address)
+        if district is None:
+            unknown += 1
+        else:
+            counts[district] = counts.get(district, 0) + 1
+
+    return Response(
+        {
+            "districts": [
+                {"district": d, "label": district_label(d), "stop_count": c} for d, c in sorted(counts.items())
+            ],
+            "unknown_district_stops": unknown,
+            "total_stops": total,
+        }
+    )
+
+
+@api_view(["DELETE"])
+@transaction.atomic
+def remove_stop(request, session_id, stop_id):
+    """Remove a single stop from a route during split review."""
+    if not require_planner(request):
+        return Response({"error": "Planner access required."}, status=status.HTTP_403_FORBIDDEN)
+
+    try:
+        session = DeliverySession.objects.select_for_update().get(id=session_id)
+    except DeliverySession.DoesNotExist:
+        return Response({"error": "Session not found."}, status=status.HTTP_404_NOT_FOUND)
+
+    if session.status == DeliverySession.Status.IN_PROGRESS:
+        return Response(
+            {"error": "Cannot remove stops from an in-progress route."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    try:
+        stop = session.stops.get(id=stop_id)
+    except DeliveryStop.DoesNotExist:
+        return Response({"error": "Stop not found in this session."}, status=status.HTTP_404_NOT_FOUND)
+
+    stop.delete()
+
+    session.route_geometry = None
+    session.route_segments = None
+    session.total_duration = None
+    session.total_distance = None
+    session.save(update_fields=["route_geometry", "route_segments", "total_duration", "total_distance"])
+
+    return Response({"removed_stop_id": stop_id, "remaining_stops": session.stops.count()})

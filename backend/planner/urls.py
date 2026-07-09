@@ -22,6 +22,12 @@ urlpatterns = [
     path("sessions/<uuid:session_id>/assign/", views.assign_session, name="assign-session"),
     path("sessions/<uuid:session_id>/rename/", views.rename_session, name="rename-session"),
     path("sessions/<uuid:session_id>/cluster/", views.cluster_session, name="cluster-session"),
+    path("sessions/<uuid:session_id>/districts/", views.session_districts, name="session-districts"),
+    path(
+        "sessions/<uuid:session_id>/stops/<int:stop_id>/remove/",
+        views.remove_stop,
+        name="remove-stop",
+    ),
     path("sessions/<uuid:session_id>/move-stop/", views.move_stop, name="move-stop"),
     path("sessions/<uuid:session_id>/uncluster/", views.uncluster_session, name="uncluster-session"),
     path("sessions/<uuid:session_id>/start/", views.start_route, name="start-route"),

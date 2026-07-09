@@ -67,6 +67,89 @@ def _enforce_max_size(clusters, max_size):
     return result
 
 
+def cluster_stops_weighted(stops, target_counts, random_state=42):
+    """
+    Cluster stops into len(target_counts) geographic groups whose sizes match
+    target_counts (which must sum to len(stops)).
+
+    Runs KMeans to find geographic centers, pairs the largest natural cluster
+    with the largest target, then greedily assigns each stop to the nearest
+    center that still has capacity — keeping groups geographically compact
+    while honouring the requested sizes.
+
+    Returns a list of stop-lists, index-aligned with target_counts.
+    """
+    if not stops:
+        return [[] for _ in target_counts]
+    if len(target_counts) == 1:
+        return [list(stops)]
+
+    coords = np.array([[s.lat, s.lng] for s in stops])
+    n_groups = len(target_counts)
+    kmeans = KMeans(n_clusters=min(n_groups, len(stops)), random_state=random_state, n_init=10)
+    labels = kmeans.fit_predict(coords)
+    centers = kmeans.cluster_centers_
+
+    # Pair natural cluster sizes with targets: biggest cluster -> biggest target,
+    # so a half-day biker gets a smaller (but still compact) area.
+    natural_sizes = np.bincount(labels, minlength=len(centers))
+    clusters_by_size = np.argsort(-natural_sizes)  # center indices, largest first
+    targets_by_size = sorted(range(n_groups), key=lambda i: -target_counts[i])
+
+    # target index -> center coords (extra targets beyond available centers
+    # reuse the last center; only happens when stops < groups)
+    target_centers = np.zeros((n_groups, 2))
+    for rank, target_idx in enumerate(targets_by_size):
+        center_idx = clusters_by_size[min(rank, len(centers) - 1)]
+        target_centers[target_idx] = centers[center_idx]
+
+    # Greedy assignment: closest (stop, center) pairs first, respecting capacity.
+    distances = np.linalg.norm(coords[:, None, :] - target_centers[None, :, :], axis=2)
+    order = np.dstack(np.unravel_index(np.argsort(distances, axis=None), distances.shape))[0]
+
+    remaining = list(target_counts)
+    assigned = [None] * len(stops)
+    n_assigned = 0
+    for stop_idx, target_idx in order:
+        if assigned[stop_idx] is not None or remaining[target_idx] <= 0:
+            continue
+        assigned[stop_idx] = target_idx
+        remaining[target_idx] -= 1
+        n_assigned += 1
+        if n_assigned == len(stops):
+            break
+
+    groups = [[] for _ in target_counts]
+    for stop, target_idx in zip(stops, assigned, strict=True):
+        if target_idx is None:
+            # capacities under-count due to rounding; put extras in the largest group
+            target_idx = targets_by_size[0]
+        groups[target_idx].append(stop)
+    return groups
+
+
+def split_counts(total, weights):
+    """
+    Split `total` into integer counts proportional to `weights` (largest
+    remainder method). Every entry with a positive weight gets at least the
+    rounded share; counts always sum to total.
+    """
+    if total <= 0 or not weights:
+        return [0] * len(weights)
+    weight_sum = sum(weights)
+    if weight_sum <= 0:
+        weights = [1] * len(weights)
+        weight_sum = len(weights)
+
+    raw = [total * w / weight_sum for w in weights]
+    counts = [int(r) for r in raw]
+    shortfall = total - sum(counts)
+    remainders = sorted(range(len(raw)), key=lambda i: raw[i] - counts[i], reverse=True)
+    for i in remainders[:shortfall]:
+        counts[i] += 1
+    return counts
+
+
 def calculate_n_clusters(stop_count, max_stops_per_cluster=48):
     """Calculate the minimum number of clusters needed."""
     if stop_count <= 0:

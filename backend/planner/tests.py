@@ -1228,3 +1228,193 @@ class FullLifecycleIntegrationTest(TestCase):
         resp = self.planner_client.post("/api/upload/", {"file": f, "owner_id": self.biker.id}, format="multipart")
         self.assertEqual(resp.status_code, 201)
         self.assertEqual(resp.json()["owner_name"], "integ_biker")
+
+
+# ============================================
+# Split Planner: districts, weighted assignments, remove stop
+# ============================================
+
+
+class DistrictExtractionTest(TestCase):
+    def test_budapest_zip_maps_to_district(self):
+        from .districts import extract_district
+
+        self.assertEqual(extract_district("1052 Budapest, Vaci utca 10"), 5)
+        self.assertEqual(extract_district("Budapest, Bartok Bela ut 1, 1114"), 11)
+        self.assertEqual(extract_district("1231 Budapest, Xy utca 2"), 23)
+
+    def test_non_budapest_or_missing_zip(self):
+        from .districts import extract_district
+
+        self.assertIsNone(extract_district("6000 Kecskemet, Fo ter 1"))
+        self.assertIsNone(extract_district("Vaci utca 10"))
+        self.assertIsNone(extract_district(""))
+        self.assertIsNone(extract_district(None))
+        # 1240+ would be district 24 -> invalid
+        self.assertIsNone(extract_district("1245 Budapest"))
+
+    def test_district_label(self):
+        from .districts import district_label
+
+        self.assertEqual(district_label(5), "V. kerület")
+        self.assertEqual(district_label(13), "XIII. kerület")
+        self.assertIsNone(district_label(None))
+        self.assertIsNone(district_label(0))
+
+
+class SplitCountsTest(TestCase):
+    def test_proportional_split_sums_to_total(self):
+        from .clustering import split_counts
+
+        self.assertEqual(sum(split_counts(50, [30, 15])), 50)
+        self.assertEqual(split_counts(10, [1, 1]), [5, 5])
+        self.assertEqual(split_counts(0, [1, 2]), [0, 0])
+
+    def test_zero_weights_fall_back_to_even(self):
+        from .clustering import split_counts
+
+        self.assertEqual(sum(split_counts(9, [0, 0, 0])), 9)
+
+
+class SplitPlannerAPITest(TestCase):
+    """Cluster endpoint with per-biker assignments, districts endpoint, remove stop."""
+
+    def setUp(self):
+        self.planner, self.planner_client = _make_planner("split_planner")
+        self.biker_a, _ = _make_biker("split_biker_a")
+        self.biker_b, _ = _make_biker("split_biker_b")
+
+        self.session = DeliverySession.objects.create(name="Big Route", status="not_started")
+        stops = []
+        # 20 stops in district 5 (around one point), 10 stops in district 13 (around another)
+        for i in range(20):
+            stops.append(
+                DeliveryStop(
+                    session=self.session,
+                    name=f"D5 Stop {i}",
+                    raw_address=f"1052 Budapest, Utca {i}",
+                    lat=47.49 + i * 0.001,
+                    lng=19.05 + i * 0.001,
+                    geocode_status="success",
+                )
+            )
+        for i in range(10):
+            stops.append(
+                DeliveryStop(
+                    session=self.session,
+                    name=f"D13 Stop {i}",
+                    raw_address=f"1136 Budapest, Utca {i}",
+                    lat=47.53 + i * 0.001,
+                    lng=19.07 + i * 0.001,
+                    geocode_status="success",
+                )
+            )
+        DeliveryStop.objects.bulk_create(stops)
+
+    def test_districts_endpoint(self):
+        resp = self.planner_client.get(f"/api/sessions/{self.session.id}/districts/")
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertEqual(data["total_stops"], 30)
+        self.assertEqual(data["unknown_district_stops"], 0)
+        districts = {d["district"]: d["stop_count"] for d in data["districts"]}
+        self.assertEqual(districts, {5: 20, 13: 10})
+
+    def test_cluster_with_weighted_assignments(self):
+        resp = self.planner_client.post(
+            f"/api/sessions/{self.session.id}/cluster/",
+            {
+                "assignments": [
+                    {"biker_id": self.biker_a.id, "target_stops": 20, "district": None},
+                    {"biker_id": self.biker_b.id, "target_stops": 10, "district": None},
+                ]
+            },
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 201)
+        sub_routes = resp.json()["sub_routes"]
+        self.assertEqual(len(sub_routes), 2)
+        by_owner = {sr["owner_name"]: sr["stop_count"] for sr in sub_routes}
+        self.assertEqual(by_owner["split_biker_a"], 20)
+        self.assertEqual(by_owner["split_biker_b"], 10)
+
+    def test_cluster_with_district_lock(self):
+        resp = self.planner_client.post(
+            f"/api/sessions/{self.session.id}/cluster/",
+            {
+                "assignments": [
+                    {"biker_id": self.biker_a.id, "target_stops": 20, "district": None},
+                    {"biker_id": self.biker_b.id, "target_stops": 10, "district": 13},
+                ]
+            },
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 201)
+        sub_routes = resp.json()["sub_routes"]
+        by_owner = {sr["owner_name"]: sr["stop_count"] for sr in sub_routes}
+        # Biker B gets exactly the 10 district-13 stops; biker A gets everything else.
+        self.assertEqual(by_owner["split_biker_b"], 10)
+        self.assertEqual(by_owner["split_biker_a"], 20)
+
+        b_route_id = next(sr["id"] for sr in sub_routes if sr["owner_name"] == "split_biker_b")
+        b_route = DeliverySession.objects.get(id=b_route_id)
+        self.assertTrue(all(s.raw_address.startswith("1136") for s in b_route.stops.all()))
+
+    def test_cluster_all_district_locked_creates_leftover_route(self):
+        resp = self.planner_client.post(
+            f"/api/sessions/{self.session.id}/cluster/",
+            {
+                "assignments": [
+                    {"biker_id": self.biker_b.id, "target_stops": 10, "district": 13},
+                ]
+            },
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 201)
+        sub_routes = resp.json()["sub_routes"]
+        self.assertEqual(len(sub_routes), 2)
+        unassigned = [sr for sr in sub_routes if sr["owner_name"] is None]
+        self.assertEqual(len(unassigned), 1)
+        self.assertEqual(unassigned[0]["stop_count"], 20)
+
+    def test_cluster_with_unknown_biker_rejected(self):
+        resp = self.planner_client.post(
+            f"/api/sessions/{self.session.id}/cluster/",
+            {"assignments": [{"biker_id": 99999, "target_stops": 30, "district": None}]},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn("not found", resp.json()["error"].lower())
+
+    def test_cluster_with_invalid_district_rejected(self):
+        resp = self.planner_client.post(
+            f"/api/sessions/{self.session.id}/cluster/",
+            {"assignments": [{"biker_id": self.biker_a.id, "target_stops": 30, "district": 42}]},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 400)
+
+    def test_remove_stop(self):
+        stop = self.session.stops.first()
+        self.session.total_duration = 1000
+        self.session.save(update_fields=["total_duration"])
+
+        resp = self.planner_client.delete(f"/api/sessions/{self.session.id}/stops/{stop.id}/remove/")
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.json()["remaining_stops"], 29)
+        self.assertFalse(self.session.stops.filter(id=stop.id).exists())
+        self.session.refresh_from_db()
+        self.assertIsNone(self.session.total_duration)
+
+    def test_remove_stop_blocked_in_progress(self):
+        self.session.status = "in_progress"
+        self.session.save(update_fields=["status"])
+        stop = self.session.stops.first()
+        resp = self.planner_client.delete(f"/api/sessions/{self.session.id}/stops/{stop.id}/remove/")
+        self.assertEqual(resp.status_code, 400)
+
+    def test_remove_stop_requires_planner(self):
+        _, biker_client = _make_biker("split_biker_c")
+        stop = self.session.stops.first()
+        resp = biker_client.delete(f"/api/sessions/{self.session.id}/stops/{stop.id}/remove/")
+        self.assertEqual(resp.status_code, 403)

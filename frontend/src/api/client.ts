@@ -3,6 +3,8 @@ import type {
   AuthResponse,
   ClusterResponse,
   DeliveryStopStatus,
+  DistrictsResponse,
+  SplitAssignment,
   MoveStopResponse,
   OptimizeResponse,
   SessionResponse,
@@ -255,16 +257,41 @@ export async function renameSession(
 
 export async function clusterSession(
   sessionId: string,
-  nRoutes?: number,
-  maxStopsPerRoute?: number
+  options?: {
+    nRoutes?: number;
+    maxStopsPerRoute?: number;
+    assignments?: SplitAssignment[];
+  }
 ): Promise<ClusterResponse> {
-  const body: Record<string, number> = {};
-  if (nRoutes != null) body.n_routes = nRoutes;
-  if (maxStopsPerRoute != null) body.max_stops_per_route = maxStopsPerRoute;
+  const body: Record<string, unknown> = {};
+  if (options?.nRoutes != null) body.n_routes = options.nRoutes;
+  if (options?.maxStopsPerRoute != null)
+    body.max_stops_per_route = options.maxStopsPerRoute;
+  if (options?.assignments) body.assignments = options.assignments;
   const { data } = await api.post<ClusterResponse>(
     `/sessions/${sessionId}/cluster/`,
     body
   );
+  return data;
+}
+
+export async function getSessionDistricts(
+  sessionId: string
+): Promise<DistrictsResponse> {
+  const { data } = await api.get<DistrictsResponse>(
+    `/sessions/${sessionId}/districts/`
+  );
+  return data;
+}
+
+export async function removeStop(
+  sessionId: string,
+  stopId: number
+): Promise<{ removed_stop_id: number; remaining_stops: number }> {
+  const { data } = await api.delete<{
+    removed_stop_id: number;
+    remaining_stops: number;
+  }>(`/sessions/${sessionId}/stops/${stopId}/remove/`);
   return data;
 }
 

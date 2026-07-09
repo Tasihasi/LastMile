@@ -1,5 +1,5 @@
 from .auth import login_view, logout_view, me_view
-from .clustering import cluster_session, move_stop, uncluster_session
+from .clustering import cluster_session, move_stop, remove_stop, session_districts, uncluster_session
 from .lifecycle import start_route, update_stop_status
 from .sessions import (
     active_sessions,
@@ -33,7 +33,9 @@ __all__ = [
     "me_view",
     "move_stop",
     "optimize",
+    "remove_stop",
     "rename_session",
+    "session_districts",
     "share_session",
     "start_route",
     "uncluster_session",

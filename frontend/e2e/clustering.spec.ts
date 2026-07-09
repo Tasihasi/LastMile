@@ -82,8 +82,23 @@ test.describe("Clustering", () => {
     await expect(splitBtn).toBeVisible({ timeout: 20_000 });
     await splitBtn.click();
 
-    // After split: stay on the dashboard (no cluster review navigation)
-    // and sub-route cards show up in the Unassigned column.
+    // The split planner modal opens. Deselect every biker so the split is
+    // automatic and the sub-routes land in the Unassigned column.
+    const modal = page.locator(".split-planner");
+    await expect(modal).toBeVisible({ timeout: 10_000 });
+    const checkedBikers = modal.locator(".split-planner-biker input:checked");
+    while ((await checkedBikers.count()) > 0) {
+      await checkedBikers.first().uncheck();
+    }
+    await modal.getByRole("button", { name: "Split automatically" }).click();
+
+    // After splitting, the app opens the split review screen for fine-tuning.
+    await expect(page.locator(".cluster-review")).toBeVisible({
+      timeout: 30_000,
+    });
+
+    // Back to the dashboard: sub-route cards show up in the Unassigned column.
+    await page.locator(".cluster-review-header .btn-ghost", { hasText: "Dashboard" }).click();
     await expect(page.getByText("Route Management")).toBeVisible({
       timeout: 30_000,
     });

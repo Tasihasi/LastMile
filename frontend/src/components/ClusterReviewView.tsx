@@ -9,6 +9,7 @@ import {
   optimizeRoute,
   assignSession,
   moveStop,
+  removeStop,
   deleteSession,
   unclusterSession,
 } from "../api/client";
@@ -188,6 +189,23 @@ export function ClusterReviewView({
       setSelectedStop(null);
     } catch {
       setError("Failed to move stop.");
+    }
+  };
+
+  const handleRemoveStop = async (stopId: number, routeId: string) => {
+    const ok = window.confirm("Remove this stop from the plan entirely?");
+    if (!ok) return;
+    try {
+      await removeStop(routeId, stopId);
+      const updated = await getSession(routeId);
+      setSubRoutes((prev) =>
+        prev.map((r) => (r.session.id === routeId ? { ...r, session: updated } : r))
+      );
+      setSelectedStop(null);
+      showToast("Stop removed");
+    } catch {
+      setError("Failed to remove stop.");
+      showToast("Failed to remove stop", "error");
     }
   };
 
@@ -582,6 +600,19 @@ export function ClusterReviewView({
                               #{stop.sequence_order}
                             </span>
                           )}
+                          <button
+                            className="cluster-stop-remove"
+                            title="Remove stop from the plan"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleRemoveStop(stop.id, route.session.id);
+                            }}
+                          >
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <line x1="18" y1="6" x2="6" y2="18" />
+                              <line x1="6" y1="6" x2="18" y2="18" />
+                            </svg>
+                          </button>
                         </div>
                       ))}
                     </div>
@@ -619,6 +650,7 @@ export function ClusterReviewView({
                   )
                 }
                 onMoveStop={handleMoveStop}
+                onRemoveStop={handleRemoveStop}
                 routeColorMap={routeColorMap}
               />
             ))}
@@ -663,6 +695,7 @@ function ClusterMapLayer({
   allRoutes,
   onSelectStop,
   onMoveStop,
+  onRemoveStop,
   routeColorMap,
 }: {
   route: SubRouteData;
@@ -670,6 +703,7 @@ function ClusterMapLayer({
   allRoutes: SubRouteData[];
   onSelectStop: (stop: DeliveryStop) => void;
   onMoveStop: (stopId: number, fromRouteId: string, toRouteId: string) => void;
+  onRemoveStop: (stopId: number, routeId: string) => void;
   routeColorMap: Map<string, string>;
 }) {
   const map = useMap();
@@ -732,6 +766,7 @@ function ClusterMapLayer({
             routeColorMap={routeColorMap}
             onSelectStop={onSelectStop}
             onMoveStop={onMoveStop}
+            onRemoveStop={onRemoveStop}
           />
         );
       })}
@@ -748,6 +783,7 @@ function ClusterMarker({
   routeColorMap,
   onSelectStop,
   onMoveStop,
+  onRemoveStop,
 }: {
   stop: DeliveryStop;
   route: SubRouteData;
@@ -757,6 +793,7 @@ function ClusterMarker({
   routeColorMap: Map<string, string>;
   onSelectStop: (stop: DeliveryStop) => void;
   onMoveStop: (stopId: number, fromSessionId: string, toSessionId: string) => void;
+  onRemoveStop: (stopId: number, routeId: string) => void;
 }) {
   const markerRef = useRef<L.Marker>(null);
 
@@ -806,6 +843,12 @@ function ClusterMarker({
                 </button>
               ))}
           </div>
+          <button
+            className="cluster-stop-popup-remove"
+            onClick={() => onRemoveStop(stop.id, route.session.id)}
+          >
+            Remove stop
+          </button>
         </div>
       </Popup>
     </Marker>

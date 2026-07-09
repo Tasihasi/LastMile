@@ -14,6 +14,7 @@ import { LoginScreen } from "./components/LoginScreen";
 import { SessionList } from "./components/SessionList";
 import { PlannerDashboard } from "./components/PlannerDashboard";
 import { PlannerMapView } from "./components/PlannerMapView";
+import { ClusterReviewView } from "./components/ClusterReviewView";
 import { shareSession } from "./api/client";
 import { formatDuration, formatDistance, formatTime, calcArrivalTimes } from "./utils/format";
 import "./App.css";
@@ -52,7 +53,8 @@ function App() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [overflowMenuOpen, setOverflowMenuOpen] = useState(false);
   const [showUpload, setShowUpload] = useState(false);
-  const [viewMode, setViewMode] = useState<"dashboard" | "map" | "live-map">(isPlanner ? "dashboard" : "map");
+  const [viewMode, setViewMode] = useState<"dashboard" | "map" | "live-map" | "split-review">(isPlanner ? "dashboard" : "map");
+  const [splitReviewId, setSplitReviewId] = useState<string | null>(null);
   const [shareLoading, setShareLoading] = useState(false);
   const [shareCopied, setShareCopied] = useState(false);
   const [confirmReoptimize, setConfirmReoptimize] = useState(false);
@@ -315,6 +317,16 @@ function App() {
           onViewSession={handleSelectSession}
           onOpenLiveMap={() => setViewMode("live-map")}
           onOpenMapView={handleNewRoute}
+          onOpenSplitReview={(parentId) => {
+            setSplitReviewId(parentId);
+            setViewMode("split-review");
+          }}
+        />
+      ) : isPlanner && viewMode === "split-review" && splitReviewId ? (
+        <ClusterReviewView
+          parentSessionId={splitReviewId}
+          onBack={() => setViewMode("dashboard")}
+          onViewSession={handleSelectSession}
         />
       ) : isPlanner && viewMode === "live-map" ? (
         <PlannerMapView onBack={() => setViewMode("dashboard")} onViewSession={handleSelectSession} />

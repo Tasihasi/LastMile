@@ -179,13 +179,26 @@ Cluster a session's geocoded stops into N geographic sub-routes using KMeans. Pl
 
 If `n_routes` is omitted, it is auto-calculated from the stop count and `max_stops_per_route` (default 48, which is the ORS optimization limit).
 
+Alternatively pass `assignments` for a planned split (used by the Split Planner UI). Each entry names a biker, an approximate stop count, and optionally a Budapest district (1-23) the biker is locked to:
+
+```json
+{
+  "assignments": [
+    { "biker_id": 3, "target_stops": 40, "district": null },
+    { "biker_id": 4, "target_stops": 20, "district": 13 }
+  ]
+}
+```
+
+District-locked bikers receive every stop in their district (derived from the postal code in `raw_address`); the remaining stops are clustered geographically with sizes proportional to `target_stops`. Each sub-route is created with its biker as owner. If every assignment is district-locked, leftover stops go into an extra unassigned sub-route.
+
 **Response** `201`:
 ```json
 {
   "parent_id": "uuid",
   "sub_routes": [
-    { "id": "uuid", "name": "Monday Deliveries - Route 1", "stop_count": 43 },
-    { "id": "uuid", "name": "Monday Deliveries - Route 2", "stop_count": 41 }
+    { "id": "uuid", "name": "Monday Deliveries - Route 1", "stop_count": 43, "owner_id": 3, "owner_name": "anna" },
+    { "id": "uuid", "name": "Monday Deliveries - Route 2", "stop_count": 41, "owner_id": null, "owner_name": null }
   ],
   "cluster_summary": {
     "total_stops": 284,
@@ -199,6 +212,31 @@ If `n_routes` is omitted, it is auto-calculated from the stop count and `max_sto
 ```
 
 Stops that are not geocoded (`geocode_status` != `success` and no lat/lng) are skipped and remain on the parent session.
+
+### GET /sessions/{id}/districts/
+
+City districts present in a session's geocoded stops, for the Split Planner. Districts are parsed from Budapest postal codes (`1052` → district 5). Planner only.
+
+**Response** `200`:
+```json
+{
+  "districts": [
+    { "district": 5, "label": "V. kerület", "stop_count": 20 },
+    { "district": 13, "label": "XIII. kerület", "stop_count": 10 }
+  ],
+  "unknown_district_stops": 3,
+  "total_stops": 33
+}
+```
+
+### DELETE /sessions/{id}/stops/{stop_id}/remove/
+
+Remove a single stop from a route (used during split review). Clears the session's cached route geometry/duration so it can be re-optimized. Planner only; fails with `400` if the route is `in_progress`.
+
+**Response** `200`:
+```json
+{ "removed_stop_id": 123, "remaining_stops": 42 }
+```
 
 ### POST /sessions/{id}/move-stop/
 
