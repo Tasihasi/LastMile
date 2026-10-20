@@ -8,6 +8,14 @@ Format: features are grouped by category. Each version includes a release date a
 
 ## Unreleased
 
+### Route planning wizard
+- For planners the wizard's last step is now **Bikers**: only after the postal codes are settled does the split dialog (biker workloads, zip/district locks) appear, inline in the wizard, leading to the split review.
+- **New Route is now a step-by-step wizard**: Upload → Geocode → Fix addresses → Optimize. Every step can be revisited with the stepper or Back/Next buttons; changing the picked files re-imports them into the same route.
+- **Multiple files per route.** Pick or drop several `.csv`/`.xlsx`/`.txt`/`.xml` files; their stops are merged into one route (`POST /api/upload/` accepts repeated `file` fields, plus `session_id` to replace the stops of a not-yet-started route).
+- **The planner dashboard's "Upload Route" and "Upload for <biker>" buttons now open the wizard** instead of importing the file straight onto the dashboard, so every upload goes through geocoding, address fixes and postal-code selection first.
+- **Postal codes step.** After fixing addresses, the route's irányítószám groups are listed with stop counts. Tick/untick a code to include it in the day's plan (excluded stops are skipped by optimize and split), expand a code with the down arrow to see its addresses, untick single addresses, or move an address to another postal-code group (`POST /api/sessions/<id>/stops/bulk/`; new `postal_code` and `excluded` stop fields, backfilled by migration 0010).
+- **Fix addresses window.** Stops the geocoder could not find are listed separately; the user rewrites the address and re-checks it (`PATCH /api/sessions/<id>/stops/<stop_id>/address/`). Planners can also remove a stop.
+
 ### Clustering
 - **Sub-routes are now first-class cards.** Splitting a large upload no longer stashes the children behind a special "Split Routes" section or a separate cluster-review screen. Each sub-route lands directly in the **Unassigned** column as a normal route card named `{parent_name}_1`, `{parent_name}_2`, ..., and can be assigned, optimized, renamed, or deleted like any other route.
 - Split parent sessions are now hidden from the planner session list (bikers already ignored them) so the dashboard shows one entry per route rather than a redundant parent + children layout.

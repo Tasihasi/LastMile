@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import type {
+  AreaOption,
   DistrictsResponse,
   SessionSummary,
   SplitAssignment,
@@ -11,13 +12,21 @@ import { useToast } from "../hooks/useToast";
 interface BikerRow {
   selected: boolean;
   targetStops: number;
-  districtOnly: boolean;
-  district: number | null;
+  areaLocked: boolean;
+  /** Selected lock area -- an exact irányítószám when available, otherwise a whole district. */
+  area: AreaOption | null;
+}
+
+/** Unique key for an AreaOption, for use in <select> values and comparisons. */
+function areaKey(a: Pick<AreaOption, "type" | "district" | "zip">): string {
+  return a.type === "zip" ? `zip:${a.zip}` : `district:${a.district}`;
 }
 
 interface SplitPlannerModalProps {
-  session: SessionSummary;
+  session: Pick<SessionSummary, "id" | "name" | "stop_count">;
   bikers: User[];
+  /** Render as a wizard page instead of an overlay dialog. */
+  inline?: boolean;
   onClose: () => void;
   /** Called with the parent session id after a successful split. */
   onSplit: (parentId: string) => void;
@@ -34,6 +43,7 @@ function evenSplit(total: number, n: number): number[] {
 export function SplitPlannerModal({
   session,
   bikers,
+  inline = false,
   onClose,
   onSplit,
 }: SplitPlannerModalProps) {
@@ -42,7 +52,7 @@ export function SplitPlannerModal({
     return new Map(
       bikers.map((b, i) => [
         b.id,
-        { selected: true, targetStops: targets[i] ?? 0, districtOnly: false, district: null },
+        { selected: true, targetStops: targets[i] ?? 0, areaLocked: false, area: null },
       ])
     );
   });
@@ -93,15 +103,16 @@ export function SplitPlannerModal({
   };
 
   const selectedBikers = bikers.filter((b) => rows.get(b.id)?.selected);
-  const targetSum = selectedBikers.reduce(
-    (sum, b) => sum + (rows.get(b.id)?.targetStops ?? 0),
-    0
-  );
-  const oversized = selectedBikers.some(
-    (b) => (rows.get(b.id)?.targetStops ?? 0) > 48
-  );
+  // A locked biker gets every stop in their zip/district, not their typed
+  // target -- so the effective count is the lock's actual size when locked.
+  const effectiveStops = (b: User) => {
+    const row = rows.get(b.id)!;
+    return row.areaLocked && row.area ? row.area.stop_count : row.targetStops;
+  };
+  const targetSum = selectedBikers.reduce((sum, b) => sum + effectiveStops(b), 0);
+  const oversized = selectedBikers.some((b) => effectiveStops(b) > 48);
 
-  const districtOptions = useMemo(() => districts?.districts ?? [], [districts]);
+  const areaOptions = useMemo(() => districts?.areas ?? [], [districts]);
 
   const handleSplit = async () => {
     setError(null);
@@ -114,10 +125,12 @@ export function SplitPlannerModal({
       } else {
         const assignments: SplitAssignment[] = selectedBikers.map((b) => {
           const row = rows.get(b.id)!;
+          const area = row.areaLocked ? row.area : null;
           return {
             biker_id: b.id,
             target_stops: row.targetStops,
-            district: row.districtOnly ? row.district : null,
+            district: area?.type === "district" ? area.district : null,
+            zip: area?.type === "zip" ? area.zip : null,
           };
         });
         await clusterSession(session.id, { assignments });
@@ -135,13 +148,13 @@ export function SplitPlannerModal({
     !splitting &&
     selectedBikers.every((b) => {
       const row = rows.get(b.id)!;
-      return !row.districtOnly || row.district != null;
+      return !row.areaLocked || row.area != null;
     });
 
   return (
-    <div className="split-planner-overlay" onClick={onClose}>
+    <div className={inline ? "split-planner-inline" : "split-planner-overlay"} onClick={inline ? undefined : onClose}>
       <div
-        className="split-planner"
+        className={inline ? "split-planner split-planner--inline" : "split-planner"}
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-label="Split route planner"
@@ -209,36 +222,38 @@ export function SplitPlannerModal({
                       />
                     </label>
 
-                    {districtOptions.length > 0 && (
+                    {areaOptions.length > 0 && (
                       <div className="split-planner-district">
-                        <label className="split-planner-toggle" title="Only give this biker stops from a single city district">
+                        <label
+                          className="split-planner-toggle"
+                          title="Only give this biker stops from a single irányítószám (or district, when it has just one)"
+                        >
                           <input
                             type="checkbox"
-                            checked={row.districtOnly}
+                            checked={row.areaLocked}
                             onChange={(e) =>
                               updateRow(biker.id, {
-                                districtOnly: e.target.checked,
-                                district: e.target.checked
-                                  ? row.district ?? districtOptions[0].district
-                                  : row.district,
+                                areaLocked: e.target.checked,
+                                area: e.target.checked ? row.area ?? areaOptions[0] : row.area,
                               })
                             }
                           />
                           <span className="split-planner-toggle-track">
                             <span className="split-planner-toggle-thumb" />
                           </span>
-                          <span className="split-planner-toggle-label">Single district</span>
+                          <span className="split-planner-toggle-label">Single zip/district</span>
                         </label>
-                        {row.districtOnly && (
+                        {row.areaLocked && (
                           <select
-                            value={row.district ?? ""}
-                            onChange={(e) =>
-                              updateRow(biker.id, { district: parseInt(e.target.value) })
-                            }
+                            value={row.area ? areaKey(row.area) : ""}
+                            onChange={(e) => {
+                              const selected = areaOptions.find((a) => areaKey(a) === e.target.value);
+                              if (selected) updateRow(biker.id, { area: selected });
+                            }}
                           >
-                            {districtOptions.map((d) => (
-                              <option key={d.district} value={d.district}>
-                                {d.label} ({d.stop_count} stops)
+                            {areaOptions.map((a) => (
+                              <option key={areaKey(a)} value={areaKey(a)}>
+                                {a.label} ({a.stop_count} stops)
                               </option>
                             ))}
                           </select>
@@ -277,7 +292,7 @@ export function SplitPlannerModal({
           </div>
           <div className="split-planner-actions">
             <button className="btn btn-ghost" onClick={onClose} disabled={splitting}>
-              Cancel
+              {inline ? "Back" : "Cancel"}
             </button>
             <button className="btn btn-primary" onClick={handleSplit} disabled={!canSplit}>
               {splitting ? (

@@ -147,16 +147,6 @@ test.describe("Biker Journey", () => {
         timeout: 15_000,
       });
 
-      // Geocode button should be visible
-      const geocodeBtn = page.getByRole("button", {
-        name: "Geocode Addresses",
-      });
-      await expect(geocodeBtn).toBeVisible();
-      await geocodeBtn.click();
-
-      // Should show progress
-      await expect(page.getByText(/Geocoding/)).toBeVisible();
-
       // Wait for geocoding to complete (mock mode is fast)
       await expect(
         page.getByRole("button", { name: "Optimize Route" })
@@ -175,10 +165,8 @@ test.describe("Biker Journey", () => {
         timeout: 20_000,
       });
 
-      await page.getByRole("button", { name: "Geocode Addresses" }).click();
-
-      // Resumable geocoding must finish ALL of them: the Optimize button only
-      // appears once nothing is left pending.
+      // The wizard only reaches the optimize step once ALL stops are geocoded
+      // (resumable geocoding), so the Optimize button implies none are pending.
       await expect(
         page.getByRole("button", { name: "Optimize Route" })
       ).toBeVisible({ timeout: 60_000 });

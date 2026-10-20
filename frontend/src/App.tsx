@@ -5,7 +5,8 @@ import { useTheme } from "./hooks/useTheme";
 import { useSettings } from "./hooks/useSettings";
 import { useAuth } from "./hooks/useAuth";
 import { useToast } from "./hooks/useToast";
-import { FileUpload } from "./components/FileUpload";
+import { RouteWizard, WizardStepper } from "./components/RouteWizard";
+import { fileKey, type WizardStep } from "./utils/wizard";
 import { AddressList } from "./components/AddressList";
 import { DeliveryMap } from "./components/DeliveryMap";
 import { StopDetail } from "./components/StopDetail";
@@ -14,8 +15,11 @@ import { LoginScreen } from "./components/LoginScreen";
 import { SessionList } from "./components/SessionList";
 import { PlannerDashboard } from "./components/PlannerDashboard";
 import { PlannerMapView } from "./components/PlannerMapView";
+import { SplitPlannerModal } from "./components/SplitPlannerModal";
 import { ClusterReviewView } from "./components/ClusterReviewView";
-import { shareSession } from "./api/client";
+import { StopKanbanBoard } from "./components/StopKanbanBoard";
+import { shareSession, listBikers } from "./api/client";
+import type { User } from "./types";
 import { formatDuration, formatDistance, formatTime, calcArrivalTimes } from "./utils/format";
 import "./App.css";
 
@@ -24,7 +28,7 @@ function App() {
   const { user, logout, isPlanner } = useAuth();
   const {
     sessionId,
-    stops,
+    stops: allStops,
     needsGeocoding,
     isUploading,
     isGeocoding,
@@ -39,11 +43,17 @@ function App() {
     uploadFile,
     loadSession,
     geocode,
+    fixAddress,
+    updateStops,
+    discardStop,
     optimize,
     startDeliveryRoute,
     markStop,
     reset,
   } = useDeliveryPlanner();
+
+  // Stops left out of today's plan (step 4) are hidden from the route views.
+  const stops = useMemo(() => allStops.filter((s) => !s.excluded), [allStops]);
 
   const { theme, toggle: toggleTheme } = useTheme();
   const { settings, update: updateSettings } = useSettings();
@@ -52,9 +62,22 @@ function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [overflowMenuOpen, setOverflowMenuOpen] = useState(false);
-  const [showUpload, setShowUpload] = useState(false);
-  const [viewMode, setViewMode] = useState<"dashboard" | "map" | "live-map" | "split-review">(isPlanner ? "dashboard" : "map");
+  // Planning wizard: 1 upload, 2 geocode, 3 fix addresses, 4 postal codes, 5 optimize (the map
+  // layout). null means no wizard is active (browsing an existing session).
+  const [wizardStep, setWizardStep] = useState<WizardStep | null>(null);
+  const [wizardFiles, setWizardFiles] = useState<File[]>([]);
+  // Biker the route is uploaded for (planner uploads from a biker column).
+  const [wizardOwnerId, setWizardOwnerId] = useState<number | undefined>();
+  // Which file selection the current session was built from; a mismatch with
+  // the picked files means the session must be re-imported before moving on.
+  const [uploadedKey, setUploadedKey] = useState("");
+  const showUpload = wizardStep !== null;
+  // Steps 1-4 replace the map layout with a full-page wizard.
+  // Planners stay in the wizard for step 5 (biker distribution); bikers go on to the map.
+  const inWizardPages = wizardStep !== null && (wizardStep < 5 || isPlanner);
+  const [viewMode, setViewMode] = useState<"dashboard" | "map" | "live-map" | "split-review" | "stop-kanban">(isPlanner ? "dashboard" : "map");
   const [splitReviewId, setSplitReviewId] = useState<string | null>(null);
+  const [bikers, setBikers] = useState<User[]>([]);
   const [shareLoading, setShareLoading] = useState(false);
   const [shareCopied, setShareCopied] = useState(false);
   const [confirmReoptimize, setConfirmReoptimize] = useState(false);
@@ -68,6 +91,14 @@ function App() {
       setViewMode("dashboard");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isPlanner]);
+
+  // Planners pick bikers in the last wizard step.
+  useEffect(() => {
+    if (!isPlanner) return;
+    listBikers()
+      .then(setBikers)
+      .catch(() => setBikers([]));
   }, [isPlanner]);
 
   // Close the header overflow menu when clicking outside of it.
@@ -144,22 +175,51 @@ function App() {
     }
   };
 
+  const clearWizard = () => {
+    setWizardStep(null);
+    setWizardFiles([]);
+    setWizardOwnerId(undefined);
+    setUploadedKey("");
+  };
+
   const handleStartOver = () => {
     reset();
-    setShowUpload(false);
+    clearWizard();
     if (isPlanner) setViewMode("dashboard");
   };
 
-  const handleNewRoute = () => {
+  const handleNewRoute = (ownerId?: number) => {
     reset();
-    setShowUpload(true);
+    clearWizard();
+    setWizardOwnerId(ownerId);
+    setWizardStep(1);
     setViewMode("map");
   };
 
   const handleSelectSession = (id: string) => {
     loadSession(id);
-    setShowUpload(false);
+    clearWizard();
     setViewMode("map");
+  };
+
+  const filesKey = wizardFiles.map(fileKey).join("|");
+  const sessionMatchesFiles = sessionId != null && filesKey === uploadedKey;
+  let maxWizardStep: WizardStep = 1;
+  if (wizardFiles.length > 0) {
+    maxWizardStep = 2;
+    if (sessionMatchesFiles && !needsGeocoding) maxWizardStep = locatedCount >= 2 ? 5 : 4;
+  }
+
+  const goToWizardStep = async (target: WizardStep) => {
+    if (target > 1 && filesKey !== uploadedKey) {
+      // Files changed (or first upload): (re)import them, then geocode afresh.
+      const ok = await uploadFile(wizardFiles, wizardOwnerId, sessionId);
+      if (!ok) return;
+      setUploadedKey(filesKey);
+      setWizardStep(2);
+      return;
+    }
+    setWizardStep(target);
   };
 
   // Show session list when no active session and not uploading (biker only)
@@ -189,15 +249,15 @@ function App() {
               Dashboard
             </button>
           )}
-          {!isPlanner && showUpload && stops.length === 0 && (
-            <button className="btn btn-ghost" onClick={() => setShowUpload(false)}>
+          {!isPlanner && inWizardPages && (
+            <button className="btn btn-ghost" onClick={handleStartOver}>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <polyline points="15 18 9 12 15 6" />
               </svg>
               Back
             </button>
           )}
-          {viewMode === "map" && stops.length > 0 && (
+          {viewMode === "map" && stops.length > 0 && !inWizardPages && (
             <button
               className="sidebar-toggle"
               onClick={() => setSidebarOpen(!sidebarOpen)}
@@ -211,7 +271,7 @@ function App() {
               </svg>
             </button>
           )}
-          {!isPlanner && stops.length > 0 && sessionStatus === "not_started" && (
+          {!isPlanner && !inWizardPages && stops.length > 0 && sessionStatus === "not_started" && (
             <button
               className="btn btn-ghost btn-ghost--start-over"
               onClick={handleStartOver}
@@ -225,7 +285,7 @@ function App() {
               <span className="btn-ghost--start-over-label">Start Over</span>
             </button>
           )}
-          {stops.length > 0 && (
+          {stops.length > 0 && !inWizardPages && (
             <button
               className={`theme-toggle ${settingsOpen ? "theme-toggle--active" : ""}`}
               onClick={() => {
@@ -316,7 +376,8 @@ function App() {
         <PlannerDashboard
           onViewSession={handleSelectSession}
           onOpenLiveMap={() => setViewMode("live-map")}
-          onOpenMapView={handleNewRoute}
+          onOpenMapView={() => handleNewRoute()}
+          onStartUpload={handleNewRoute}
           onOpenSplitReview={(parentId) => {
             setSplitReviewId(parentId);
             setViewMode("split-review");
@@ -327,14 +388,71 @@ function App() {
           parentSessionId={splitReviewId}
           onBack={() => setViewMode("dashboard")}
           onViewSession={handleSelectSession}
+          onOpenKanban={() => setViewMode("stop-kanban")}
+        />
+      ) : isPlanner && viewMode === "stop-kanban" && splitReviewId ? (
+        <StopKanbanBoard
+          parentSessionId={splitReviewId}
+          onBack={() => setViewMode("split-review")}
         />
       ) : isPlanner && viewMode === "live-map" ? (
         <PlannerMapView onBack={() => setViewMode("dashboard")} onViewSession={handleSelectSession} />
+      ) : inWizardPages && wizardStep !== null ? (
+        <div className="wizard">
+          <WizardStepper
+            current={wizardStep}
+            maxStep={maxWizardStep}
+            disabled={isUploading || isGeocoding}
+            planner={isPlanner}
+            onStepChange={goToWizardStep}
+          />
+          {wizardStep === 5 && sessionId ? (
+            <SplitPlannerModal
+              inline
+              session={{ id: sessionId, name: wizardFiles[0]?.name ?? "Route", stop_count: stops.length }}
+              bikers={bikers}
+              onClose={() => setWizardStep(4)}
+              onSplit={(parentId) => {
+                clearWizard();
+                reset();
+                setSplitReviewId(parentId);
+                setViewMode("split-review");
+              }}
+            />
+          ) : (
+          <RouteWizard
+            step={wizardStep}
+            files={wizardFiles}
+            onFilesChange={setWizardFiles}
+            isUploading={isUploading}
+            stops={allStops}
+            needsGeocoding={needsGeocoding}
+            isGeocoding={isGeocoding}
+            geocodeProgress={geocodeProgress}
+            error={error}
+            canRemoveStops={isPlanner}
+            onGeocode={geocode}
+            onFixAddress={fixAddress}
+            onUpdateStops={updateStops}
+            onRemoveStop={discardStop}
+            onStepChange={goToWizardStep}
+            onCancel={handleStartOver}
+          />
+          )}
+        </div>
       ) : (
       <>
+      {wizardStep === 5 && (
+        <WizardStepper
+          current={5}
+          maxStep={5}
+          disabled={isOptimizing}
+          onStepChange={goToWizardStep}
+        />
+      )}
       <div className="app-layout">
         {sidebarOpen && <div className="sidebar-overlay" onClick={() => setSidebarOpen(false)} />}
-        <aside className={`sidebar ${sidebarOpen || showSessionList || (showUpload && stops.length === 0) ? "sidebar--open" : ""}`}>
+        <aside className={`sidebar ${sidebarOpen || showSessionList ? "sidebar--open" : ""}`}>
           <div className="sidebar-content">
             {error && (
               <div className="error-banner">
@@ -357,11 +475,9 @@ function App() {
             {showSessionList ? (
               <SessionList
                 onSelectSession={handleSelectSession}
-                onNewRoute={handleNewRoute}
+                onNewRoute={() => handleNewRoute()}
               />
-            ) : stops.length === 0 ? (
-              <FileUpload onUpload={uploadFile} isUploading={isUploading} />
-            ) : (
+            ) : stops.length === 0 ? null : (
               <>
                 {/* Stats */}
                 <div className="stats-bar">

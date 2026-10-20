@@ -35,6 +35,8 @@ class DeliveryStopSerializer(serializers.ModelSerializer):
             "lng",
             "geocode_status",
             "geocode_error",
+            "postal_code",
+            "excluded",
             "sequence_order",
             "delivery_status",
         ]

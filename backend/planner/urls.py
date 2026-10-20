@@ -28,6 +28,12 @@ urlpatterns = [
         views.remove_stop,
         name="remove-stop",
     ),
+    path(
+        "sessions/<uuid:session_id>/stops/<int:stop_id>/address/",
+        views.update_stop_address,
+        name="update-stop-address",
+    ),
+    path("sessions/<uuid:session_id>/stops/bulk/", views.bulk_update_stops, name="bulk-update-stops"),
     path("sessions/<uuid:session_id>/move-stop/", views.move_stop, name="move-stop"),
     path("sessions/<uuid:session_id>/uncluster/", views.uncluster_session, name="uncluster-session"),
     path("sessions/<uuid:session_id>/start/", views.start_route, name="start-route"),

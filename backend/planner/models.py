@@ -72,6 +72,11 @@ class DeliveryStop(models.Model):
         db_index=True,
     )
     geocode_error = models.CharField(max_length=500, blank=True, default="")
+    # Irányítószám. Derived from the address, but the planner may move a stop to
+    # another postal-code group, so it is stored rather than recomputed.
+    postal_code = models.CharField(max_length=10, blank=True, default="")
+    # Left out of today's route plan (kept in the session so it can be re-included).
+    excluded = models.BooleanField(default=False)
     sequence_order = models.IntegerField(null=True, blank=True, db_index=True)
     delivery_status = models.CharField(
         max_length=20,

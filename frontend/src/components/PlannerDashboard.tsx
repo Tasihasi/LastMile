@@ -9,7 +9,6 @@ import {
   deleteSession,
   assignSession,
   renameSession,
-  uploadFile as apiUpload,
 } from "../api/client";
 import { FinishedRouteDetail } from "./FinishedRouteDetail";
 import { SplitPlannerModal } from "./SplitPlannerModal";
@@ -19,26 +18,19 @@ interface PlannerDashboardProps {
   onOpenLiveMap?: () => void;
   onOpenMapView?: () => void;
   onOpenSplitReview: (parentSessionId: string) => void;
+  /** Start the upload wizard, optionally for a given biker. */
+  onStartUpload: (ownerId?: number) => void;
 }
 
 // Drop zone identifier: biker id or "unassigned"
 type DropTarget = number | "unassigned";
 
-/** Pull the backend's `{error}` message off a failed upload, with a fallback. */
-function uploadErrorMessage(err: unknown): string {
-  const data = (err as { response?: { data?: { error?: string } } })?.response?.data;
-  return data?.error || "Upload failed. Check the file format and try again.";
-}
-
-export function PlannerDashboard({ onViewSession, onOpenLiveMap, onOpenMapView, onOpenSplitReview }: PlannerDashboardProps) {
+export function PlannerDashboard({ onViewSession, onOpenLiveMap, onOpenMapView, onOpenSplitReview, onStartUpload }: PlannerDashboardProps) {
   const [bikers, setBikers] = useState<User[]>([]);
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [assignDropdown, setAssignDropdown] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const [uploadTarget, setUploadTarget] = useState<number | undefined>();
-  const [uploading, setUploading] = useState(false);
   const [dragOverTarget, setDragOverTarget] = useState<DropTarget | null>(null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [finishedDetailId, setFinishedDetailId] = useState<string | null>(null);
@@ -94,29 +86,6 @@ export function PlannerDashboard({ onViewSession, onOpenLiveMap, onOpenMapView, 
       showToast("Route renamed");
     } catch {
       showToast("Failed to rename route", "error");
-    }
-  };
-
-  const handleUploadClick = (bikerId?: number) => {
-    setUploadTarget(bikerId);
-    fileInputRef.current?.click();
-  };
-
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    // Reset the input up front so re-selecting the same file still fires change.
-    if (fileInputRef.current) fileInputRef.current.value = "";
-    if (!file) return;
-    setUploading(true);
-    try {
-      const session = await apiUpload(file, uploadTarget);
-      refresh();
-      const count = session.stops?.length ?? 0;
-      showToast(`Uploaded "${session.name}" — ${count} stop${count === 1 ? "" : "s"}`);
-    } catch (err) {
-      showToast(uploadErrorMessage(err), "error");
-    } finally {
-      setUploading(false);
     }
   };
 
@@ -192,14 +161,6 @@ export function PlannerDashboard({ onViewSession, onOpenLiveMap, onOpenMapView, 
 
   return (
     <div className="dashboard">
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept=".csv,.xlsx,.txt,.xml"
-        style={{ display: "none" }}
-        onChange={handleFileChange}
-      />
-
       <div className="dashboard-header">
         <h2>Route Management</h2>
         <div className="dashboard-header-actions">
@@ -229,16 +190,12 @@ export function PlannerDashboard({ onViewSession, onOpenLiveMap, onOpenMapView, 
               Live Map ({activeCount})
             </button>
           )}
-          <button className="btn btn-primary btn-sm" onClick={() => handleUploadClick()} disabled={uploading}>
-            {uploading ? (
-              <span className="upload-spinner" style={{ width: 12, height: 12, borderWidth: 2 }} />
-            ) : (
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <line x1="12" y1="5" x2="12" y2="19" />
-                <line x1="5" y1="12" x2="19" y2="12" />
-              </svg>
-            )}
-            {uploading ? "Uploading..." : "Upload Route"}
+          <button className="btn btn-primary btn-sm" onClick={() => onStartUpload()}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="12" y1="5" x2="12" y2="19" />
+              <line x1="5" y1="12" x2="19" y2="12" />
+            </svg>
+            Upload Route
           </button>
         </div>
       </div>
@@ -352,8 +309,7 @@ export function PlannerDashboard({ onViewSession, onOpenLiveMap, onOpenMapView, 
                 </div>
                 <button
                   className="btn btn-ghost dashboard-upload-btn"
-                  onClick={() => handleUploadClick(biker.id)}
-                  disabled={uploading}
+                  onClick={() => onStartUpload(biker.id)}
                 >
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <line x1="12" y1="5" x2="12" y2="19" />
@@ -561,6 +517,14 @@ function SessionCard({
           {session.status === "split" && (
             <span className="session-card-status session-card-status--split">Split</span>
           )}
+          {session.parent_id && (
+            <span
+              className="session-card-status session-card-status--split"
+              title="Part of a split route — use the board icon to adjust it"
+            >
+              Sub-route
+            </span>
+          )}
         </div>
         <div className="session-card-meta">
           <span className="session-card-stops">
@@ -611,7 +575,7 @@ function SessionCard({
         </button>
         {/* Split review — sub-routes only */}
         {onOpenSplitReview && (
-          <button className="session-card-btn" onClick={onOpenSplitReview} title="Open split review — move stops between sibling routes">
+          <button className="session-card-btn session-card-btn--accent" onClick={onOpenSplitReview} title="Open split review — adjust bikers, move or re-split stops">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <circle cx="12" cy="12" r="3" />
               <circle cx="5" cy="6" r="2" />

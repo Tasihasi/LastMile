@@ -1,11 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet";
 import L from "leaflet";
-import type { DeliveryStop, SessionResponse, User } from "../types";
+import type { DeliveryStop, SessionResponse } from "../types";
 import {
   getSession,
-  listSessions,
-  listBikers,
   optimizeRoute,
   assignSession,
   moveStop,
@@ -15,6 +13,7 @@ import {
 } from "../api/client";
 import { useSettings } from "../hooks/useSettings";
 import { useToast } from "../hooks/useToast";
+import { useSplitSubRoutes } from "../hooks/useSplitSubRoutes";
 import { formatDuration, formatDistance } from "../utils/format";
 import "leaflet/dist/leaflet.css";
 
@@ -40,18 +39,24 @@ interface ClusterReviewViewProps {
   parentSessionId: string;
   onBack: () => void;
   onViewSession: (sessionId: string) => void;
+  onOpenKanban?: () => void;
 }
 
 export function ClusterReviewView({
   parentSessionId,
   onBack,
   onViewSession,
+  onOpenKanban,
 }: ClusterReviewViewProps) {
-  const [subRoutes, setSubRoutes] = useState<SubRouteData[]>([]);
-  const [parentSession, setParentSession] = useState<SessionResponse | null>(null);
-  const [bikers, setBikers] = useState<User[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const {
+    subRoutes: rawSubRoutes,
+    setSubRoutes: setRawSubRoutes,
+    parentSession,
+    bikers,
+    loading,
+    error,
+    setError,
+  } = useSplitSubRoutes(parentSessionId);
   const [expandedRoute, setExpandedRoute] = useState<string | null>(null);
   const [optimizingId, setOptimizingId] = useState<string | null>(null);
   const [optimizeAllRunning, setOptimizeAllRunning] = useState(false);
@@ -65,45 +70,10 @@ export function ClusterReviewView({
   const { settings } = useSettings();
   const { showToast } = useToast();
 
-  const loadData = useCallback(async () => {
-    try {
-      setError(null);
-      const [parent, sessionList, bikerList] = await Promise.all([
-        getSession(parentSessionId),
-        listSessions(),
-        listBikers(),
-      ]);
-      setParentSession(parent);
-      setBikers(bikerList);
-
-      // Find child sessions of this parent
-      const childIds = sessionList
-        .filter((s) => s.parent_id === parentSessionId)
-        .map((s) => s.id);
-
-      const childSessions = await Promise.all(
-        childIds.map((id) => getSession(id))
-      );
-
-      setSubRoutes(
-        childSessions.map((session, i) => ({
-          session,
-          color: CLUSTER_COLORS[i % CLUSTER_COLORS.length],
-        }))
-      );
-    } catch {
-      setError("Failed to load cluster data.");
-    } finally {
-      setLoading(false);
-    }
-  }, [parentSessionId]);
-
-  useEffect(() => {
-    // Initial cluster-data fetch on mount; loadData sets loading/error state
-    // before awaiting, which is the intended behaviour for a data load.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    loadData();
-  }, [loadData]);
+  const subRoutes: SubRouteData[] = rawSubRoutes.map((session, i) => ({
+    session,
+    color: CLUSTER_COLORS[i % CLUSTER_COLORS.length],
+  }));
 
   const handleOptimize = async (routeId: string) => {
     setOptimizingId(routeId);
@@ -115,11 +85,7 @@ export function ClusterReviewView({
       await optimizeRoute(routeId, depot);
       // Reload the optimized session
       const updated = await getSession(routeId);
-      setSubRoutes((prev) =>
-        prev.map((r) =>
-          r.session.id === routeId ? { ...r, session: updated } : r
-        )
-      );
+      setRawSubRoutes((prev) => prev.map((s) => (s.id === routeId ? updated : s)));
     } catch {
       setError("Optimization failed. Check your ORS API key.");
     } finally {
@@ -139,11 +105,7 @@ export function ClusterReviewView({
       try {
         await optimizeRoute(route.session.id, depot);
         const updated = await getSession(route.session.id);
-        setSubRoutes((prev) =>
-          prev.map((r) =>
-            r.session.id === route.session.id ? { ...r, session: updated } : r
-          )
-        );
+        setRawSubRoutes((prev) => prev.map((s) => (s.id === route.session.id ? updated : s)));
       } catch {
         // continue with remaining routes
       }
@@ -156,11 +118,7 @@ export function ClusterReviewView({
     try {
       await assignSession(routeId, bikerId);
       const updated = await getSession(routeId);
-      setSubRoutes((prev) =>
-        prev.map((r) =>
-          r.session.id === routeId ? { ...r, session: updated } : r
-        )
-      );
+      setRawSubRoutes((prev) => prev.map((s) => (s.id === routeId ? updated : s)));
     } catch {
       // ignore
     }
@@ -179,11 +137,11 @@ export function ClusterReviewView({
         getSession(fromRouteId),
         getSession(toRouteId),
       ]);
-      setSubRoutes((prev) =>
-        prev.map((r) => {
-          if (r.session.id === fromRouteId) return { ...r, session: fromUpdated };
-          if (r.session.id === toRouteId) return { ...r, session: toUpdated };
-          return r;
+      setRawSubRoutes((prev) =>
+        prev.map((s) => {
+          if (s.id === fromRouteId) return fromUpdated;
+          if (s.id === toRouteId) return toUpdated;
+          return s;
         })
       );
       setSelectedStop(null);
@@ -198,9 +156,7 @@ export function ClusterReviewView({
     try {
       await removeStop(routeId, stopId);
       const updated = await getSession(routeId);
-      setSubRoutes((prev) =>
-        prev.map((r) => (r.session.id === routeId ? { ...r, session: updated } : r))
-      );
+      setRawSubRoutes((prev) => prev.map((s) => (s.id === routeId ? updated : s)));
       setSelectedStop(null);
       showToast("Stop removed");
     } catch {
@@ -229,7 +185,7 @@ export function ClusterReviewView({
   const handleDeleteRoute = async (routeId: string) => {
     try {
       await deleteSession(routeId);
-      setSubRoutes((prev) => prev.filter((r) => r.session.id !== routeId));
+      setRawSubRoutes((prev) => prev.filter((s) => s.id !== routeId));
       showToast("Route deleted");
     } catch {
       setError("Failed to delete route.");
@@ -292,6 +248,19 @@ export function ClusterReviewView({
         </button>
         <h3>{parentSession?.name || "Cluster Review"}</h3>
         <div className="cluster-review-header-actions">
+          {onOpenKanban && (
+            <button
+              className="btn btn-ghost btn-sm"
+              onClick={onOpenKanban}
+              title="Open the stop board — drag stops between bikers"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="3" width="7" height="18" rx="1" />
+                <rect x="14" y="3" width="7" height="10" rx="1" />
+              </svg>
+              Stop Board
+            </button>
+          )}
           {!allOptimized && (
             <button
               className="btn btn-primary btn-sm cluster-optimize-all-btn"

@@ -64,14 +64,48 @@ export async function listSessions(
   return data;
 }
 
+/**
+ * Upload one or more files as a single route. Passing `replaceSessionId`
+ * re-imports into that not-yet-started session instead of creating a new one.
+ */
 export async function uploadFile(
-  file: File,
-  ownerId?: number
+  files: File | File[],
+  ownerId?: number,
+  replaceSessionId?: string | null
 ): Promise<SessionResponse> {
   const formData = new FormData();
-  formData.append("file", file);
+  for (const file of Array.isArray(files) ? files : [files]) {
+    formData.append("file", file);
+  }
   if (ownerId) formData.append("owner_id", String(ownerId));
+  if (replaceSessionId) formData.append("session_id", replaceSessionId);
   const { data } = await api.post<SessionResponse>("/upload/", formData);
+  return data;
+}
+
+/** Rewrite a stop's address and re-geocode it; returns the updated stop. */
+export async function updateStopAddress(
+  sessionId: string,
+  stopId: number,
+  address: string
+): Promise<import("../types").DeliveryStop> {
+  const { data } = await api.patch<import("../types").DeliveryStop>(
+    `/sessions/${sessionId}/stops/${stopId}/address/`,
+    { address }
+  );
+  return data;
+}
+
+/** Include/exclude stops from the day's plan and/or move them to another postal-code group. */
+export async function bulkUpdateStops(
+  sessionId: string,
+  stopIds: number[],
+  patch: { excluded?: boolean; postal_code?: string }
+): Promise<import("../types").DeliveryStop[]> {
+  const { data } = await api.post<import("../types").DeliveryStop[]>(
+    `/sessions/${sessionId}/stops/bulk/`,
+    { stop_ids: stopIds, ...patch }
+  );
   return data;
 }
 

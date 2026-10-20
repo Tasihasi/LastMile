@@ -105,27 +105,7 @@ test.describe("Planner Journey", () => {
   });
 
   test.describe("Session management", () => {
-    test("upload route as planner", async ({ page }) => {
-      await expect(page.locator(".dashboard-layout")).toBeVisible({
-        timeout: 15_000,
-      });
-
-      // Count existing session cards
-      const cardsBefore = await page.locator(".session-card").count();
-
-      // Use the hidden file input via Upload Route button
-      const fileInput = page.locator('input[type="file"]').first();
-      await fileInput.setInputFiles(
-        path.resolve(__dirname, "test-data", "geocoded_stops.csv")
-      );
-
-      // Planner upload stays on dashboard — a new session card should appear
-      await expect(page.locator(".session-card")).toHaveCount(cardsBefore + 1, {
-        timeout: 15_000,
-      });
-    });
-
-    test("Upload Route button works: opens chooser, uploads, shows toast + new card", async ({
+    test("Upload Route opens the wizard; finishing it adds a card to the dashboard", async ({
       page,
     }) => {
       await expect(page.locator(".dashboard-layout")).toBeVisible({
@@ -133,49 +113,50 @@ test.describe("Planner Journey", () => {
       });
       const cardsBefore = await page.locator(".session-card").count();
 
-      // Drive the real button (not the hidden input directly): clicking it must
-      // open the native file chooser. If the button were wired wrong, no
-      // filechooser event fires and this Promise.all times out.
-      const [chooser] = await Promise.all([
-        page.waitForEvent("filechooser", { timeout: 5_000 }),
-        page.getByRole("button", { name: "Upload Route" }).click(),
-      ]);
-      await chooser.setFiles(
-        path.resolve(__dirname, "test-data", "ups_terkep_teszt.xlsx")
-      );
+      await page.getByRole("button", { name: "Upload Route" }).click();
+      await expect(page.locator(".wizard-stepper")).toBeVisible();
 
-      // A success toast confirms the upload and reports the stop count...
-      await expect(page.locator(".toast--success")).toBeVisible({
-        timeout: 15_000,
-      });
-      await expect(page.locator(".toast--success")).toContainText("14 stops");
+      await page
+        .locator('input[type="file"]')
+        .setInputFiles(path.resolve(__dirname, "test-data", "ups_terkep_teszt.xlsx"));
+      await page.getByRole("button", { name: /Upload & continue/ }).click();
 
-      // ...and the uploaded route actually lands on the dashboard as a new card.
+      const footer = page.locator(".wizard-footer");
+      const toFix = footer.getByRole("button", { name: /(Fix|Review) addresses/ });
+      await expect(toFix).toBeEnabled({ timeout: 90_000 });
+      await toFix.click();
+      await footer.getByRole("button", { name: /^Continue/ }).click();
+      await expect(page.getByText(/\d+ of 14 stops included/)).toBeVisible();
+
+      // Only after the zip codes are settled does the biker distribution come.
+      await footer.getByRole("button", { name: /^Continue/ }).click();
+      await expect(page.getByRole("dialog", { name: "Split route planner" })).toBeVisible();
+      await expect(page.getByRole("button", { name: /^Split / })).toBeVisible();
+
+      // Back to the dashboard: the uploaded route is there as a new card.
+      await page.getByRole("button", { name: "Dashboard" }).click();
       await expect(page.locator(".session-card")).toHaveCount(cardsBefore + 1, {
         timeout: 15_000,
       });
     });
 
-    test("rejected upload surfaces an error toast (no silent failure)", async ({
+    test("rejected upload surfaces an error in the wizard (no silent failure)", async ({
       page,
     }) => {
       await expect(page.locator(".dashboard-layout")).toBeVisible({
         timeout: 15_000,
       });
 
-      const [chooser] = await Promise.all([
-        page.waitForEvent("filechooser", { timeout: 5_000 }),
-        page.getByRole("button", { name: "Upload Route" }).click(),
-      ]);
-      // Unsupported format -> backend 400; the button must report it, not
-      // swallow it silently.
-      await chooser.setFiles({
+      await page.getByRole("button", { name: "Upload Route" }).click();
+      // Unsupported format -> backend 400; the wizard must report it.
+      await page.locator('input[type="file"]').setInputFiles({
         name: "bad.json",
         mimeType: "application/json",
         buffer: Buffer.from('{"not":"a stop list"}'),
       });
+      await page.getByRole("button", { name: /Upload & continue/ }).click();
 
-      await expect(page.locator(".toast--error")).toBeVisible({
+      await expect(page.locator(".wizard-error")).toBeVisible({
         timeout: 15_000,
       });
     });

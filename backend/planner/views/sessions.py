@@ -4,6 +4,7 @@ import json
 import requests
 from django.conf import settings as django_settings
 from django.contrib.auth.models import User
+from django.core.exceptions import ValidationError
 from django.db.models import Count, OuterRef, Q, Subquery
 from django.http import StreamingHttpResponse
 from rest_framework import status
@@ -12,6 +13,7 @@ from rest_framework.parsers import MultiPartParser
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
+from ..districts import extract_postal_code
 from ..geocoder import geocode_address
 from ..models import DeliverySession, DeliveryStop, SharedRoute
 from ..optimizer import get_route_details, optimize_route
@@ -77,25 +79,42 @@ def list_sessions(request):
     return Response(SessionListSerializer(qs, many=True).data)
 
 
+def _route_name_from_files(names):
+    raw_name = names[0].rsplit(".", 1)[0] if "." in names[0] else names[0]
+    route_name = raw_name.replace("_", " ").replace("-", " ").strip().title()
+    if len(names) > 1:
+        route_name = f"{route_name} +{len(names) - 1}"
+    return route_name
+
+
 @api_view(["POST"])
 @parser_classes([MultiPartParser])
 def upload_file(request):
-    file = request.FILES.get("file")
-    if not file:
+    """Create a session from one or more files (field `file`, repeatable).
+
+    Rows from all files are merged into a single session. Passing `session_id`
+    re-imports into that not-yet-started session instead (replacing its stops),
+    which is what lets the planning wizard step back to the upload step.
+    """
+    files = request.FILES.getlist("file")
+    if not files:
         return Response(
             {"error": "No file provided."},
             status=status.HTTP_400_BAD_REQUEST,
         )
 
-    try:
-        rows = parse_file(file, file.name)
-    except ValueError as e:
-        return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
-    except Exception:
-        return Response(
-            {"error": "Failed to parse file. Check the format and try again."},
-            status=status.HTTP_400_BAD_REQUEST,
-        )
+    rows = []
+    for file in files:
+        try:
+            file_rows = parse_file(file, file.name)
+        except ValueError as e:
+            return Response({"error": f"{file.name}: {e}"}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception:
+            return Response(
+                {"error": f"{file.name}: failed to parse file. Check the format and try again."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        rows.extend(file_rows)
 
     if not rows:
         return Response(
@@ -103,17 +122,38 @@ def upload_file(request):
             status=status.HTTP_400_BAD_REQUEST,
         )
 
-    is_planner = hasattr(request.user, "profile") and request.user.profile.role == "planner"
-    owner = None if is_planner else request.user
-    owner_id = request.data.get("owner_id")
-    if owner_id and is_planner:
-        with contextlib.suppress(User.DoesNotExist, ValueError, TypeError):
-            owner = User.objects.get(id=int(owner_id))
+    route_name = _route_name_from_files([f.name for f in files])
 
-    raw_name = file.name.rsplit(".", 1)[0] if "." in file.name else file.name
-    route_name = raw_name.replace("_", " ").replace("-", " ").strip().title()
+    replace_id = request.data.get("session_id")
+    if replace_id:
+        try:
+            session = get_user_session(request, replace_id)
+        except (ValueError, ValidationError):
+            session = None
+        if not session:
+            return Response({"error": "Session not found."}, status=status.HTTP_404_NOT_FOUND)
+        if session.status != DeliverySession.Status.NOT_STARTED or session.sub_routes.exists():
+            return Response(
+                {"error": "Only a route that has not started can have its files replaced."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        session.stops.all().delete()
+        session.original_file = files[0]
+        session.name = route_name
+        session.route_geometry = None
+        session.route_segments = None
+        session.total_duration = None
+        session.total_distance = None
+        session.save()
+    else:
+        is_planner = hasattr(request.user, "profile") and request.user.profile.role == "planner"
+        owner = None if is_planner else request.user
+        owner_id = request.data.get("owner_id")
+        if owner_id and is_planner:
+            with contextlib.suppress(User.DoesNotExist, ValueError, TypeError):
+                owner = User.objects.get(id=int(owner_id))
 
-    session = DeliverySession.objects.create(original_file=file, owner=owner, name=route_name)
+        session = DeliverySession.objects.create(original_file=files[0], owner=owner, name=route_name)
 
     stops = []
     for row in rows:
@@ -125,6 +165,7 @@ def upload_file(request):
             product_code=row.get("product_code", ""),
             recipient_name=row.get("recipient_name", ""),
             recipient_phone=row.get("recipient_phone", ""),
+            postal_code=extract_postal_code(row.get("address", "")),
             lat=row["lat"],
             lng=row["lng"],
             geocode_status="skipped" if has_coords else "pending",
@@ -136,6 +177,83 @@ def upload_file(request):
     session.refresh_from_db()
     serializer = DeliverySessionSerializer(session)
     return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+
+@api_view(["PATCH"])
+def update_stop_address(request, session_id, stop_id):
+    """Rewrite a stop's address (e.g. a typo from the recipient) and re-geocode it."""
+    session = get_user_session(request, session_id)
+    if not session:
+        return Response({"error": "Session not found."}, status=status.HTTP_404_NOT_FOUND)
+
+    try:
+        stop = session.stops.get(id=stop_id)
+    except DeliveryStop.DoesNotExist:
+        return Response({"error": "Stop not found in this session."}, status=status.HTTP_404_NOT_FOUND)
+
+    address = str(request.data.get("address", "")).strip()
+    if not address:
+        return Response({"error": "Address is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+    stop.raw_address = address[:500]
+    stop.postal_code = extract_postal_code(stop.raw_address)
+    result = geocode_address(stop.raw_address)
+    if result:
+        stop.lat, stop.lng = result
+        stop.geocode_status = "success"
+        stop.geocode_error = ""
+    else:
+        stop.lat = stop.lng = None
+        stop.geocode_status = "failed"
+        stop.geocode_error = "Address not found"
+    stop.sequence_order = None
+    stop.save()
+
+    return Response(DeliveryStopSerializer(stop).data)
+
+
+@api_view(["POST"])
+def bulk_update_stops(request, session_id):
+    """Include/exclude stops from the day's plan and/or move them to a postal-code group.
+
+    Body: {"stop_ids": [..], "excluded"?: bool, "postal_code"?: str}.
+    """
+    session = get_user_session(request, session_id)
+    if not session:
+        return Response({"error": "Session not found."}, status=status.HTTP_404_NOT_FOUND)
+    if session.status != DeliverySession.Status.NOT_STARTED:
+        return Response(
+            {"error": "Only a route that has not started can be edited."}, status=status.HTTP_400_BAD_REQUEST
+        )
+
+    stop_ids = request.data.get("stop_ids")
+    if not isinstance(stop_ids, list) or not stop_ids:
+        return Response({"error": "stop_ids must be a non-empty list."}, status=status.HTTP_400_BAD_REQUEST)
+
+    updates = {}
+    if "excluded" in request.data:
+        if not isinstance(request.data["excluded"], bool):
+            return Response({"error": "excluded must be true or false."}, status=status.HTTP_400_BAD_REQUEST)
+        updates["excluded"] = request.data["excluded"]
+    if "postal_code" in request.data:
+        code = str(request.data["postal_code"] or "").strip()
+        if len(code) > 10:
+            return Response({"error": "Invalid postal code."}, status=status.HTTP_400_BAD_REQUEST)
+        updates["postal_code"] = code
+    if not updates:
+        return Response({"error": "Nothing to update."}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        stops = session.stops.filter(id__in=stop_ids)
+    except (ValueError, TypeError):
+        return Response({"error": "stop_ids must be integers."}, status=status.HTTP_400_BAD_REQUEST)
+    ids = list(stops.values_list("id", flat=True))
+    if updates.get("excluded") or "postal_code" in updates:
+        # A changed plan invalidates any previous ordering.
+        session.stops.filter(id__in=ids).update(**updates, sequence_order=None)
+    else:
+        session.stops.filter(id__in=ids).update(**updates)
+    return Response(DeliveryStopSerializer(session.stops.filter(id__in=ids), many=True).data)
 
 
 @api_view(["GET"])
@@ -228,7 +346,7 @@ def optimize(request, session_id):
     if not session:
         return Response({"error": "Session not found."}, status=status.HTTP_404_NOT_FOUND)
 
-    located_stops = list(session.stops.filter(lat__isnull=False, lng__isnull=False))
+    located_stops = list(session.stops.filter(lat__isnull=False, lng__isnull=False, excluded=False))
 
     if len(located_stops) < 2:
         return Response(

@@ -49,6 +49,8 @@ export interface DeliveryStop {
   lng: number | null;
   geocode_status: "pending" | "success" | "failed" | "skipped";
   geocode_error: string;
+  postal_code: string;
+  excluded: boolean;
   sequence_order: number | null;
   delivery_status: DeliveryStopStatus;
 }
@@ -100,6 +102,7 @@ export interface SplitAssignment {
   biker_id: number | null;
   target_stops: number;
   district: number | null;
+  zip: number | null;
 }
 
 export interface DistrictInfo {
@@ -108,8 +111,22 @@ export interface DistrictInfo {
   stop_count: number;
 }
 
+/**
+ * A selectable lock area for the split planner: an exact irányítószám
+ * (postal code) when a district has more than one, otherwise the whole
+ * district.
+ */
+export interface AreaOption {
+  type: "district" | "zip";
+  district: number;
+  zip: number | null;
+  label: string;
+  stop_count: number;
+}
+
 export interface DistrictsResponse {
   districts: DistrictInfo[];
+  areas: AreaOption[];
   unknown_district_stops: number;
   total_stops: number;
 }

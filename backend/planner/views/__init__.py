@@ -4,6 +4,7 @@ from .lifecycle import start_route, update_stop_status
 from .sessions import (
     active_sessions,
     assign_session,
+    bulk_update_stops,
     delete_session,
     geocode_status,
     geocode_stops,
@@ -14,12 +15,14 @@ from .sessions import (
     optimize,
     rename_session,
     share_session,
+    update_stop_address,
     upload_file,
 )
 
 __all__ = [
     "active_sessions",
     "assign_session",
+    "bulk_update_stops",
     "cluster_session",
     "delete_session",
     "geocode_status",
@@ -39,6 +42,7 @@ __all__ = [
     "share_session",
     "start_route",
     "uncluster_session",
+    "update_stop_address",
     "update_stop_status",
     "upload_file",
 ]

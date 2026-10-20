@@ -952,6 +952,102 @@ class UploadAPITest(TestCase):
         response = anon_client.post("/api/upload/", {"file": f}, format="multipart")
         self.assertEqual(response.status_code, 401)
 
+    def _csv(self, name, rows):
+        return SimpleUploadedFile(name, b"name,address\n" + rows, content_type="text/csv")
+
+    def _upload(self, files, **extra):
+        return self.client.post("/api/upload/", {"file": files, **extra}, format="multipart")
+
+    def test_upload_multiple_files_merges_stops(self):
+        a = self._csv("a.csv", b"Shop A,Main St\n")
+        b = self._csv("b.csv", b"Shop B,Vaci ut\nShop C,Andrassy ut\n")
+        response = self._upload([a, b])
+        self.assertEqual(response.status_code, 201)
+        data = response.json()
+        self.assertEqual(len(data["stops"]), 3)
+        self.assertTrue(data["name"].endswith("+1"))
+
+    def test_upload_bad_file_among_many_rejects_all(self):
+        a = self._csv("a.csv", b"Shop A,Main St\n")
+        bad = SimpleUploadedFile("data.pdf", b"fake", content_type="application/pdf")
+        response = self._upload([a, bad])
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("data.pdf", response.json()["error"])
+        self.assertEqual(DeliverySession.objects.count(), 0)
+
+    def test_upload_replaces_stops_of_existing_session(self):
+        first = self._upload(self._csv("a.csv", b"Shop A,Main St\n")).json()
+        response = self._upload(
+            [self._csv("b.csv", b"Shop B,Vaci ut\n"), self._csv("c.csv", b"Shop C,X ut\n")],
+            session_id=first["id"],
+        )
+        self.assertEqual(response.status_code, 201)
+        data = response.json()
+        self.assertEqual(data["id"], first["id"])
+        self.assertEqual(sorted(s["name"] for s in data["stops"]), ["Shop B", "Shop C"])
+        self.assertEqual(DeliverySession.objects.count(), 1)
+
+    def test_upload_replace_rejected_once_started(self):
+        first = self._upload(self._csv("a.csv", b"Shop A,Main St\n")).json()
+        DeliverySession.objects.filter(id=first["id"]).update(status="in_progress")
+        response = self._upload(self._csv("b.csv", b"Shop B,Vaci ut\n"), session_id=first["id"])
+        self.assertEqual(response.status_code, 400)
+
+    def test_update_stop_address_regeocodes(self):
+        data = self._upload(self._csv("a.csv", b"Shop A,Typo Strt\n")).json()
+        url = f"/api/sessions/{data['id']}/stops/{data['stops'][0]['id']}/address/"
+        with patch("planner.views.sessions.geocode_address", return_value=None):
+            failed = self.client.patch(url, {"address": "Still wrong"}, format="json")
+        self.assertEqual(failed.json()["geocode_status"], "failed")
+        with patch("planner.views.sessions.geocode_address", return_value=(47.5, 19.05)):
+            fixed = self.client.patch(url, {"address": "Main Street 1, Budapest"}, format="json")
+        body = fixed.json()
+        self.assertEqual(body["geocode_status"], "success")
+        self.assertEqual(body["raw_address"], "Main Street 1, Budapest")
+        self.assertEqual(body["lat"], 47.5)
+
+    def test_postal_code_derived_from_address(self):
+        data = self._upload(
+            self._csv("a.csv", b'Shop A,"1052 Budapest, Main St 1"\nShop B,"6720 Szeged, Fo ut 2"\n')
+        ).json()
+        self.assertEqual(sorted(s["postal_code"] for s in data["stops"]), ["1052", "6720"])
+
+    def test_bulk_update_excludes_and_moves_stops(self):
+        data = self._upload(self._csv("a.csv", b'Shop A,"1052 Budapest, X"\nShop B,"1052 Budapest, Y"\n')).json()
+        ids = [s["id"] for s in data["stops"]]
+        url = f"/api/sessions/{data['id']}/stops/bulk/"
+        resp = self.client.post(url, {"stop_ids": ids, "excluded": True}, format="json")
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(all(s["excluded"] for s in resp.json()))
+        resp = self.client.post(url, {"stop_ids": ids[:1], "postal_code": "1111"}, format="json")
+        self.assertEqual(resp.json()[0]["postal_code"], "1111")
+        self.assertEqual(self.client.post(url, {"stop_ids": ids}, format="json").status_code, 400)
+        self.assertEqual(self.client.post(url, {"stop_ids": []}, format="json").status_code, 400)
+
+    def test_optimize_ignores_excluded_stops(self):
+        data = self._upload(
+            SimpleUploadedFile(
+                "g.csv", b"name,lat,lng\nA,47.5,19.0\nB,47.51,19.01\nC,47.52,19.02\n", content_type="text/csv"
+            )
+        ).json()
+        ids = [s["id"] for s in data["stops"]]
+        self.client.post(
+            f"/api/sessions/{data['id']}/stops/bulk/", {"stop_ids": ids[:1], "excluded": True}, format="json"
+        )
+        with (
+            patch("planner.views.sessions.optimize_route", return_value=ids[1:]) as opt,
+            patch("planner.views.sessions.get_route_details", return_value=None),
+            self.settings(ORS_API_KEY="k"),
+        ):
+            resp = self.client.post(f"/api/sessions/{data['id']}/optimize/", {}, format="json")
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual([s.id for s in opt.call_args.args[0]], ids[1:])
+
+    def test_update_stop_address_requires_address(self):
+        data = self._upload(self._csv("a.csv", b"Shop A,Main St\n")).json()
+        url = f"/api/sessions/{data['id']}/stops/{data['stops'][0]['id']}/address/"
+        self.assertEqual(self.client.patch(url, {"address": "  "}, format="json").status_code, 400)
+
 
 class SessionAPITest(TestCase):
     def setUp(self):
@@ -1253,6 +1349,15 @@ class DistrictExtractionTest(TestCase):
         # 1240+ would be district 24 -> invalid
         self.assertIsNone(extract_district("1245 Budapest"))
 
+    def test_extract_zip(self):
+        from .districts import extract_zip
+
+        self.assertEqual(extract_zip("1052 Budapest, Vaci utca 10"), 1052)
+        self.assertEqual(extract_zip("Budapest, Bartok Bela ut 1, 1114"), 1114)
+        self.assertIsNone(extract_zip("6000 Kecskemet, Fo ter 1"))
+        self.assertIsNone(extract_zip("1245 Budapest"))  # district 24 -> invalid
+        self.assertIsNone(extract_zip(None))
+
     def test_district_label(self):
         from .districts import district_label
 
@@ -1286,13 +1391,15 @@ class SplitPlannerAPITest(TestCase):
 
         self.session = DeliverySession.objects.create(name="Big Route", status="not_started")
         stops = []
-        # 20 stops in district 5 (around one point), 10 stops in district 13 (around another)
+        # 20 stops in district 5, split across two irányítószám (12 x 1052, 8 x 1055);
+        # 10 stops in district 13 (around another point), all sharing one zip.
         for i in range(20):
+            zip_code = "1052" if i < 12 else "1055"
             stops.append(
                 DeliveryStop(
                     session=self.session,
                     name=f"D5 Stop {i}",
-                    raw_address=f"1052 Budapest, Utca {i}",
+                    raw_address=f"{zip_code} Budapest, Utca {i}",
                     lat=47.49 + i * 0.001,
                     lng=19.05 + i * 0.001,
                     geocode_status="success",
@@ -1319,6 +1426,88 @@ class SplitPlannerAPITest(TestCase):
         self.assertEqual(data["unknown_district_stops"], 0)
         districts = {d["district"]: d["stop_count"] for d in data["districts"]}
         self.assertEqual(districts, {5: 20, 13: 10})
+
+        # District 5 has two distinct zips -> fine-grained zip areas.
+        # District 13 has one zip -> falls back to a single district area.
+        areas = data["areas"]
+        d5_areas = [a for a in areas if a["district"] == 5]
+        d13_areas = [a for a in areas if a["district"] == 13]
+        self.assertEqual({a["type"] for a in d5_areas}, {"zip"})
+        self.assertEqual({a["zip"]: a["stop_count"] for a in d5_areas}, {1052: 12, 1055: 8})
+        self.assertEqual(len(d13_areas), 1)
+        self.assertEqual(
+            d13_areas[0], {"type": "district", "district": 13, "zip": None, "label": "XIII. kerület", "stop_count": 10}
+        )
+
+    def test_cluster_with_zip_lock(self):
+        resp = self.planner_client.post(
+            f"/api/sessions/{self.session.id}/cluster/",
+            {
+                "assignments": [
+                    {"biker_id": self.biker_a.id, "target_stops": 22, "district": None, "zip": None},
+                    {"biker_id": self.biker_b.id, "target_stops": 8, "district": None, "zip": 1055},
+                ]
+            },
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 201)
+        sub_routes = resp.json()["sub_routes"]
+        by_owner = {sr["owner_name"]: sr["stop_count"] for sr in sub_routes}
+        self.assertEqual(by_owner["split_biker_b"], 8)
+        self.assertEqual(by_owner["split_biker_a"], 22)
+
+        b_route_id = next(sr["id"] for sr in sub_routes if sr["owner_name"] == "split_biker_b")
+        b_route = DeliverySession.objects.get(id=b_route_id)
+        self.assertTrue(all(s.raw_address.startswith("1055") for s in b_route.stops.all()))
+
+    def test_cluster_with_invalid_zip_rejected(self):
+        resp = self.planner_client.post(
+            f"/api/sessions/{self.session.id}/cluster/",
+            {"assignments": [{"biker_id": self.biker_a.id, "target_stops": 30, "district": None, "zip": 9999}]},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 400)
+
+    def test_cluster_can_resplit_a_sub_route(self):
+        # First split: biker A gets the 20 district-5 stops as one big sub-route.
+        first = self.planner_client.post(
+            f"/api/sessions/{self.session.id}/cluster/",
+            {
+                "assignments": [
+                    {"biker_id": self.biker_a.id, "target_stops": 20, "district": 5},
+                    {"biker_id": self.biker_b.id, "target_stops": 10, "district": 13},
+                ]
+            },
+            format="json",
+        )
+        self.assertEqual(first.status_code, 201)
+        sub_route_id = next(sr["id"] for sr in first.json()["sub_routes"] if sr["owner_name"] == "split_biker_a")
+
+        # The sub-route can itself be clustered further -- it just nests one
+        # level deeper instead of being rejected as "already a sub-route".
+        second = self.planner_client.post(
+            f"/api/sessions/{sub_route_id}/cluster/",
+            {"n_routes": 2},
+            format="json",
+        )
+        self.assertEqual(second.status_code, 201)
+        grandchildren = second.json()["sub_routes"]
+        self.assertEqual(len(grandchildren), 2)
+        self.assertEqual(sum(sr["stop_count"] for sr in grandchildren), 20)
+
+        sub_route = DeliverySession.objects.get(id=sub_route_id)
+        self.assertEqual(sub_route.status, "split")
+        self.assertEqual(sub_route.sub_routes.count(), 2)
+
+    def test_cluster_rejected_for_in_progress_route(self):
+        self.session.status = "in_progress"
+        self.session.save(update_fields=["status"])
+        resp = self.planner_client.post(
+            f"/api/sessions/{self.session.id}/cluster/",
+            {"n_routes": 2},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 400)
 
     def test_cluster_with_weighted_assignments(self):
         resp = self.planner_client.post(

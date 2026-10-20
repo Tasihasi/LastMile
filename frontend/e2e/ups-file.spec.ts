@@ -32,14 +32,8 @@ test.describe("UPS courier file — full journey", () => {
       timeout: 15_000,
     });
 
-    // The sheet has no coordinates, so geocoding is required first.
-    const geocodeBtn = page.getByRole("button", { name: "Geocode Addresses" });
-    await expect(geocodeBtn).toBeVisible();
-    await geocodeBtn.click();
-    // Don't assert on the transient "Geocoding X/Y" progress text: in mock mode
-    // geocoding finishes almost instantly, so that span can come and go before
-    // it's observed (flaky in CI). Wait for the meaningful end state instead —
-    // the Optimize button only appears once every stop is geocoded.
+    // The sheet has no coordinates: the wizard geocoded every stop before
+    // reaching this step, so the Optimize button is available right away.
     const optimizeBtn = page.getByRole("button", { name: "Optimize Route" });
     await expect(optimizeBtn).toBeVisible({ timeout: 30_000 });
     await optimizeBtn.click();
