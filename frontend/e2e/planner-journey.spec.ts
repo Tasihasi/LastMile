@@ -171,10 +171,10 @@ test.describe("Planner Journey", () => {
       if (await viewBtn.isVisible()) {
         await viewBtn.click();
 
-        // Should switch to map view
-        await expect(page.locator(".leaflet-container")).toBeVisible({
-          timeout: 15_000,
-        });
+        // Unplanned routes reopen in the wizard, planned ones on the map
+        await expect(
+          page.locator(".wizard-stepper, .leaflet-container").first()
+        ).toBeVisible({ timeout: 15_000 });
       }
     });
 

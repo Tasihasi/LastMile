@@ -431,7 +431,9 @@ class PlannerManagementE2E(TestCase):
         self.assertEqual(resp.status_code, 404)
 
     def test_biker_cannot_rename(self):
-        resp = self.biker.patch(
+        # A biker may only rename routes they own.
+        other = _auth_client("not_the_owner", "biker")
+        resp = other.patch(
             f"/api/sessions/{self.session.id}/rename/",
             {"name": "Hacked"},
         )

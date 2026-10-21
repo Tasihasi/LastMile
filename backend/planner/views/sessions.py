@@ -66,9 +66,23 @@ def _annotate_session_list(qs):
 
 @api_view(["GET"])
 def list_sessions(request):
-    """List sessions. Bikers see their own; planners see all (optionally filtered by owner_id)."""
+    """List sessions.
+
+    Bikers see their own routes (a split route's sub-routes assigned to them,
+    never the split parent). Planners see each route once: a split route is a
+    single entry (its sub-routes are summarised on it); pass `parent_id` to list
+    one split route's sub-routes instead. `owner_id` filters by assignee.
+    """
     if hasattr(request.user, "profile") and request.user.profile.role == "planner":
-        qs = DeliverySession.objects.exclude(status=DeliverySession.Status.SPLIT)
+        qs = DeliverySession.objects.all()
+        parent_id = request.query_params.get("parent_id")
+        if parent_id:
+            try:
+                qs = qs.filter(parent_id=parent_id)
+            except (ValueError, ValidationError):
+                qs = qs.none()
+        else:
+            qs = qs.filter(parent__isnull=True)
         owner_id = request.query_params.get("owner_id")
         if owner_id:
             qs = qs.filter(owner_id=owner_id)
@@ -485,13 +499,14 @@ def assign_session(request, session_id):
 
 @api_view(["PATCH"])
 def rename_session(request, session_id):
-    if not require_planner(request):
-        return Response({"error": "Planner access required."}, status=status.HTTP_403_FORBIDDEN)
-
     try:
         session = DeliverySession.objects.get(id=session_id)
     except DeliverySession.DoesNotExist:
         return Response({"error": "Session not found."}, status=status.HTTP_404_NOT_FOUND)
+
+    # Planners may rename any route; bikers only their own.
+    if not require_planner(request) and session.owner_id != request.user.id:
+        return Response({"error": "Not allowed to rename this route."}, status=status.HTTP_403_FORBIDDEN)
 
     name = request.data.get("name", "").strip()
     if not name:

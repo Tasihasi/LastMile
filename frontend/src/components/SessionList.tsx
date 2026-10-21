@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { SessionSummary } from "../types";
-import { listSessions } from "../api/client";
+import { listSessions, renameSession } from "../api/client";
+import { RouteNameField } from "./RouteNameField";
 import { formatDuration, formatDistance, formatDateTime } from "../utils/format";
 
 function statusOrder(s: SessionSummary): number {
@@ -13,12 +14,23 @@ interface SessionListProps {
   ownerId?: number;
   onSelectSession: (sessionId: string) => void;
   onNewRoute: () => void;
+  /** Open the only in-progress route straight away (on first load, not after going back). */
+  autoSelect?: boolean;
 }
 
-export function SessionList({ ownerId, onSelectSession, onNewRoute }: SessionListProps) {
+export function SessionList({ ownerId, onSelectSession, onNewRoute, autoSelect = true }: SessionListProps) {
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const autoSelectedRef = useRef(false);
+
+  const rename = async (id: string, name: string) => {
+    try {
+      await renameSession(id, name);
+      setSessions((prev) => prev.map((s) => (s.id === id ? { ...s, name } : s)));
+    } catch {
+      // Keep the old name; the list is not the place for an error banner.
+    }
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -28,7 +40,7 @@ export function SessionList({ ownerId, onSelectSession, onNewRoute }: SessionLis
         setSessions(data);
         // If the biker has exactly one in-progress route, auto-select it so
         // they don't land on an empty map after login.
-        if (!autoSelectedRef.current) {
+        if (autoSelect && !autoSelectedRef.current) {
           const inProgress = data.filter((s) => s.status === "in_progress");
           if (inProgress.length === 1) {
             autoSelectedRef.current = true;
@@ -39,7 +51,7 @@ export function SessionList({ ownerId, onSelectSession, onNewRoute }: SessionLis
       .catch(() => {})
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [ownerId, onSelectSession]);
+  }, [ownerId, onSelectSession, autoSelect]);
 
   return (
     <div className="session-list">
@@ -106,6 +118,9 @@ export function SessionList({ ownerId, onSelectSession, onNewRoute }: SessionLis
                       {s.stop_count} stop{s.stop_count !== 1 ? "s" : ""}
                     </span>
                   </button>
+                  <div className="session-list-rename">
+                    <RouteNameField iconOnly name={s.name} onSave={(n) => rename(s.id, n)} />
+                  </div>
                 </li>
               ))}
             </ul>
@@ -130,6 +145,9 @@ export function SessionList({ ownerId, onSelectSession, onNewRoute }: SessionLis
                           {s.stop_count} stop{s.stop_count !== 1 ? "s" : ""}
                         </span>
                       </button>
+                      <div className="session-list-rename">
+                        <RouteNameField iconOnly name={s.name} onSave={(n) => rename(s.id, n)} />
+                      </div>
                     </li>
                   ))}
                 </ul>

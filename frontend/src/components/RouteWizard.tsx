@@ -23,10 +23,12 @@ interface StepperProps {
   disabled?: boolean;
   /** Planners distribute the route between bikers in the last step. */
   planner?: boolean;
+  /** Lowest step that can be revisited (an existing route has no files to re-pick). */
+  minStep?: WizardStep;
   onStepChange: (step: WizardStep) => void;
 }
 
-export function WizardStepper({ current, maxStep, disabled, planner, onStepChange }: StepperProps) {
+export function WizardStepper({ current, maxStep, disabled, planner, minStep = 1, onStepChange }: StepperProps) {
   return (
     <nav className="wizard-stepper" aria-label="Route planning steps">
       {STEPS.map(({ step, label }) => {
@@ -36,7 +38,7 @@ export function WizardStepper({ current, maxStep, disabled, planner, onStepChang
             key={step}
             type="button"
             className={`wizard-step wizard-step--${state}`}
-            disabled={disabled || step > maxStep}
+            disabled={disabled || step > maxStep || step < minStep}
             aria-current={step === current ? "step" : undefined}
             onClick={() => onStepChange(step)}
           >

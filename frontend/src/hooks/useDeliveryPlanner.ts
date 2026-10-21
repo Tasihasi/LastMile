@@ -11,10 +11,12 @@ import {
   optimizeRoute as apiOptimize,
   startRoute as apiStartRoute,
   updateStopStatus as apiUpdateStopStatus,
+  renameSession as apiRenameSession,
 } from "../api/client";
 
 export function useDeliveryPlanner() {
   const [sessionId, setSessionId] = useState<string | null>(null);
+  const [sessionName, setSessionName] = useState("");
   const [stops, setStops] = useState<DeliveryStop[]>([]);
   const [needsGeocoding, setNeedsGeocoding] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
@@ -42,6 +44,7 @@ export function useDeliveryPlanner() {
     try {
       const session: SessionResponse = await apiUpload(files, ownerId, replaceSessionId);
       setSessionId(session.id);
+      setSessionName(session.name);
       setStops(session.stops);
       setNeedsGeocoding(session.needs_geocoding);
       setSessionStatus(session.status);
@@ -69,6 +72,7 @@ export function useDeliveryPlanner() {
     try {
       const session = await apiGetSession(id);
       setSessionId(session.id);
+      setSessionName(session.name);
       setStops(session.stops);
       setNeedsGeocoding(session.needs_geocoding);
       setSessionStatus(session.status);
@@ -77,8 +81,10 @@ export function useDeliveryPlanner() {
       setRouteSegments(session.route_segments ?? null);
       setTotalDuration(session.total_duration ?? null);
       setTotalDistance(session.total_distance ?? null);
+      return session;
     } catch {
       setError("Failed to load session.");
+      return null;
     }
   }, []);
 
@@ -239,8 +245,21 @@ export function useDeliveryPlanner() {
     }
   }, [sessionId]);
 
+  const renameCurrent = useCallback(async (name: string): Promise<boolean> => {
+    if (!sessionId) return false;
+    try {
+      const saved = await apiRenameSession(sessionId, name);
+      setSessionName(saved.name);
+      return true;
+    } catch {
+      setError("Failed to rename the route.");
+      return false;
+    }
+  }, [sessionId]);
+
   const reset = useCallback(() => {
     setSessionId(null);
+    setSessionName("");
     setStops([]);
     setNeedsGeocoding(false);
     setIsGeocoding(false);
@@ -257,6 +276,8 @@ export function useDeliveryPlanner() {
 
   return {
     sessionId,
+    sessionName,
+    renameCurrent,
     stops,
     needsGeocoding,
     isUploading,

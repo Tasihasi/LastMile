@@ -2058,7 +2058,8 @@ body {
   min-width: 0;
 }
 
-.dashboard-unassigned {
+.dashboard-unassigned,
+.dashboard-split {
   width: 320px;
   flex-shrink: 0;
 }
@@ -2654,7 +2655,8 @@ body {
     gap: 12px;
   }
 
-  .dashboard-unassigned {
+  .dashboard-unassigned,
+  .dashboard-split {
     width: 100%;
     max-width: 480px;
   }
@@ -5804,4 +5806,86 @@ body {
 .split-planner--inline {
   max-width: 640px;
   max-height: none;
+}
+
+/* Inline route rename */
+.route-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 280px;
+  padding: 4px 8px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md, 8px);
+  background: transparent;
+  color: var(--color-text-secondary, inherit);
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.route-name:hover {
+  border-color: var(--color-border);
+  background: var(--color-surface-hover, rgba(0, 0, 0, 0.04));
+}
+
+.route-name-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.route-name-input {
+  width: 220px;
+  max-width: 100%;
+  padding: 4px 8px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md, 8px);
+  background: var(--color-surface);
+  color: inherit;
+  font: inherit;
+  font-size: 0.85rem;
+}
+
+.session-list-items li {
+  position: relative;
+}
+
+.session-list-rename {
+  position: absolute;
+  bottom: 6px;
+  right: 6px;
+}
+
+.session-list-rename .route-name {
+  padding: 4px;
+}
+
+@media (max-width: 640px) {
+  .app-header-left .route-name,
+  .app-header-left .route-name-input {
+    max-width: 120px;
+    width: 120px;
+  }
+}
+
+/* Split route card: who rides which sub-route */
+.session-card-subroutes {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.8rem;
+}
+
+.session-card-subroutes li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.session-card-subroute-owner {
+  font-weight: 600;
 }

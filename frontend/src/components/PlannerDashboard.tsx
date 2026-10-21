@@ -11,7 +11,6 @@ import {
   renameSession,
 } from "../api/client";
 import { FinishedRouteDetail } from "./FinishedRouteDetail";
-import { SplitPlannerModal } from "./SplitPlannerModal";
 
 interface PlannerDashboardProps {
   onViewSession: (sessionId: string) => void;
@@ -34,7 +33,6 @@ export function PlannerDashboard({ onViewSession, onOpenLiveMap, onOpenMapView, 
   const [dragOverTarget, setDragOverTarget] = useState<DropTarget | null>(null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [finishedDetailId, setFinishedDetailId] = useState<string | null>(null);
-  const [splitSession, setSplitSession] = useState<SessionSummary | null>(null);
 
   const { settings } = useSettings();
   const { showToast } = useToast();
@@ -130,7 +128,9 @@ export function PlannerDashboard({ onViewSession, onOpenLiveMap, onOpenMapView, 
 
   // Group active sessions by owner, in_progress always first
   const statusPriority = (s: SessionSummary) => s.status === "in_progress" ? 0 : 1;
-  const unassigned = activeSessions.filter((s) => !s.owner_name);
+  // A split route is one entry for the planner; its sub-routes live on the biker's side.
+  const splitSessions = activeSessions.filter((s) => s.status === "split");
+  const unassigned = activeSessions.filter((s) => !s.owner_name && s.status !== "split");
   const bikerSessions = new Map<string, SessionSummary[]>();
   for (const biker of bikers) {
     bikerSessions.set(
@@ -201,6 +201,41 @@ export function PlannerDashboard({ onViewSession, onOpenLiveMap, onOpenMapView, 
       </div>
 
       <div className="dashboard-layout">
+        {/* Split routes: one card per route, sub-routes belong to the bikers */}
+        {splitSessions.length > 0 && (
+          <div className="dashboard-split">
+            <div className="dashboard-column">
+              <div className="dashboard-column-header">
+                <span className="dashboard-column-title">Split between bikers</span>
+                <span className="dashboard-column-count">{splitSessions.length}</span>
+              </div>
+              <div className="dashboard-column-cards">
+                {splitSessions.map((s) => (
+                  <div key={s.id} className="session-card-wrapper">
+                    <SessionCard
+                      session={s}
+                      bikers={bikers}
+                      assignDropdown={assignDropdown}
+                      confirmDelete={confirmDelete}
+                      isDragging={false}
+                      dwellMinutes={settings.dwellMinutes}
+                      onDragStart={() => {}}
+                      onDragEnd={() => {}}
+                      onView={() => onOpenSplitReview(s.id)}
+                      onAssignOpen={() => {}}
+                      onAssign={() => {}}
+                      onDeleteConfirm={() => setConfirmDelete(s.id)}
+                      onDeleteCancel={() => setConfirmDelete(null)}
+                      onDelete={() => handleDelete(s.id)}
+                      onRename={(name) => handleRename(s.id, name)}
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Left: Unassigned routes */}
         {unassigned.length > 0 && (
           <div
@@ -217,12 +252,6 @@ export function PlannerDashboard({ onViewSession, onOpenLiveMap, onOpenMapView, 
               <div className="dashboard-column-cards">
                 {unassigned.map((s) => (
                   <div key={s.id} className="session-card-wrapper">
-                    {s.stop_count > 48 && s.status === "not_started" && (
-                      <ClusterBanner
-                        session={s}
-                        onCluster={() => setSplitSession(s)}
-                      />
-                    )}
                     <SessionCard
                       session={s}
                       bikers={bikers}
@@ -239,7 +268,7 @@ export function PlannerDashboard({ onViewSession, onOpenLiveMap, onOpenMapView, 
                       onDeleteCancel={() => setConfirmDelete(null)}
                       onDelete={() => handleDelete(s.id)}
                       onRename={(name) => handleRename(s.id, name)}
-                      onOpenSplitReview={s.parent_id ? () => onOpenSplitReview(s.parent_id!) : undefined}
+
                     />
                   </div>
                 ))}
@@ -275,12 +304,6 @@ export function PlannerDashboard({ onViewSession, onOpenLiveMap, onOpenMapView, 
                 <div className="dashboard-column-cards">
                   {bikerRoutes.map((s) => (
                     <div key={s.id} className="session-card-wrapper">
-                      {s.stop_count > 48 && s.status === "not_started" && (
-                        <ClusterBanner
-                          session={s}
-                          onCluster={() => setSplitSession(s)}
-                        />
-                      )}
                       <SessionCard
                         session={s}
                         bikers={bikers}
@@ -297,7 +320,7 @@ export function PlannerDashboard({ onViewSession, onOpenLiveMap, onOpenMapView, 
                         onDeleteCancel={() => setConfirmDelete(null)}
                         onDelete={() => handleDelete(s.id)}
                         onRename={(name) => handleRename(s.id, name)}
-                        onOpenSplitReview={s.parent_id ? () => onOpenSplitReview(s.parent_id!) : undefined}
+
                       />
                     </div>
                   ))}
@@ -380,20 +403,6 @@ export function PlannerDashboard({ onViewSession, onOpenLiveMap, onOpenMapView, 
           onViewMap={(id) => { setFinishedDetailId(null); onViewSession(id); }}
         />
       )}
-
-      {/* Split Planner */}
-      {splitSession && (
-        <SplitPlannerModal
-          session={splitSession}
-          bikers={bikers}
-          onClose={() => setSplitSession(null)}
-          onSplit={(parentId) => {
-            setSplitSession(null);
-            refresh();
-            onOpenSplitReview(parentId);
-          }}
-        />
-      )}
     </div>
   );
 }
@@ -414,7 +423,6 @@ interface SessionCardProps {
   onDeleteCancel: () => void;
   onDelete: () => void;
   onRename: (name: string) => void;
-  onOpenSplitReview?: () => void;
 }
 
 function SessionCard({
@@ -433,8 +441,8 @@ function SessionCard({
   onDeleteCancel,
   onDelete,
   onRename,
-  onOpenSplitReview,
 }: SessionCardProps) {
+  const isSplit = session.status === "split";
   const isAssigning = assignDropdown === session.id;
   const isConfirmingDelete = confirmDelete === session.id;
   const [isEditing, setIsEditing] = useState(false);
@@ -466,7 +474,7 @@ function SessionCard({
   return (
     <div
       className={`session-card ${isDragging ? "session-card--dragging" : ""}`}
-      draggable
+      draggable={!isSplit}
       onDragStart={(e) => {
         e.dataTransfer.effectAllowed = "move";
         onDragStart();
@@ -528,7 +536,9 @@ function SessionCard({
         </div>
         <div className="session-card-meta">
           <span className="session-card-stops">
-            {session.status === "in_progress" || session.status === "finished"
+            {isSplit
+              ? `${session.sub_routes.reduce((n, r) => n + r.stop_count, 0)} stops in ${session.sub_routes.length} sub-routes`
+              : session.status === "in_progress" || session.status === "finished"
               ? `${session.delivered_count + session.not_received_count}/${session.stop_count} stops`
               : `${session.stop_count} stop${session.stop_count !== 1 ? "s" : ""}`
             }
@@ -539,6 +549,20 @@ function SessionCard({
             </span>
           )}
         </div>
+        {isSplit && (
+          <ul className="session-card-subroutes">
+            {session.sub_routes.map((r) => (
+              <li key={r.id}>
+                <span className="session-card-subroute-owner">{r.owner_name ?? "Unassigned"}</span>
+                <span>
+                  {r.status === "in_progress" || r.status === "finished"
+                    ? `${r.done_count}/${r.stop_count} stops`
+                    : `${r.stop_count} stops`}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
         {session.status === "in_progress" && session.current_stop_name && (
           <div className="session-card-progress">
             <span className="session-card-progress-dot" />
@@ -573,18 +597,6 @@ function SessionCard({
             <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
           </svg>
         </button>
-        {/* Split review — sub-routes only */}
-        {onOpenSplitReview && (
-          <button className="session-card-btn session-card-btn--accent" onClick={onOpenSplitReview} title="Open split review — adjust bikers, move or re-split stops">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="12" r="3" />
-              <circle cx="5" cy="6" r="2" />
-              <circle cx="19" cy="6" r="2" />
-              <circle cx="5" cy="18" r="2" />
-              <circle cx="19" cy="18" r="2" />
-            </svg>
-          </button>
-        )}
         {/* View */}
         <button className="session-card-btn" onClick={onView} title="View route on map">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -592,7 +604,8 @@ function SessionCard({
             <circle cx="12" cy="12" r="3" />
           </svg>
         </button>
-        {/* Assign */}
+        {/* Assign (a split route is assigned per sub-route instead) */}
+        {!isSplit && (
         <div className="session-card-assign-wrap">
           <button className="session-card-btn" onClick={onAssignOpen} title="Assign to biker">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -628,6 +641,7 @@ function SessionCard({
             </>
           )}
         </div>
+        )}
         {/* Delete */}
         <button className="session-card-btn session-card-btn--danger" onClick={onDeleteConfirm} title="Delete route">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -648,29 +662,5 @@ function SessionCard({
         </div>
       )}
     </div>
-  );
-}
-
-function ClusterBanner({ onCluster }: {
-  session: SessionSummary;
-  onCluster: () => void;
-}) {
-  return (
-    <button
-      className="cluster-banner"
-      onClick={onCluster}
-      // Stop count includes ungeocoded stops, but clustering only operates on
-      // located ones — so the actual sub-route count is decided server-side.
-      title="Plan how to split this large route between bikers"
-    >
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <circle cx="12" cy="12" r="3" />
-        <circle cx="5" cy="6" r="2" />
-        <circle cx="19" cy="6" r="2" />
-        <circle cx="5" cy="18" r="2" />
-        <circle cx="19" cy="18" r="2" />
-      </svg>
-      Split into Routes
-    </button>
   );
 }

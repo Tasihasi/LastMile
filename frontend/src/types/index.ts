@@ -11,6 +11,15 @@ export interface AuthResponse {
 
 export type SessionStatus = "not_started" | "in_progress" | "finished" | "split";
 
+export interface SubRouteSummary {
+  id: string;
+  name: string;
+  owner_name: string | null;
+  status: SessionStatus;
+  stop_count: number;
+  done_count: number;
+}
+
 export interface SessionSummary {
   id: string;
   name: string;
@@ -18,6 +27,8 @@ export interface SessionSummary {
   owner_name: string | null;
   parent_id: string | null;
   sub_route_count: number;
+  /** Filled for split routes: one entry per sub-route and who rides it. */
+  sub_routes: SubRouteSummary[];
   stop_count: number;
   total_duration: number | null;
   total_distance: number | null;

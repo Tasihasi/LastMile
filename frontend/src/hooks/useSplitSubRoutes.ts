@@ -15,15 +15,13 @@ export function useSplitSubRoutes(parentSessionId: string) {
       setError(null);
       const [parent, sessionList, bikerList] = await Promise.all([
         getSession(parentSessionId),
-        listSessions(),
+        listSessions(undefined, parentSessionId),
         listBikers(),
       ]);
       setParentSession(parent);
       setBikers(bikerList);
 
-      const childIds = sessionList
-        .filter((s) => s.parent_id === parentSessionId)
-        .map((s) => s.id);
+      const childIds = sessionList.map((s) => s.id);
 
       const childSessions = await Promise.all(childIds.map((id) => getSession(id)));
       setSubRoutes(childSessions);

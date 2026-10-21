@@ -1,6 +1,6 @@
 import path from "path";
 import { fileURLToPath } from "url";
-import { test, expect, loginViaAPI, TEST_FILES } from "./fixtures";
+import { test, expect, loginViaAPI, uploadTestFile, TEST_FILES } from "./fixtures";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -84,5 +84,45 @@ test.describe("Route planning wizard", () => {
     // Optimize step only shows the included stops.
     await footer.getByRole("button", { name: /^Continue/ }).click();
     await expect(page.locator(".stop-item")).toHaveCount(3);
+  });
+  test("rename the route and go back from the map to the planning steps", async ({
+    page,
+  }) => {
+    await uploadTestFile(page, "postal_codes.csv");
+    await expect(page.getByRole("button", { name: "Optimize Route" })).toBeVisible();
+
+    // Rename from the header.
+    await page.getByRole("button", { name: /^Rename route/ }).click();
+    const input = page.getByLabel("Route name");
+    await input.fill("Monday morning");
+    await input.press("Enter");
+    await expect(page.getByRole("button", { name: "Rename route Monday morning" })).toBeVisible();
+
+    // Reopen the route from the biker's list: it is unplanned, so it opens in the wizard.
+    await page.reload();
+    await page.getByRole("button", { name: /Monday morning/ }).first().click();
+    await expect(page.getByText(/\d+ of \d+ stops included/)).toBeVisible();
+
+    // Continue to the map, then use the back button to return to the planning steps.
+    await page.locator(".wizard-footer").getByRole("button", { name: /^Continue/ }).click();
+    await expect(page.getByRole("button", { name: "Optimize Route" })).toBeVisible();
+    await page.getByRole("button", { name: "Postal codes" }).click();
+    await expect(page.getByText(/\d+ of \d+ stops included/)).toBeVisible();
+  });
+  test("an optimized route reopened from the list reopens at the latest planning step", async ({
+    page,
+  }) => {
+    await uploadTestFile(page, "postal_codes.csv");
+    await page.getByRole("button", { name: "Optimize Route" }).click();
+    await expect(page.locator(".route-summary")).toBeVisible({ timeout: 30_000 });
+
+    // Reopening drops the biker at the latest planning step (the map) ...
+    await page.reload();
+    await page.locator(".session-list-item").first().click();
+    await expect(page.locator(".route-summary")).toBeVisible();
+
+    // ... and the earlier steps stay one click away.
+    await page.getByRole("button", { name: /Postal codes/ }).click();
+    await expect(page.getByText(/\d+ of \d+ stops included/)).toBeVisible();
   });
 });

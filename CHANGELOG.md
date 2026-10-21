@@ -16,10 +16,16 @@ Format: features are grouped by category. Each version includes a release date a
 - **Postal codes step.** After fixing addresses, the route's irányítószám groups are listed with stop counts. Tick/untick a code to include it in the day's plan (excluded stops are skipped by optimize and split), expand a code with the down arrow to see its addresses, untick single addresses, or move an address to another postal-code group (`POST /api/sessions/<id>/stops/bulk/`; new `postal_code` and `excluded` stop fields, backfilled by migration 0010).
 - **Fix addresses window.** Stops the geocoder could not find are listed separately; the user rewrites the address and re-checks it (`PATCH /api/sessions/<id>/stops/<stop_id>/address/`). Planners can also remove a stop.
 
+### Route navigation
+- **Existing routes open in the wizard.** An unplanned route reopens at the step it needs (geocode, fix addresses or postal codes); an optimized one drops the biker on the map, with the earlier steps one click away in the stepper.
+- **Back buttons.** A "Route planner" button on the map returns to the planning steps; bikers get a "My routes" button that returns to the list of all their routes without auto-reopening a lone active route.
+- **Rename routes** from the map header, the biker route list and the dashboard (`RouteNameField`). The backend lets a route's owner rename it as well as planners.
+- **Re-optimize is planner-only** once a route has a stop order, so a biker cannot overwrite the planner's order on an assigned route.
+
 ### Clustering
-- **Sub-routes are now first-class cards.** Splitting a large upload no longer stashes the children behind a special "Split Routes" section or a separate cluster-review screen. Each sub-route lands directly in the **Unassigned** column as a normal route card named `{parent_name}_1`, `{parent_name}_2`, ..., and can be assigned, optimized, renamed, or deleted like any other route.
-- Split parent sessions are now hidden from the planner session list (bikers already ignored them) so the dashboard shows one entry per route rather than a redundant parent + children layout.
-- The standalone cluster review view and the "Undo Split" / "Optimize All" / move-stops-between-clusters flows are no longer reachable from the UI. The backend endpoints (`uncluster/`, `move-stop/`) are unchanged and still work if called directly.
+- **A split route is one card for the planner.** It sits in a "Split between bikers" column listing its sub-routes (biker, status, progress); clicking it opens the Bikers step of the wizard. The sub-route cards, the cluster banner and the split modal on the dashboard are gone. `GET /api/sessions/` returns top-level sessions with a `sub_routes` summary, and `?parent_id=<id>` lists the children.
+- **Bikers only see their own sub-route.** Split parents are hidden from biker lists; each biker sees the part assigned to them.
+- The `uncluster/` and `move-stop/` backend endpoints are unchanged.
 
 ---
 

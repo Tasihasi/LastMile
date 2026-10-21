@@ -98,11 +98,10 @@ test.describe("Session List (Biker)", () => {
     await expect(session).toBeVisible({ timeout: 10_000 });
     await session.click();
 
-    // Should load route with stops and map
-    await expect(page.locator(".stop-item").first()).toBeVisible({
-      timeout: 15_000,
-    });
-    await expect(page.locator(".leaflet-container")).toBeVisible();
+    // An unplanned route reopens in the wizard (postal codes); a planned one on the map.
+    await expect(
+      page.locator(".wizard-stepper, .leaflet-container").first()
+    ).toBeVisible({ timeout: 15_000 });
   });
 
   test("empty state for new biker", async ({ page }) => {
@@ -110,5 +109,26 @@ test.describe("Session List (Biker)", () => {
     await expect(
       page.getByText(/No routes yet/)
     ).toBeVisible({ timeout: 15_000 });
+  });
+  test("a biker can go back from an open route to the list of all routes", async ({
+    page,
+  }) => {
+    // Anna's in-progress route either opens straight away (a lone one) or is picked from the list.
+    await loginViaAPI(page, "Anna", "biker");
+    const active = page.locator(".session-list-item--active").first();
+    if (await active.isVisible({ timeout: 5_000 }).catch(() => false)) {
+      await active.click();
+    }
+    await expect(page.locator(".stop-item").first()).toBeVisible({
+      timeout: 15_000,
+    });
+
+    await page.getByRole("button", { name: /My routes/ }).click();
+    await expect(page.getByText("Recent Routes")).toBeVisible({
+      timeout: 10_000,
+    });
+    // The list stays: it must not bounce back into the in-progress route.
+    await page.waitForTimeout(1_000);
+    await expect(page.getByText("Recent Routes")).toBeVisible();
   });
 });

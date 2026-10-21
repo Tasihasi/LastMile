@@ -320,8 +320,21 @@ class PlannerManagementTest(TestCase):
         )
         self.assertEqual(response.status_code, 400)
 
-    def test_biker_cannot_rename(self):
+    def test_biker_can_rename_own_session(self):
+        self.session.owner = self.biker
+        self.session.save(update_fields=["owner"])
         response = self.biker_client.patch(
+            f"/api/sessions/{self.session.id}/rename/",
+            {"name": "My route"},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.session.refresh_from_db()
+        self.assertEqual(self.session.name, "My route")
+
+    def test_biker_cannot_rename(self):
+        # A biker may only rename routes they own.
+        _, other_client = _make_biker("not_the_owner")
+        response = other_client.patch(
             f"/api/sessions/{self.session.id}/rename/",
             {"name": "Hacked"},
         )
@@ -1146,16 +1159,22 @@ class FullLifecycleIntegrationTest(TestCase):
         resp = self.planner_client.get(f"/api/sessions/{session_id}/")
         self.assertEqual(resp.json()["status"], "split")
 
-        # Split parents should be hidden from the planner session list too —
-        # the sub-routes take their place in the dashboard.
+        # For the planner a split route stays ONE entry; its sub-routes are
+        # summarised on it instead of being listed as separate routes.
         resp = self.planner_client.get("/api/sessions/")
-        planner_ids = [s["id"] for s in resp.json()]
-        self.assertNotIn(session_id, planner_ids)
+        planner_rows = {s["id"]: s for s in resp.json()}
+        self.assertIn(session_id, planner_rows)
         for sr_id in sub_route_ids:
-            self.assertIn(sr_id, planner_ids)
+            self.assertNotIn(sr_id, planner_rows)
+        summary = planner_rows[session_id]["sub_routes"]
+        self.assertEqual({sr["id"] for sr in summary}, set(sub_route_ids))
+
+        # The sub-routes can still be listed explicitly.
+        resp = self.planner_client.get(f"/api/sessions/?parent_id={session_id}")
+        sub_routes_in_list = [s for s in resp.json() if s["id"] in sub_route_ids]
+        self.assertEqual(len(sub_routes_in_list), len(sub_route_ids))
 
         # Sub-route names follow the "{parent_name}_N" convention.
-        sub_routes_in_list = [s for s in resp.json() if s["id"] in sub_route_ids]
         for sr in sub_routes_in_list:
             self.assertRegex(sr["name"], r"_\d+$")
 

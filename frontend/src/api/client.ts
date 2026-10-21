@@ -57,9 +57,12 @@ export async function logout(): Promise<void> {
 // ============================================
 
 export async function listSessions(
-  ownerId?: number
+  ownerId?: number,
+  parentId?: string
 ): Promise<SessionSummary[]> {
-  const params = ownerId ? { owner_id: ownerId } : {};
+  const params: Record<string, string | number> = {};
+  if (ownerId) params.owner_id = ownerId;
+  if (parentId) params.parent_id = parentId;
   const { data } = await api.get<SessionSummary[]>("/sessions/", { params });
   return data;
 }

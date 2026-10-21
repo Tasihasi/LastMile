@@ -156,6 +156,8 @@ test.describe("Biker Journey", () => {
     test("geocodes a large route fully (well past the old ~31 cap)", async ({
       page,
     }) => {
+      // Geocoding 60 stops takes about a second each, longer than the default timeout.
+      test.setTimeout(180_000);
       await loginViaAPI(page, "BikerBigGeocode", "biker");
       await page.getByRole("button", { name: "New Route" }).click();
 

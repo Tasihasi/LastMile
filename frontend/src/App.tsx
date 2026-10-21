@@ -17,6 +17,7 @@ import { PlannerDashboard } from "./components/PlannerDashboard";
 import { PlannerMapView } from "./components/PlannerMapView";
 import { SplitPlannerModal } from "./components/SplitPlannerModal";
 import { ClusterReviewView } from "./components/ClusterReviewView";
+import { RouteNameField } from "./components/RouteNameField";
 import { StopKanbanBoard } from "./components/StopKanbanBoard";
 import { shareSession, listBikers } from "./api/client";
 import type { User } from "./types";
@@ -40,6 +41,8 @@ function App() {
     error,
     sessionStatus,
     currentStopIndex,
+    sessionName,
+    renameCurrent,
     uploadFile,
     loadSession,
     geocode,
@@ -71,6 +74,8 @@ function App() {
   // Which file selection the current session was built from; a mismatch with
   // the picked files means the session must be re-imported before moving on.
   const [uploadedKey, setUploadedKey] = useState("");
+  // An existing route reopened in the wizard: no files to re-pick, so steps 1 starts at 2.
+  const [wizardResumed, setWizardResumed] = useState(false);
   const showUpload = wizardStep !== null;
   // Steps 1-4 replace the map layout with a full-page wizard.
   // Planners stay in the wizard for step 5 (biker distribution); bikers go on to the map.
@@ -180,9 +185,14 @@ function App() {
     setWizardFiles([]);
     setWizardOwnerId(undefined);
     setUploadedKey("");
+    setWizardResumed(false);
   };
 
+  // Only the very first list load jumps into a lone in-progress route; after going back the biker stays on the list.
+  const [autoOpenRoute, setAutoOpenRoute] = useState(true);
+
   const handleStartOver = () => {
+    setAutoOpenRoute(false);
     reset();
     clearWizard();
     if (isPlanner) setViewMode("dashboard");
@@ -196,16 +206,31 @@ function App() {
     setViewMode("map");
   };
 
-  const handleSelectSession = (id: string) => {
-    loadSession(id);
+  const handleSelectSession = async (id: string) => {
+    const session = await loadSession(id);
     clearWizard();
     setViewMode("map");
+    // A route that is still being planned reopens at its latest planning step.
+    // Sub-routes of a split route are not re-planned: they open straight on the map.
+    if (session && session.status === "not_started" && !session.parent_id) {
+      const optimized = session.stops.some((s) => s.sequence_order != null);
+      const toFix = session.stops.some((s) => s.lat == null || s.lng == null);
+      if (!optimized) {
+        setWizardResumed(true);
+        setWizardStep(session.needs_geocoding ? 2 : toFix ? 3 : 4);
+      } else if (!isPlanner) {
+        setWizardResumed(true);
+        setWizardStep(5);
+      }
+    }
   };
 
   const filesKey = wizardFiles.map(fileKey).join("|");
   const sessionMatchesFiles = sessionId != null && filesKey === uploadedKey;
   let maxWizardStep: WizardStep = 1;
-  if (wizardFiles.length > 0) {
+  if (wizardResumed) {
+    maxWizardStep = needsGeocoding ? 2 : locatedCount >= 2 ? 5 : 4;
+  } else if (wizardFiles.length > 0) {
     maxWizardStep = 2;
     if (sessionMatchesFiles && !needsGeocoding) maxWizardStep = locatedCount >= 2 ? 5 : 4;
   }
@@ -220,6 +245,13 @@ function App() {
       return;
     }
     setWizardStep(target);
+  };
+
+  // Go back from the map to the planning steps (postal codes) of the same route.
+  const openPlanner = () => {
+    setWizardResumed(wizardFiles.length === 0);
+    setWizardStep(4);
+    setViewMode("map");
   };
 
   // Show session list when no active session and not uploading (biker only)
@@ -239,6 +271,9 @@ function App() {
             </svg>
           </div>
           <h1>LastMile</h1>
+          {sessionId && viewMode === "map" && (
+            <RouteNameField name={sessionName} onSave={async (n) => { if (await renameCurrent(n)) showToast("Route renamed"); }} />
+          )}
         </div>
         <div className="app-header-right">
           {isPlanner && viewMode === "map" && (
@@ -255,6 +290,22 @@ function App() {
                 <polyline points="15 18 9 12 15 6" />
               </svg>
               Back
+            </button>
+          )}
+          {!isPlanner && viewMode === "map" && allStops.length > 0 && !inWizardPages && (
+            <button className="btn btn-ghost" onClick={handleStartOver} title="Back to all my routes">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="15 18 9 12 15 6" />
+              </svg>
+              My routes
+            </button>
+          )}
+          {viewMode === "map" && allStops.length > 0 && !inWizardPages && wizardStep !== 5 && sessionStatus === "not_started" && (
+            <button className="btn btn-ghost" onClick={openPlanner} title="Back to the route planning steps">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="15 18 9 12 15 6" />
+              </svg>
+              Route planner
             </button>
           )}
           {viewMode === "map" && stops.length > 0 && !inWizardPages && (
@@ -384,12 +435,16 @@ function App() {
           }}
         />
       ) : isPlanner && viewMode === "split-review" && splitReviewId ? (
-        <ClusterReviewView
-          parentSessionId={splitReviewId}
-          onBack={() => setViewMode("dashboard")}
-          onViewSession={handleSelectSession}
-          onOpenKanban={() => setViewMode("stop-kanban")}
-        />
+        <>
+          {/* A split route is at the last planning step; earlier steps are done. */}
+          <WizardStepper current={5} maxStep={5} minStep={5} planner onStepChange={() => {}} />
+          <ClusterReviewView
+            parentSessionId={splitReviewId}
+            onBack={() => setViewMode("dashboard")}
+            onViewSession={handleSelectSession}
+            onOpenKanban={() => setViewMode("stop-kanban")}
+          />
+        </>
       ) : isPlanner && viewMode === "stop-kanban" && splitReviewId ? (
         <StopKanbanBoard
           parentSessionId={splitReviewId}
@@ -404,12 +459,13 @@ function App() {
             maxStep={maxWizardStep}
             disabled={isUploading || isGeocoding}
             planner={isPlanner}
+            minStep={wizardResumed ? 2 : 1}
             onStepChange={goToWizardStep}
           />
           {wizardStep === 5 && sessionId ? (
             <SplitPlannerModal
               inline
-              session={{ id: sessionId, name: wizardFiles[0]?.name ?? "Route", stop_count: stops.length }}
+              session={{ id: sessionId, name: sessionName, stop_count: stops.length }}
               bikers={bikers}
               onClose={() => setWizardStep(4)}
               onSplit={(parentId) => {
@@ -476,6 +532,7 @@ function App() {
               <SessionList
                 onSelectSession={handleSelectSession}
                 onNewRoute={() => handleNewRoute()}
+                autoSelect={autoOpenRoute}
               />
             ) : stops.length === 0 ? null : (
               <>
@@ -596,7 +653,7 @@ function App() {
                       )}
                     </button>
                   )}
-                  {canOptimize && sessionStatus === "not_started" && (
+                  {canOptimize && sessionStatus === "not_started" && (isPlanner || !isOptimized) && (
                     <button
                       className="btn btn-primary"
                       onClick={() => optimize(
@@ -622,7 +679,7 @@ function App() {
                       )}
                     </button>
                   )}
-                  {canOptimize && isOptimized && sessionStatus === "in_progress" && (
+                  {canOptimize && isOptimized && isPlanner && sessionStatus === "in_progress" && (
                     confirmReoptimize ? (
                       <div className="reoptimize-confirm">
                         <span>Re-optimize will change the route order. Continue?</span>
