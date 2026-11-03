@@ -84,6 +84,8 @@ class DeliveryStop(models.Model):
         default=DeliveryStatus.PENDING,
         db_index=True,
     )
+    # When the biker marked the stop delivered / not received / skipped.
+    delivered_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         ordering = ["id"]

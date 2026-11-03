@@ -25,6 +25,7 @@ Format: features are grouped by category. Each version includes a release date a
 ### Clustering
 - **A split route is one card for the planner.** It sits in a "Split between bikers" column listing its sub-routes (biker, status, progress); clicking it opens the Bikers step of the wizard. The sub-route cards, the cluster banner and the split modal on the dashboard are gone. `GET /api/sessions/` returns top-level sessions with a `sub_routes` summary, and `?parent_id=<id>` lists the children.
 - **Bikers only see their own sub-route.** Split parents are hidden from biker lists; each biker sees the part assigned to them.
+- **Stop popup on the split-review map** shows which biker carries the stop, with **Stop details** (recipient, phone, position, estimated arrival, or delivered/not-received time) and **Move to…** (a window over the map to hand the stop to another biker). Stops now record `delivered_at` (migration 0011).
 - The `uncluster/` and `move-stop/` backend endpoints are unchanged.
 
 ---

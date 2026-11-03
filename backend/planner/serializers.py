@@ -39,6 +39,7 @@ class DeliveryStopSerializer(serializers.ModelSerializer):
             "excluded",
             "sequence_order",
             "delivery_status",
+            "delivered_at",
         ]
 
 

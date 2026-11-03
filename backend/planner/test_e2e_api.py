@@ -488,6 +488,7 @@ class RouteLifecycleE2E(TestCase):
         )
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.json()["stop"]["delivery_status"], "delivered")
+        self.assertIsNotNone(resp.json()["stop"]["delivered_at"])
         self.assertEqual(resp.json()["current_stop_index"], 2)
         self.assertEqual(resp.json()["session_status"], "in_progress")
 

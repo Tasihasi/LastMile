@@ -243,35 +243,33 @@ test.describe("Planner Journey", () => {
       }
     });
 
-    test("delete session with confirmation", async ({ page }) => {
+    test("delete session by holding the delete button", async ({ page }) => {
       // Wait for dashboard to fully load
       await expect(page.locator(".dashboard-layout")).toBeVisible({
         timeout: 20_000,
       });
       await page.waitForLoadState("networkidle");
 
-      // Find a session card with a delete button
       const cards = page.locator(".session-card");
       await expect(cards.first()).toBeVisible({ timeout: 15_000 });
       const cardCount = await cards.count();
 
       const deleteBtn = page.locator(".session-card-btn--danger").first();
       if (await deleteBtn.isVisible({ timeout: 5_000 }).catch(() => false)) {
-        await deleteBtn.click();
+        const box = (await deleteBtn.boundingBox())!;
+        await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
 
-        // Confirmation dialog should appear
-        await expect(
-          page.locator(".session-card-confirm")
-        ).toBeVisible({ timeout: 5_000 });
+        // A short press does nothing...
+        await page.mouse.down();
+        await expect(deleteBtn).toHaveClass(/hold-btn--holding/);
+        await page.mouse.up();
+        await expect(deleteBtn).not.toHaveClass(/hold-btn--holding/);
+        await expect(cards).toHaveCount(cardCount);
 
-        // Click confirm delete
-        await page
-          .locator(".session-card-confirm-delete")
-          .first()
-          .click();
-
-        // Card should be removed
+        // ...holding it for the full duration deletes the route.
+        await page.mouse.down();
         await expect(cards).toHaveCount(cardCount - 1, { timeout: 10_000 });
+        await page.mouse.up();
       }
     });
   });

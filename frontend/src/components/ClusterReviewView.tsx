@@ -1,3 +1,7 @@
+import { HoldToConfirmButton } from "./HoldToConfirmButton";
+import { MoveStopModal } from "./MoveStopModal";
+import { StopDetailsModal } from "./StopDetailsModal";
+import { calcArrivalTimes } from "../utils/format";
 import { useEffect, useRef, useState } from "react";
 import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet";
 import L from "leaflet";
@@ -66,6 +70,15 @@ export function ClusterReviewView({
     routeId: string;
   } | null>(null);
   const [unclustering, setUnclustering] = useState(false);
+  const [moveRequest, setMoveRequest] = useState<{
+    stop: DeliveryStop;
+    routeId: string;
+  } | null>(null);
+  const [moving, setMoving] = useState(false);
+  const [detailsRequest, setDetailsRequest] = useState<{
+    stop: DeliveryStop;
+    routeId: string;
+  } | null>(null);
 
   const { settings } = useSettings();
   const { showToast } = useToast();
@@ -125,34 +138,35 @@ export function ClusterReviewView({
     setAssignDropdown(null);
   };
 
-  const handleMoveStop = async (
-    stopId: number,
-    fromRouteId: string,
-    toRouteId: string
-  ) => {
+  const handleMoveStop = async (toRouteId: string) => {
+    if (!moveRequest) return;
+    const { stop, routeId: fromRouteId } = moveRequest;
+    setMoving(true);
     try {
-      await moveStop(fromRouteId, stopId, toRouteId);
-      // Reload both affected sessions
+      await moveStop(fromRouteId, stop.id, toRouteId);
       const [fromUpdated, toUpdated] = await Promise.all([
         getSession(fromRouteId),
         getSession(toRouteId),
       ]);
       setRawSubRoutes((prev) =>
-        prev.map((s) => {
-          if (s.id === fromRouteId) return fromUpdated;
-          if (s.id === toRouteId) return toUpdated;
-          return s;
+        prev.map((r) => {
+          if (r.id === fromRouteId) return fromUpdated;
+          if (r.id === toRouteId) return toUpdated;
+          return r;
         })
       );
       setSelectedStop(null);
+      setMoveRequest(null);
+      showToast(`Stop moved to ${toUpdated.owner_name ?? toUpdated.name}`);
     } catch {
-      setError("Failed to move stop.");
+      setError("Failed to move stop. The route may already be in progress.");
+      setMoveRequest(null);
+    } finally {
+      setMoving(false);
     }
   };
 
   const handleRemoveStop = async (stopId: number, routeId: string) => {
-    const ok = window.confirm("Remove this stop from the plan entirely?");
-    if (!ok) return;
     try {
       await removeStop(routeId, stopId);
       const updated = await getSession(routeId);
@@ -224,11 +238,6 @@ export function ClusterReviewView({
   const parentSkippedStops = parentSession
     ? parentSession.stops.filter((s) => s.geocode_status !== "success").length
     : 0;
-
-  // Build a map of routeId -> color for the stop move popup
-  const routeColorMap = new Map(
-    subRoutes.map((r) => [r.session.id, r.color])
-  );
 
   return (
     <div className="cluster-review">
@@ -517,10 +526,11 @@ export function ClusterReviewView({
                       </svg>
                     </button>
                     {route.session.stops.length === 0 && (
-                      <button
+                      <HoldToConfirmButton
                         className="btn btn-sm btn-ghost cluster-route-delete"
-                        onClick={() => handleDeleteRoute(route.session.id)}
-                        title="Delete empty route"
+                        onConfirm={() => handleDeleteRoute(route.session.id)}
+                        title="Hold to delete empty route"
+                        aria-label="Hold to delete empty route"
                       >
                         <svg
                           viewBox="0 0 24 24"
@@ -533,7 +543,7 @@ export function ClusterReviewView({
                           <polyline points="3 6 5 6 21 6" />
                           <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
                         </svg>
-                      </button>
+                      </HoldToConfirmButton>
                     )}
                   </div>
 
@@ -569,19 +579,17 @@ export function ClusterReviewView({
                               #{stop.sequence_order}
                             </span>
                           )}
-                          <button
+                          <HoldToConfirmButton
                             className="cluster-stop-remove"
-                            title="Remove stop from the plan"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleRemoveStop(stop.id, route.session.id);
-                            }}
+                            title="Hold to remove stop from the plan"
+                            aria-label="Hold to remove stop from the plan"
+                            onConfirm={() => handleRemoveStop(stop.id, route.session.id)}
                           >
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                               <line x1="18" y1="6" x2="6" y2="18" />
                               <line x1="6" y1="6" x2="18" y2="18" />
                             </svg>
-                          </button>
+                          </HoldToConfirmButton>
                         </div>
                       ))}
                     </div>
@@ -610,7 +618,6 @@ export function ClusterReviewView({
                 key={route.session.id}
                 route={route}
                 selectedStop={selectedStop}
-                allRoutes={subRoutes}
                 onSelectStop={(stop) =>
                   setSelectedStop(
                     selectedStop?.stop.id === stop.id
@@ -618,14 +625,52 @@ export function ClusterReviewView({
                       : { stop, routeId: route.session.id }
                   )
                 }
-                onMoveStop={handleMoveStop}
+                onMoveRequest={(stop, routeId) => setMoveRequest({ stop, routeId })}
+                onDetailsRequest={(stop, routeId) => setDetailsRequest({ stop, routeId })}
                 onRemoveStop={handleRemoveStop}
-                routeColorMap={routeColorMap}
               />
             ))}
           </MapContainer>
         </main>
       </div>
+      {detailsRequest && (() => {
+        const route = subRoutes.find((r) => r.session.id === detailsRequest.routeId);
+        if (!route) return null;
+        const included = route.session.stops.filter(
+          (s) => s.sequence_order != null && !s.excluded
+        );
+        const segments = route.session.route_segments;
+        const hasDepot =
+          settings.homeLat != null && settings.homeLng != null && segments != null && segments.length > included.length;
+        const arrivals =
+          segments && segments.length > 0
+            ? calcArrivalTimes(segments, settings, included.length, hasDepot)
+            : null;
+        const stop = route.session.stops.find((s) => s.id === detailsRequest.stop.id) ?? detailsRequest.stop;
+        return (
+          <StopDetailsModal
+            stop={stop}
+            route={route.session}
+            color={route.color}
+            eta={stop.sequence_order != null ? arrivals?.get(stop.sequence_order) ?? null : null}
+            stopCount={included.length}
+            onClose={() => setDetailsRequest(null)}
+          />
+        );
+      })()}
+      {moveRequest && (() => {
+        const fromRoute = moveRequest ? subRoutes.find((r) => r.session.id === moveRequest.routeId) : undefined;
+        return fromRoute ? (
+          <MoveStopModal
+            stop={moveRequest.stop}
+            from={fromRoute.session}
+            routes={subRoutes}
+            busy={moving}
+            onMove={handleMoveStop}
+            onClose={() => setMoveRequest(null)}
+          />
+        ) : null;
+      })()}
     </div>
   );
 }
@@ -661,19 +706,17 @@ function FitClusterBounds({ subRoutes }: { subRoutes: SubRouteData[] }) {
 function ClusterMapLayer({
   route,
   selectedStop,
-  allRoutes,
   onSelectStop,
-  onMoveStop,
+  onMoveRequest,
+  onDetailsRequest,
   onRemoveStop,
-  routeColorMap,
 }: {
   route: SubRouteData;
   selectedStop: { stop: DeliveryStop; routeId: string } | null;
-  allRoutes: SubRouteData[];
   onSelectStop: (stop: DeliveryStop) => void;
-  onMoveStop: (stopId: number, fromRouteId: string, toRouteId: string) => void;
+  onMoveRequest: (stop: DeliveryStop, routeId: string) => void;
+  onDetailsRequest: (stop: DeliveryStop, routeId: string) => void;
   onRemoveStop: (stopId: number, routeId: string) => void;
-  routeColorMap: Map<string, string>;
 }) {
   const map = useMap();
   const routeLayerRef = useRef<L.GeoJSON | null>(null);
@@ -731,10 +774,9 @@ function ClusterMapLayer({
             route={route}
             isSelected={isSelected}
             num={num}
-            allRoutes={allRoutes}
-            routeColorMap={routeColorMap}
             onSelectStop={onSelectStop}
-            onMoveStop={onMoveStop}
+            onMoveRequest={onMoveRequest}
+            onDetailsRequest={onDetailsRequest}
             onRemoveStop={onRemoveStop}
           />
         );
@@ -748,20 +790,18 @@ function ClusterMarker({
   route,
   isSelected,
   num,
-  allRoutes,
-  routeColorMap,
   onSelectStop,
-  onMoveStop,
+  onMoveRequest,
+  onDetailsRequest,
   onRemoveStop,
 }: {
   stop: DeliveryStop;
   route: SubRouteData;
   isSelected: boolean;
   num: number;
-  allRoutes: SubRouteData[];
-  routeColorMap: Map<string, string>;
   onSelectStop: (stop: DeliveryStop) => void;
-  onMoveStop: (stopId: number, fromSessionId: string, toSessionId: string) => void;
+  onMoveRequest: (stop: DeliveryStop, routeId: string) => void;
+  onDetailsRequest: (stop: DeliveryStop, routeId: string) => void;
   onRemoveStop: (stopId: number, routeId: string) => void;
 }) {
   const markerRef = useRef<L.Marker>(null);
@@ -780,7 +820,7 @@ function ClusterMarker({
       eventHandlers={{ click: () => onSelectStop(stop) }}
       zIndexOffset={isSelected ? 1000 : 0}
     >
-      <Popup>
+      <Popup minWidth={280} maxWidth={380}>
         <div className="cluster-stop-popup">
           <strong>{stop.name}</strong>
           {stop.raw_address && <span>{stop.raw_address}</span>}
@@ -789,35 +829,34 @@ function ClusterMarker({
               {stop.product_code}
             </span>
           )}
-          <div className="cluster-stop-popup-move">
-            <span>Move to:</span>
-            {allRoutes
-              .filter((r) => r.session.id !== route.session.id)
-              .map((r) => (
-                <button
-                  key={r.session.id}
-                  className="cluster-stop-popup-move-btn"
-                  onClick={() =>
-                    onMoveStop(stop.id, route.session.id, r.session.id)
-                  }
-                >
-                  <span
-                    className="cluster-stop-dot"
-                    style={{
-                      background:
-                        routeColorMap.get(r.session.id) ?? "#6366f1",
-                    }}
-                  />
-                  {r.session.name}
-                </button>
-              ))}
+          <span className="cluster-stop-popup-carrier">
+            <span
+              className="cluster-stop-dot"
+              style={{ background: route.color }}
+            />
+            Carried by <b>{route.session.owner_name ?? "Unassigned"}</b>
+          </span>
+          <div className="cluster-stop-popup-actions">
+            <button
+              className="cluster-stop-popup-move-btn"
+              onClick={() => onDetailsRequest(stop, route.session.id)}
+            >
+              Stop details
+            </button>
+            <button
+              className="cluster-stop-popup-move-btn"
+              onClick={() => onMoveRequest(stop, route.session.id)}
+            >
+              Move to…
+            </button>
           </div>
-          <button
+          <HoldToConfirmButton
             className="cluster-stop-popup-remove"
-            onClick={() => onRemoveStop(stop.id, route.session.id)}
+            title="Hold to remove stop from the plan"
+            onConfirm={() => onRemoveStop(stop.id, route.session.id)}
           >
             Remove stop
-          </button>
+          </HoldToConfirmButton>
         </div>
       </Popup>
     </Marker>

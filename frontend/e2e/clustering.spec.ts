@@ -99,5 +99,22 @@ test.describe("Clustering", () => {
     await expect(page.locator(".cluster-review")).toBeVisible({
       timeout: 15_000,
     });
+
+    // A stop's popup names the biker who carries it; "Move to…" opens a
+    // window over the map to pick a different biker.
+    await page.locator(".numbered-marker").first().click({ force: true });
+    const popup = page.locator(".cluster-stop-popup");
+    await expect(popup).toContainText("Carried by");
+    await popup.getByRole("button", { name: "Stop details" }).click();
+    const details = page.getByRole("dialog", { name: "Stop details" });
+    await expect(details).toContainText("Carried by");
+    await expect(details.locator(".stop-details-status")).toBeVisible();
+    await details.getByRole("button", { name: "Close" }).click();
+    await expect(details).toBeHidden();
+
+    await popup.getByRole("button", { name: /^Move to/ }).click();
+    const dialog = page.getByRole("dialog", { name: "Move stop to another biker" });
+    await expect(dialog).toBeVisible();
+    await expect(dialog.locator(".move-stop-option").first()).toBeVisible();
   });
 });

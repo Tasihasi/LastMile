@@ -1,3 +1,4 @@
+import { HoldToConfirmButton } from "./HoldToConfirmButton";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { DeliveryStop } from "../types";
 
@@ -301,9 +302,14 @@ function FixRow({
           {busy ? "Searching…" : ok ? "Re-check" : "Find"}
         </button>
         {canRemove && !ok && (
-          <button type="button" className="btn btn-ghost btn-sm" disabled={busy} onClick={() => void onRemoveStop(stop.id)}>
+          <HoldToConfirmButton
+            className="btn btn-ghost btn-sm"
+            disabled={busy}
+            title="Hold to remove this stop"
+            onConfirm={() => void onRemoveStop(stop.id)}
+          >
             Remove
-          </button>
+          </HoldToConfirmButton>
         )}
       </form>
       {!ok && tried && <p className="fix-row-error">Still not found — try adding the city or fixing the spelling.</p>}

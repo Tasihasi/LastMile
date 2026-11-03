@@ -1,3 +1,4 @@
+import { HoldToConfirmButton } from "./HoldToConfirmButton";
 import { useState } from "react";
 import type { DeliveryStop } from "../types";
 import { getSession, moveStop, removeStop } from "../api/client";
@@ -57,8 +58,6 @@ export function StopKanbanBoard({ parentSessionId, onBack }: StopKanbanBoardProp
   };
 
   const handleRemove = async (routeId: string, stopId: number) => {
-    const ok = window.confirm("Remove this stop from the plan entirely?");
-    if (!ok) return;
     try {
       await removeStop(routeId, stopId);
       const updated = await getSession(routeId);
@@ -220,16 +219,17 @@ function StopCard({
         )}
       </div>
       {!locked && (
-        <button
+        <HoldToConfirmButton
           className="stop-kanban-card-remove"
-          title="Remove stop from the plan"
-          onClick={onRemove}
+          title="Hold to remove stop from the plan"
+          aria-label="Hold to remove stop from the plan"
+          onConfirm={onRemove}
         >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <line x1="18" y1="6" x2="6" y2="18" />
             <line x1="6" y1="6" x2="18" y2="18" />
           </svg>
-        </button>
+        </HoldToConfirmButton>
       )}
     </div>
   );

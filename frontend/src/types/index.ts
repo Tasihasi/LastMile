@@ -64,6 +64,8 @@ export interface DeliveryStop {
   excluded: boolean;
   sequence_order: number | null;
   delivery_status: DeliveryStopStatus;
+  /** When the biker marked the stop delivered / not received / skipped. */
+  delivered_at: string | null;
 }
 
 export interface SessionResponse {
