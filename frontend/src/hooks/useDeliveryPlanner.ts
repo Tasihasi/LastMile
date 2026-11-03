@@ -2,16 +2,21 @@ import { useState, useCallback } from "react";
 import type { DeliveryStop, DeliveryStopStatus, RouteSegment, SessionResponse, SessionStatus } from "../types";
 import {
   uploadFile as apiUpload,
+  updateStopAddress as apiUpdateStopAddress,
+  bulkUpdateStops as apiBulkUpdateStops,
+  removeStop as apiRemoveStop,
   getSession as apiGetSession,
   geocodeStops as apiGeocode,
   geocodeStatus as apiGeocodeStatus,
   optimizeRoute as apiOptimize,
   startRoute as apiStartRoute,
   updateStopStatus as apiUpdateStopStatus,
+  renameSession as apiRenameSession,
 } from "../api/client";
 
 export function useDeliveryPlanner() {
   const [sessionId, setSessionId] = useState<string | null>(null);
+  const [sessionName, setSessionName] = useState("");
   const [stops, setStops] = useState<DeliveryStop[]>([]);
   const [needsGeocoding, setNeedsGeocoding] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
@@ -28,12 +33,18 @@ export function useDeliveryPlanner() {
   const [sessionStatus, setSessionStatus] = useState<SessionStatus>("not_started");
   const [currentStopIndex, setCurrentStopIndex] = useState<number | null>(null);
 
-  const uploadFile = useCallback(async (file: File, ownerId?: number) => {
+  /** Resolves true when the files were imported into the session. */
+  const uploadFile = useCallback(async (
+    files: File | File[],
+    ownerId?: number,
+    replaceSessionId?: string | null
+  ): Promise<boolean> => {
     setIsUploading(true);
     setError(null);
     try {
-      const session: SessionResponse = await apiUpload(file, ownerId);
+      const session: SessionResponse = await apiUpload(files, ownerId, replaceSessionId);
       setSessionId(session.id);
+      setSessionName(session.name);
       setStops(session.stops);
       setNeedsGeocoding(session.needs_geocoding);
       setSessionStatus(session.status);
@@ -42,6 +53,7 @@ export function useDeliveryPlanner() {
       setRouteSegments(null);
       setTotalDuration(null);
       setTotalDistance(null);
+      return true;
     } catch (err: unknown) {
       if (err && typeof err === "object" && "response" in err) {
         const axiosErr = err as { response?: { data?: { error?: string } } };
@@ -49,6 +61,7 @@ export function useDeliveryPlanner() {
       } else {
         setError("Upload failed.");
       }
+      return false;
     } finally {
       setIsUploading(false);
     }
@@ -59,6 +72,7 @@ export function useDeliveryPlanner() {
     try {
       const session = await apiGetSession(id);
       setSessionId(session.id);
+      setSessionName(session.name);
       setStops(session.stops);
       setNeedsGeocoding(session.needs_geocoding);
       setSessionStatus(session.status);
@@ -67,8 +81,10 @@ export function useDeliveryPlanner() {
       setRouteSegments(session.route_segments ?? null);
       setTotalDuration(session.total_duration ?? null);
       setTotalDistance(session.total_distance ?? null);
+      return session;
     } catch {
       setError("Failed to load session.");
+      return null;
     }
   }, []);
 
@@ -123,6 +139,60 @@ export function useDeliveryPlanner() {
     }
   }, [sessionId]);
 
+  /** Rewrite a stop's address and re-geocode it. Resolves true if it now has coordinates. */
+  const fixAddress = useCallback(async (stopId: number, address: string): Promise<boolean> => {
+    if (!sessionId) return false;
+    setError(null);
+    try {
+      const stop = await apiUpdateStopAddress(sessionId, stopId, address);
+      setStops((prev) => prev.map((s) => (s.id === stop.id ? stop : s)));
+      return stop.geocode_status === "success";
+    } catch {
+      setError("Failed to update the address.");
+      return false;
+    }
+  }, [sessionId]);
+
+  /** Include/exclude stops and/or move them to another postal-code group. */
+  const updateStops = useCallback(async (
+    stopIds: number[],
+    patch: { excluded?: boolean; postal_code?: string }
+  ) => {
+    if (!sessionId || stopIds.length === 0) return;
+    setError(null);
+    // Apply the change right away so checkboxes respond instantly; the server
+    // response (or a rollback on failure) settles the final state.
+    const ids = new Set(stopIds);
+    const before = new Map<number, DeliveryStop>();
+    setStops((prev) => prev.map((s) => {
+      if (!ids.has(s.id)) return s;
+      before.set(s.id, s);
+      return { ...s, ...patch };
+    }));
+    try {
+      const updated = await apiBulkUpdateStops(sessionId, stopIds, patch);
+      const byId = new Map(updated.map((s) => [s.id, s]));
+      setStops((prev) => prev.map((s) => byId.get(s.id) ?? s));
+      // Ordering is invalidated server-side; drop the stale route drawing.
+      setRouteGeometry(null);
+      setRouteSegments(null);
+    } catch {
+      setStops((prev) => prev.map((s) => before.get(s.id) ?? s));
+      setError("Failed to update the stops.");
+    }
+  }, [sessionId]);
+
+  const discardStop = useCallback(async (stopId: number) => {
+    if (!sessionId) return;
+    setError(null);
+    try {
+      await apiRemoveStop(sessionId, stopId);
+      setStops((prev) => prev.filter((s) => s.id !== stopId));
+    } catch {
+      setError("Failed to remove the stop.");
+    }
+  }, [sessionId]);
+
   const optimize = useCallback(async (depot?: { lat: number; lng: number } | null) => {
     if (!sessionId) return;
     setIsOptimizing(true);
@@ -130,7 +200,10 @@ export function useDeliveryPlanner() {
 
     try {
       const result = await apiOptimize(sessionId, depot);
-      setStops(result.optimized_stops);
+      // Keep stops that are not part of the route (excluded / not located) so
+      // stepping back in the wizard still shows them.
+      const optimized = new Map(result.optimized_stops.map((s) => [s.id, s]));
+      setStops((prev) => prev.map((s) => optimized.get(s.id) ?? s));
       setRouteGeometry(result.route_geometry);
       setRouteSegments(result.route_segments);
       setTotalDuration(result.total_duration);
@@ -172,8 +245,21 @@ export function useDeliveryPlanner() {
     }
   }, [sessionId]);
 
+  const renameCurrent = useCallback(async (name: string): Promise<boolean> => {
+    if (!sessionId) return false;
+    try {
+      const saved = await apiRenameSession(sessionId, name);
+      setSessionName(saved.name);
+      return true;
+    } catch {
+      setError("Failed to rename the route.");
+      return false;
+    }
+  }, [sessionId]);
+
   const reset = useCallback(() => {
     setSessionId(null);
+    setSessionName("");
     setStops([]);
     setNeedsGeocoding(false);
     setIsGeocoding(false);
@@ -190,6 +276,8 @@ export function useDeliveryPlanner() {
 
   return {
     sessionId,
+    sessionName,
+    renameCurrent,
     stops,
     needsGeocoding,
     isUploading,
@@ -206,6 +294,9 @@ export function useDeliveryPlanner() {
     uploadFile,
     loadSession,
     geocode,
+    fixAddress,
+    updateStops,
+    discardStop,
     optimize,
     startDeliveryRoute,
     markStop,

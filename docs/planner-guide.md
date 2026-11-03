@@ -37,9 +37,9 @@ Each card shows:
 
 ### Split Banner
 
-Routes with more than 48 stops display a **Split into Routes** banner above the session card. Click it to trigger KMeans clustering -- a spinner shows while clustering is in progress. The actual number of sub-routes depends on how many stops were successfully geocoded, so the banner label stays generic.
+Routes with more than 48 stops display a **Split into Routes** banner above the session card. Click it to open the **Split Planner** -- a dialog where you choose which bikers share the route, roughly how many stops each should get (fewer for a half-day shift), and optionally lock a biker to a single city district. The actual number of sub-routes depends on how many stops were successfully geocoded, so the banner label stays generic.
 
-After splitting, the parent route disappears from the dashboard and each sub-route appears in the **Unassigned** column as an independent route card named `{parent_name}_1`, `{parent_name}_2`, etc. Sub-routes behave like any other route -- assign, optimize, rename, or delete them individually from the kanban.
+After splitting, the parent route disappears from the dashboard and each sub-route appears as an independent route card named `{parent_name}_1`, `{parent_name}_2`, etc. -- already assigned to the biker you picked, or in the **Unassigned** column for automatic splits. Sub-routes behave like any other route -- assign, optimize, rename, or delete them individually from the kanban.
 
 ## Assigning Routes
 
@@ -85,10 +85,23 @@ For large uploads (50+ stops), LastMile splits deliveries into manageable sub-ro
 
 1. Upload a file with more than 48 stops
 2. A **Split into Routes** banner appears above the route card in the Unassigned column
-3. Click the banner -- KMeans clustering runs on the geocoded stops
-4. The parent session is hidden and each resulting sub-route is inserted into the **Unassigned** column as a normal route card named `{parent_name}_1`, `{parent_name}_2`, ...
+3. Click the banner -- the **Split Planner** dialog opens
+4. Pick the bikers who work that day, adjust each biker's approximate stop count (e.g. fewer stops for a half-day shift), and optionally toggle **Single district** to restrict a biker to one city district (districts are derived from the Budapest postal codes in the stop addresses)
+5. Click **Split** -- weighted KMeans clustering runs on the geocoded stops and each sub-route is created already assigned to its biker
 
-The number of sub-routes is auto-calculated: `ceil(stop_count / 48)`. Each sub-route respects the ORS 48-stop optimization limit. Non-geocoded stops are skipped during clustering.
+Deselecting all bikers falls back to automatic splitting: `ceil(stop_count / 48)` sub-routes, all landing in the **Unassigned** column. Non-geocoded stops are skipped during clustering. If every selected biker is district-locked, stops outside those districts go into an extra unassigned sub-route so nothing is lost.
+
+### Split Review
+
+After splitting, the app opens the **Split Review** screen: every sub-route on one map, color-coded, with a sidebar listing stops per route. From here you can:
+
+- **Move a stop** to a sibling route (click a stop, pick the target route in the popup)
+- **Remove a stop** from the plan entirely (the × next to a stop, or "Remove stop" in the popup)
+- **Optimize** routes individually or all at once
+- **Assign / reassign** each sub-route to a biker
+- **Undo the split**, deleting all sub-routes and restoring the original session
+
+The review screen stays reachable after the fact: sub-route cards on the dashboard have a **split review** action that reopens it for more precise planning.
 
 ### Working with sub-routes
 
@@ -98,10 +111,6 @@ Sub-routes are first-class routes. From the kanban you can:
 - **Optimize** individually by opening the route view
 - **Rename** or **delete** via the card action icons
 - **Track** progress once a biker starts one
-
-There is no separate "cluster review" UI -- a planner cannot tell whether a route was created by clustering or by a normal upload. Sub-routes are visually identical to simple routes.
-
-> **Undo:** Because sub-routes are independent once created, there is no single "undo split" action. Delete the sub-routes you no longer want and re-upload or re-cluster if needed.
 
 ---
 

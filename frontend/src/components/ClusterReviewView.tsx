@@ -1,19 +1,23 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { HoldToConfirmButton } from "./HoldToConfirmButton";
+import { MoveStopModal } from "./MoveStopModal";
+import { StopDetailsModal } from "./StopDetailsModal";
+import { calcArrivalTimes } from "../utils/format";
+import { useEffect, useRef, useState } from "react";
 import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet";
 import L from "leaflet";
-import type { DeliveryStop, SessionResponse, User } from "../types";
+import type { DeliveryStop, SessionResponse } from "../types";
 import {
   getSession,
-  listSessions,
-  listBikers,
   optimizeRoute,
   assignSession,
   moveStop,
+  removeStop,
   deleteSession,
   unclusterSession,
 } from "../api/client";
 import { useSettings } from "../hooks/useSettings";
 import { useToast } from "../hooks/useToast";
+import { useSplitSubRoutes } from "../hooks/useSplitSubRoutes";
 import { formatDuration, formatDistance } from "../utils/format";
 import "leaflet/dist/leaflet.css";
 
@@ -39,18 +43,24 @@ interface ClusterReviewViewProps {
   parentSessionId: string;
   onBack: () => void;
   onViewSession: (sessionId: string) => void;
+  onOpenKanban?: () => void;
 }
 
 export function ClusterReviewView({
   parentSessionId,
   onBack,
   onViewSession,
+  onOpenKanban,
 }: ClusterReviewViewProps) {
-  const [subRoutes, setSubRoutes] = useState<SubRouteData[]>([]);
-  const [parentSession, setParentSession] = useState<SessionResponse | null>(null);
-  const [bikers, setBikers] = useState<User[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const {
+    subRoutes: rawSubRoutes,
+    setSubRoutes: setRawSubRoutes,
+    parentSession,
+    bikers,
+    loading,
+    error,
+    setError,
+  } = useSplitSubRoutes(parentSessionId);
   const [expandedRoute, setExpandedRoute] = useState<string | null>(null);
   const [optimizingId, setOptimizingId] = useState<string | null>(null);
   const [optimizeAllRunning, setOptimizeAllRunning] = useState(false);
@@ -60,49 +70,23 @@ export function ClusterReviewView({
     routeId: string;
   } | null>(null);
   const [unclustering, setUnclustering] = useState(false);
+  const [moveRequest, setMoveRequest] = useState<{
+    stop: DeliveryStop;
+    routeId: string;
+  } | null>(null);
+  const [moving, setMoving] = useState(false);
+  const [detailsRequest, setDetailsRequest] = useState<{
+    stop: DeliveryStop;
+    routeId: string;
+  } | null>(null);
 
   const { settings } = useSettings();
   const { showToast } = useToast();
 
-  const loadData = useCallback(async () => {
-    try {
-      setError(null);
-      const [parent, sessionList, bikerList] = await Promise.all([
-        getSession(parentSessionId),
-        listSessions(),
-        listBikers(),
-      ]);
-      setParentSession(parent);
-      setBikers(bikerList);
-
-      // Find child sessions of this parent
-      const childIds = sessionList
-        .filter((s) => s.parent_id === parentSessionId)
-        .map((s) => s.id);
-
-      const childSessions = await Promise.all(
-        childIds.map((id) => getSession(id))
-      );
-
-      setSubRoutes(
-        childSessions.map((session, i) => ({
-          session,
-          color: CLUSTER_COLORS[i % CLUSTER_COLORS.length],
-        }))
-      );
-    } catch {
-      setError("Failed to load cluster data.");
-    } finally {
-      setLoading(false);
-    }
-  }, [parentSessionId]);
-
-  useEffect(() => {
-    // Initial cluster-data fetch on mount; loadData sets loading/error state
-    // before awaiting, which is the intended behaviour for a data load.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    loadData();
-  }, [loadData]);
+  const subRoutes: SubRouteData[] = rawSubRoutes.map((session, i) => ({
+    session,
+    color: CLUSTER_COLORS[i % CLUSTER_COLORS.length],
+  }));
 
   const handleOptimize = async (routeId: string) => {
     setOptimizingId(routeId);
@@ -114,11 +98,7 @@ export function ClusterReviewView({
       await optimizeRoute(routeId, depot);
       // Reload the optimized session
       const updated = await getSession(routeId);
-      setSubRoutes((prev) =>
-        prev.map((r) =>
-          r.session.id === routeId ? { ...r, session: updated } : r
-        )
-      );
+      setRawSubRoutes((prev) => prev.map((s) => (s.id === routeId ? updated : s)));
     } catch {
       setError("Optimization failed. Check your ORS API key.");
     } finally {
@@ -138,11 +118,7 @@ export function ClusterReviewView({
       try {
         await optimizeRoute(route.session.id, depot);
         const updated = await getSession(route.session.id);
-        setSubRoutes((prev) =>
-          prev.map((r) =>
-            r.session.id === route.session.id ? { ...r, session: updated } : r
-          )
-        );
+        setRawSubRoutes((prev) => prev.map((s) => (s.id === route.session.id ? updated : s)));
       } catch {
         // continue with remaining routes
       }
@@ -155,39 +131,51 @@ export function ClusterReviewView({
     try {
       await assignSession(routeId, bikerId);
       const updated = await getSession(routeId);
-      setSubRoutes((prev) =>
-        prev.map((r) =>
-          r.session.id === routeId ? { ...r, session: updated } : r
-        )
-      );
+      setRawSubRoutes((prev) => prev.map((s) => (s.id === routeId ? updated : s)));
     } catch {
       // ignore
     }
     setAssignDropdown(null);
   };
 
-  const handleMoveStop = async (
-    stopId: number,
-    fromRouteId: string,
-    toRouteId: string
-  ) => {
+  const handleMoveStop = async (toRouteId: string) => {
+    if (!moveRequest) return;
+    const { stop, routeId: fromRouteId } = moveRequest;
+    setMoving(true);
     try {
-      await moveStop(fromRouteId, stopId, toRouteId);
-      // Reload both affected sessions
+      await moveStop(fromRouteId, stop.id, toRouteId);
       const [fromUpdated, toUpdated] = await Promise.all([
         getSession(fromRouteId),
         getSession(toRouteId),
       ]);
-      setSubRoutes((prev) =>
+      setRawSubRoutes((prev) =>
         prev.map((r) => {
-          if (r.session.id === fromRouteId) return { ...r, session: fromUpdated };
-          if (r.session.id === toRouteId) return { ...r, session: toUpdated };
+          if (r.id === fromRouteId) return fromUpdated;
+          if (r.id === toRouteId) return toUpdated;
           return r;
         })
       );
       setSelectedStop(null);
+      setMoveRequest(null);
+      showToast(`Stop moved to ${toUpdated.owner_name ?? toUpdated.name}`);
     } catch {
-      setError("Failed to move stop.");
+      setError("Failed to move stop. The route may already be in progress.");
+      setMoveRequest(null);
+    } finally {
+      setMoving(false);
+    }
+  };
+
+  const handleRemoveStop = async (stopId: number, routeId: string) => {
+    try {
+      await removeStop(routeId, stopId);
+      const updated = await getSession(routeId);
+      setRawSubRoutes((prev) => prev.map((s) => (s.id === routeId ? updated : s)));
+      setSelectedStop(null);
+      showToast("Stop removed");
+    } catch {
+      setError("Failed to remove stop.");
+      showToast("Failed to remove stop", "error");
     }
   };
 
@@ -211,7 +199,7 @@ export function ClusterReviewView({
   const handleDeleteRoute = async (routeId: string) => {
     try {
       await deleteSession(routeId);
-      setSubRoutes((prev) => prev.filter((r) => r.session.id !== routeId));
+      setRawSubRoutes((prev) => prev.filter((s) => s.id !== routeId));
       showToast("Route deleted");
     } catch {
       setError("Failed to delete route.");
@@ -251,11 +239,6 @@ export function ClusterReviewView({
     ? parentSession.stops.filter((s) => s.geocode_status !== "success").length
     : 0;
 
-  // Build a map of routeId -> color for the stop move popup
-  const routeColorMap = new Map(
-    subRoutes.map((r) => [r.session.id, r.color])
-  );
-
   return (
     <div className="cluster-review">
       <div className="cluster-review-header">
@@ -274,6 +257,19 @@ export function ClusterReviewView({
         </button>
         <h3>{parentSession?.name || "Cluster Review"}</h3>
         <div className="cluster-review-header-actions">
+          {onOpenKanban && (
+            <button
+              className="btn btn-ghost btn-sm"
+              onClick={onOpenKanban}
+              title="Open the stop board — drag stops between bikers"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="3" width="7" height="18" rx="1" />
+                <rect x="14" y="3" width="7" height="10" rx="1" />
+              </svg>
+              Stop Board
+            </button>
+          )}
           {!allOptimized && (
             <button
               className="btn btn-primary btn-sm cluster-optimize-all-btn"
@@ -530,10 +526,11 @@ export function ClusterReviewView({
                       </svg>
                     </button>
                     {route.session.stops.length === 0 && (
-                      <button
+                      <HoldToConfirmButton
                         className="btn btn-sm btn-ghost cluster-route-delete"
-                        onClick={() => handleDeleteRoute(route.session.id)}
-                        title="Delete empty route"
+                        onConfirm={() => handleDeleteRoute(route.session.id)}
+                        title="Hold to delete empty route"
+                        aria-label="Hold to delete empty route"
                       >
                         <svg
                           viewBox="0 0 24 24"
@@ -546,7 +543,7 @@ export function ClusterReviewView({
                           <polyline points="3 6 5 6 21 6" />
                           <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
                         </svg>
-                      </button>
+                      </HoldToConfirmButton>
                     )}
                   </div>
 
@@ -582,6 +579,17 @@ export function ClusterReviewView({
                               #{stop.sequence_order}
                             </span>
                           )}
+                          <HoldToConfirmButton
+                            className="cluster-stop-remove"
+                            title="Hold to remove stop from the plan"
+                            aria-label="Hold to remove stop from the plan"
+                            onConfirm={() => handleRemoveStop(stop.id, route.session.id)}
+                          >
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <line x1="18" y1="6" x2="6" y2="18" />
+                              <line x1="6" y1="6" x2="18" y2="18" />
+                            </svg>
+                          </HoldToConfirmButton>
                         </div>
                       ))}
                     </div>
@@ -611,7 +619,6 @@ export function ClusterReviewView({
                 key={route.session.id}
                 route={route}
                 selectedStop={selectedStop}
-                allRoutes={subRoutes}
                 onSelectStop={(stop) =>
                   setSelectedStop(
                     selectedStop?.stop.id === stop.id
@@ -619,13 +626,52 @@ export function ClusterReviewView({
                       : { stop, routeId: route.session.id }
                   )
                 }
-                onMoveStop={handleMoveStop}
-                routeColorMap={routeColorMap}
+                onMoveRequest={(stop, routeId) => setMoveRequest({ stop, routeId })}
+                onDetailsRequest={(stop, routeId) => setDetailsRequest({ stop, routeId })}
+                onRemoveStop={handleRemoveStop}
               />
             ))}
           </MapContainer>
         </main>
       </div>
+      {detailsRequest && (() => {
+        const route = subRoutes.find((r) => r.session.id === detailsRequest.routeId);
+        if (!route) return null;
+        const included = route.session.stops.filter(
+          (s) => s.sequence_order != null && !s.excluded
+        );
+        const segments = route.session.route_segments;
+        const hasDepot =
+          settings.homeLat != null && settings.homeLng != null && segments != null && segments.length > included.length;
+        const arrivals =
+          segments && segments.length > 0
+            ? calcArrivalTimes(segments, settings, included.length, hasDepot)
+            : null;
+        const stop = route.session.stops.find((s) => s.id === detailsRequest.stop.id) ?? detailsRequest.stop;
+        return (
+          <StopDetailsModal
+            stop={stop}
+            route={route.session}
+            color={route.color}
+            eta={stop.sequence_order != null ? arrivals?.get(stop.sequence_order) ?? null : null}
+            stopCount={included.length}
+            onClose={() => setDetailsRequest(null)}
+          />
+        );
+      })()}
+      {moveRequest && (() => {
+        const fromRoute = moveRequest ? subRoutes.find((r) => r.session.id === moveRequest.routeId) : undefined;
+        return fromRoute ? (
+          <MoveStopModal
+            stop={moveRequest.stop}
+            from={fromRoute.session}
+            routes={subRoutes}
+            busy={moving}
+            onMove={handleMoveStop}
+            onClose={() => setMoveRequest(null)}
+          />
+        ) : null;
+      })()}
     </div>
   );
 }
@@ -661,17 +707,17 @@ function FitClusterBounds({ subRoutes }: { subRoutes: SubRouteData[] }) {
 function ClusterMapLayer({
   route,
   selectedStop,
-  allRoutes,
   onSelectStop,
-  onMoveStop,
-  routeColorMap,
+  onMoveRequest,
+  onDetailsRequest,
+  onRemoveStop,
 }: {
   route: SubRouteData;
   selectedStop: { stop: DeliveryStop; routeId: string } | null;
-  allRoutes: SubRouteData[];
   onSelectStop: (stop: DeliveryStop) => void;
-  onMoveStop: (stopId: number, fromRouteId: string, toRouteId: string) => void;
-  routeColorMap: Map<string, string>;
+  onMoveRequest: (stop: DeliveryStop, routeId: string) => void;
+  onDetailsRequest: (stop: DeliveryStop, routeId: string) => void;
+  onRemoveStop: (stopId: number, routeId: string) => void;
 }) {
   const map = useMap();
   const routeLayerRef = useRef<L.GeoJSON | null>(null);
@@ -729,10 +775,10 @@ function ClusterMapLayer({
             route={route}
             isSelected={isSelected}
             num={num}
-            allRoutes={allRoutes}
-            routeColorMap={routeColorMap}
             onSelectStop={onSelectStop}
-            onMoveStop={onMoveStop}
+            onMoveRequest={onMoveRequest}
+            onDetailsRequest={onDetailsRequest}
+            onRemoveStop={onRemoveStop}
           />
         );
       })}
@@ -745,19 +791,19 @@ function ClusterMarker({
   route,
   isSelected,
   num,
-  allRoutes,
-  routeColorMap,
   onSelectStop,
-  onMoveStop,
+  onMoveRequest,
+  onDetailsRequest,
+  onRemoveStop,
 }: {
   stop: DeliveryStop;
   route: SubRouteData;
   isSelected: boolean;
   num: number;
-  allRoutes: SubRouteData[];
-  routeColorMap: Map<string, string>;
   onSelectStop: (stop: DeliveryStop) => void;
-  onMoveStop: (stopId: number, fromSessionId: string, toSessionId: string) => void;
+  onMoveRequest: (stop: DeliveryStop, routeId: string) => void;
+  onDetailsRequest: (stop: DeliveryStop, routeId: string) => void;
+  onRemoveStop: (stopId: number, routeId: string) => void;
 }) {
   const markerRef = useRef<L.Marker>(null);
 
@@ -775,7 +821,7 @@ function ClusterMarker({
       eventHandlers={{ click: () => onSelectStop(stop) }}
       zIndexOffset={isSelected ? 1000 : 0}
     >
-      <Popup>
+      <Popup minWidth={280} maxWidth={380}>
         <div className="cluster-stop-popup">
           <strong>{stop.name}</strong>
           {stop.raw_address && <span>{stop.raw_address}</span>}
@@ -784,29 +830,34 @@ function ClusterMarker({
               {stop.product_code}
             </span>
           )}
-          <div className="cluster-stop-popup-move">
-            <span>Move to:</span>
-            {allRoutes
-              .filter((r) => r.session.id !== route.session.id)
-              .map((r) => (
-                <button
-                  key={r.session.id}
-                  className="cluster-stop-popup-move-btn"
-                  onClick={() =>
-                    onMoveStop(stop.id, route.session.id, r.session.id)
-                  }
-                >
-                  <span
-                    className="cluster-stop-dot"
-                    style={{
-                      background:
-                        routeColorMap.get(r.session.id) ?? "#6366f1",
-                    }}
-                  />
-                  {r.session.name}
-                </button>
-              ))}
+          <span className="cluster-stop-popup-carrier">
+            <span
+              className="cluster-stop-dot"
+              style={{ background: route.color }}
+            />
+            Carried by <b>{route.session.owner_name ?? "Unassigned"}</b>
+          </span>
+          <div className="cluster-stop-popup-actions">
+            <button
+              className="cluster-stop-popup-move-btn"
+              onClick={() => onDetailsRequest(stop, route.session.id)}
+            >
+              Stop details
+            </button>
+            <button
+              className="cluster-stop-popup-move-btn"
+              onClick={() => onMoveRequest(stop, route.session.id)}
+            >
+              Move to…
+            </button>
           </div>
+          <HoldToConfirmButton
+            className="cluster-stop-popup-remove"
+            title="Hold to remove stop from the plan"
+            onConfirm={() => onRemoveStop(stop.id, route.session.id)}
+          >
+            Remove stop
+          </HoldToConfirmButton>
         </div>
       </Popup>
     </Marker>

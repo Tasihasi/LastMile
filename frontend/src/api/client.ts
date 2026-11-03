@@ -3,6 +3,8 @@ import type {
   AuthResponse,
   ClusterResponse,
   DeliveryStopStatus,
+  DistrictsResponse,
+  SplitAssignment,
   MoveStopResponse,
   OptimizeResponse,
   SessionResponse,
@@ -55,21 +57,58 @@ export async function logout(): Promise<void> {
 // ============================================
 
 export async function listSessions(
-  ownerId?: number
+  ownerId?: number,
+  parentId?: string
 ): Promise<SessionSummary[]> {
-  const params = ownerId ? { owner_id: ownerId } : {};
+  const params: Record<string, string | number> = {};
+  if (ownerId) params.owner_id = ownerId;
+  if (parentId) params.parent_id = parentId;
   const { data } = await api.get<SessionSummary[]>("/sessions/", { params });
   return data;
 }
 
+/**
+ * Upload one or more files as a single route. Passing `replaceSessionId`
+ * re-imports into that not-yet-started session instead of creating a new one.
+ */
 export async function uploadFile(
-  file: File,
-  ownerId?: number
+  files: File | File[],
+  ownerId?: number,
+  replaceSessionId?: string | null
 ): Promise<SessionResponse> {
   const formData = new FormData();
-  formData.append("file", file);
+  for (const file of Array.isArray(files) ? files : [files]) {
+    formData.append("file", file);
+  }
   if (ownerId) formData.append("owner_id", String(ownerId));
+  if (replaceSessionId) formData.append("session_id", replaceSessionId);
   const { data } = await api.post<SessionResponse>("/upload/", formData);
+  return data;
+}
+
+/** Rewrite a stop's address and re-geocode it; returns the updated stop. */
+export async function updateStopAddress(
+  sessionId: string,
+  stopId: number,
+  address: string
+): Promise<import("../types").DeliveryStop> {
+  const { data } = await api.patch<import("../types").DeliveryStop>(
+    `/sessions/${sessionId}/stops/${stopId}/address/`,
+    { address }
+  );
+  return data;
+}
+
+/** Include/exclude stops from the day's plan and/or move them to another postal-code group. */
+export async function bulkUpdateStops(
+  sessionId: string,
+  stopIds: number[],
+  patch: { excluded?: boolean; postal_code?: string }
+): Promise<import("../types").DeliveryStop[]> {
+  const { data } = await api.post<import("../types").DeliveryStop[]>(
+    `/sessions/${sessionId}/stops/bulk/`,
+    { stop_ids: stopIds, ...patch }
+  );
   return data;
 }
 
@@ -255,16 +294,41 @@ export async function renameSession(
 
 export async function clusterSession(
   sessionId: string,
-  nRoutes?: number,
-  maxStopsPerRoute?: number
+  options?: {
+    nRoutes?: number;
+    maxStopsPerRoute?: number;
+    assignments?: SplitAssignment[];
+  }
 ): Promise<ClusterResponse> {
-  const body: Record<string, number> = {};
-  if (nRoutes != null) body.n_routes = nRoutes;
-  if (maxStopsPerRoute != null) body.max_stops_per_route = maxStopsPerRoute;
+  const body: Record<string, unknown> = {};
+  if (options?.nRoutes != null) body.n_routes = options.nRoutes;
+  if (options?.maxStopsPerRoute != null)
+    body.max_stops_per_route = options.maxStopsPerRoute;
+  if (options?.assignments) body.assignments = options.assignments;
   const { data } = await api.post<ClusterResponse>(
     `/sessions/${sessionId}/cluster/`,
     body
   );
+  return data;
+}
+
+export async function getSessionDistricts(
+  sessionId: string
+): Promise<DistrictsResponse> {
+  const { data } = await api.get<DistrictsResponse>(
+    `/sessions/${sessionId}/districts/`
+  );
+  return data;
+}
+
+export async function removeStop(
+  sessionId: string,
+  stopId: number
+): Promise<{ removed_stop_id: number; remaining_stops: number }> {
+  const { data } = await api.delete<{
+    removed_stop_id: number;
+    remaining_stops: number;
+  }>(`/sessions/${sessionId}/stops/${stopId}/remove/`);
   return data;
 }
 

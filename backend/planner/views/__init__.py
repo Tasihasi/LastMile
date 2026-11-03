@@ -1,9 +1,10 @@
 from .auth import login_view, logout_view, me_view
-from .clustering import cluster_session, move_stop, uncluster_session
+from .clustering import cluster_session, move_stop, remove_stop, session_districts, uncluster_session
 from .lifecycle import start_route, update_stop_status
 from .sessions import (
     active_sessions,
     assign_session,
+    bulk_update_stops,
     delete_session,
     geocode_status,
     geocode_stops,
@@ -14,12 +15,14 @@ from .sessions import (
     optimize,
     rename_session,
     share_session,
+    update_stop_address,
     upload_file,
 )
 
 __all__ = [
     "active_sessions",
     "assign_session",
+    "bulk_update_stops",
     "cluster_session",
     "delete_session",
     "geocode_status",
@@ -33,10 +36,13 @@ __all__ = [
     "me_view",
     "move_stop",
     "optimize",
+    "remove_stop",
     "rename_session",
+    "session_districts",
     "share_session",
     "start_route",
     "uncluster_session",
+    "update_stop_address",
     "update_stop_status",
     "upload_file",
 ]

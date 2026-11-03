@@ -35,8 +35,11 @@ class DeliveryStopSerializer(serializers.ModelSerializer):
             "lng",
             "geocode_status",
             "geocode_error",
+            "postal_code",
+            "excluded",
             "sequence_order",
             "delivery_status",
+            "delivered_at",
         ]
 
 
@@ -86,6 +89,7 @@ class SessionListSerializer(serializers.ModelSerializer):
     delivered_count = serializers.SerializerMethodField()
     not_received_count = serializers.SerializerMethodField()
     current_stop_name = serializers.SerializerMethodField()
+    sub_routes = serializers.SerializerMethodField()
 
     class Meta:
         model = DeliverySession
@@ -96,6 +100,7 @@ class SessionListSerializer(serializers.ModelSerializer):
             "owner_name",
             "parent_id",
             "sub_route_count",
+            "sub_routes",
             "stop_count",
             "total_duration",
             "total_distance",
@@ -117,6 +122,23 @@ class SessionListSerializer(serializers.ModelSerializer):
         if hasattr(obj, "_sub_route_count"):
             return obj._sub_route_count
         return obj.sub_routes.count()
+
+    def get_sub_routes(self, obj):
+        """For a split route: one line per sub-route (who rides it, how far along it is)."""
+        if obj.status != DeliverySession.Status.SPLIT:
+            return []
+        children = obj.sub_routes.select_related("owner").order_by("name")
+        return [
+            {
+                "id": str(c.id),
+                "name": c.name,
+                "owner_name": c.owner.username if c.owner else None,
+                "status": c.status,
+                "stop_count": c.stops.count(),
+                "done_count": c.stops.filter(delivery_status__in=["delivered", "not_received"]).count(),
+            }
+            for c in children
+        ]
 
     def get_delivered_count(self, obj):
         if hasattr(obj, "_delivered_count"):

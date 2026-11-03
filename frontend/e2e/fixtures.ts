@@ -43,11 +43,29 @@ async function loginViaAPI(
   await page.waitForLoadState("networkidle");
 }
 
-/** Helper: upload a file by setting it on the hidden input. */
-async function uploadTestFile(page: Page, fileName: string) {
-  const filePath = path.resolve(__dirname, "test-data", fileName);
+/**
+ * Helper: run the planning wizard (upload -> geocode -> fix addresses) until the
+ * optimize step, where the stop list and map are shown.
+ */
+async function uploadTestFile(page: Page, fileName: string | string[]) {
+  const names = Array.isArray(fileName) ? fileName : [fileName];
   const fileInput = page.locator('input[type="file"]');
-  await fileInput.setInputFiles(filePath);
+  await fileInput.setInputFiles(
+    names.map((n) => path.resolve(__dirname, "test-data", n))
+  );
+  await page.getByRole("button", { name: /Upload & continue/ }).click();
+
+  // Step 2 geocodes automatically; Next unlocks once nothing is pending.
+  const footer = page.locator(".wizard-footer");
+  const toFix = footer.getByRole("button", { name: /(Fix|Review) addresses/ });
+  await expect(toFix).toBeEnabled({ timeout: 90_000 });
+  await toFix.click();
+
+  // Step 3: continue (with or without unresolved addresses).
+  await footer.getByRole("button", { name: /^Continue/ }).click();
+
+  // Step 4: keep every postal code.
+  await footer.getByRole("button", { name: /^Continue/ }).click();
 }
 
 /** Helper: clean up test user via API */

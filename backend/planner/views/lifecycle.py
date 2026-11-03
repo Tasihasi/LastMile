@@ -56,7 +56,8 @@ def update_stop_status(request, session_id, stop_id):
         return Response({"error": "Stop not found."}, status=status.HTTP_404_NOT_FOUND)
 
     stop.delivery_status = new_status
-    stop.save(update_fields=["delivery_status"])
+    stop.delivered_at = timezone.now()
+    stop.save(update_fields=["delivery_status", "delivered_at"])
 
     next_stop = (
         session.stops.filter(sequence_order__isnull=False, delivery_status="pending").order_by("sequence_order").first()
