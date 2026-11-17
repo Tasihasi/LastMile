@@ -4,7 +4,7 @@ from rest_framework import status
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 
-from ..clustering import calculate_n_clusters, cluster_stops, cluster_stops_weighted, split_counts
+from ..clustering import calculate_n_clusters, cluster_zip_atomic, split_counts, stop_zip
 from ..districts import district_label, extract_district, extract_zip
 from ..models import DeliverySession, DeliveryStop
 from .helpers import require_planner
@@ -60,50 +60,70 @@ def _parse_assignments(raw):
     return parsed, None
 
 
-def _build_assignment_clusters(geocoded_stops, assignments):
+def _build_assignment_clusters(geocoded_stops, assignments, max_stops=48):
     """Distribute stops across assignments honouring area locks and targets.
 
     An assignment can be locked to an exact irányítószám ("zip", the
     fine-grained key) or, when no zip is set, to a whole district (the
-    coarse fallback) -- same mechanic, just a more specific area.
+    coarse fallback). Zip locks are applied first so they always win over a
+    district lock. A postal code is never split: every stop of a zip ends up
+    in the same cluster.
 
-    Returns (clusters, leftover) where clusters is index-aligned with
-    assignments and leftover holds stops no assignment can take (only when
-    every assignment is area-locked).
+    Returns (clusters, leftover, oversized_zips, unzipped_stops). clusters is
+    index-aligned with assignments; leftover holds stops no assignment can take
+    (only when every assignment is area-locked).
     """
     pool = list(geocoded_stops)
     clusters = [[] for _ in assignments]
+    oversized = []
+    unzipped = []
 
-    # Area-locked bikers take every stop matching their lock: an exact zip
-    # when set, otherwise the whole district.
+    # Area locks: zip locks first, then district locks.
     area_groups = {}
     for i, a in enumerate(assignments):
         if a["zip"] is not None:
-            area_groups.setdefault(("zip", a["zip"]), []).append(i)
-        elif a["district"] is not None:
+            area_groups.setdefault(("zip", str(a["zip"])), []).append(i)
+    for i, a in enumerate(assignments):
+        if a["zip"] is None and a["district"] is not None:
             area_groups.setdefault(("district", a["district"]), []).append(i)
 
     for (kind, value), idxs in area_groups.items():
-        matches = extract_zip if kind == "zip" else extract_district
-        area_stops = [s for s in pool if matches(s.raw_address) == value]
-        pool = [s for s in pool if matches(s.raw_address) != value]
+        if kind == "zip":
+
+            def matches(stop, value=value):
+                return stop_zip(stop) == value
+        else:
+
+            def matches(stop, value=value):
+                return extract_district(stop_zip(stop)) == value
+
+        area_stops = [s for s in pool if matches(s)]
+        pool = [s for s in pool if not matches(s)]
         if len(idxs) == 1:
             clusters[idxs[0]] = area_stops
+        elif kind == "zip":
+            # One zip, several bikers: the zip is indivisible, the first biker takes it all.
+            clusters[idxs[0]] = area_stops
         else:
-            weights = [assignments[i]["target_stops"] for i in idxs]
-            counts = split_counts(len(area_stops), weights)
-            for i, group in zip(idxs, cluster_stops_weighted(area_stops, counts), strict=True):
+            result = cluster_zip_atomic(
+                area_stops,
+                targets=split_counts(len(area_stops), [assignments[i]["target_stops"] for i in idxs]),
+                max_stops=max_stops,
+            )
+            for i, group in zip(idxs, result.clusters, strict=True):
                 clusters[i] = group
+            oversized += result.oversized_zips
+            unzipped += result.unzipped_stops
 
     free_idxs = [i for i, a in enumerate(assignments) if a["zip"] is None and a["district"] is None]
     if not free_idxs:
-        return clusters, pool
+        return clusters, pool, oversized, unzipped
 
-    weights = [assignments[i]["target_stops"] for i in free_idxs]
-    counts = split_counts(len(pool), weights)
-    for i, group in zip(free_idxs, cluster_stops_weighted(pool, counts), strict=True):
+    counts = split_counts(len(pool), [assignments[i]["target_stops"] for i in free_idxs])
+    result = cluster_zip_atomic(pool, targets=counts, max_stops=max_stops)
+    for i, group in zip(free_idxs, result.clusters, strict=True):
         clusters[i] = group
-    return clusters, []
+    return clusters, [], oversized + result.oversized_zips, unzipped + result.unzipped_stops
 
 
 @api_view(["POST"])
@@ -153,7 +173,10 @@ def cluster_session(request, session_id):
         assignments, err = _parse_assignments(assignments_raw)
         if err:
             return Response({"error": err}, status=status.HTTP_400_BAD_REQUEST)
-        clusters, leftover = _build_assignment_clusters(geocoded_stops, assignments)
+        max_stops = int(request.data.get("max_stops_per_route", 48))
+        clusters, leftover, oversized_zips, unzipped = _build_assignment_clusters(
+            geocoded_stops, assignments, max_stops=max_stops
+        )
         owners = [a["owner"] for a in assignments]
         if leftover:
             # Every assignment was district-locked; keep the rest reviewable.
@@ -165,7 +188,9 @@ def cluster_session(request, session_id):
         n_routes = (
             int(n_routes_param) if n_routes_param is not None else calculate_n_clusters(len(geocoded_stops), max_stops)
         )
-        clusters = cluster_stops(geocoded_stops, n_routes, max_stops_per_cluster=max_stops)
+        result = cluster_zip_atomic(geocoded_stops, n_routes=n_routes, max_stops=max_stops)
+        clusters = [c for c in result.clusters if c]
+        oversized_zips, unzipped = result.oversized_zips, result.unzipped_stops
         owners = [None] * len(clusters)
 
     sub_routes = []
@@ -191,6 +216,7 @@ def cluster_session(request, session_id):
                     lng=stop.lng,
                     geocode_status=stop.geocode_status,
                     geocode_error=stop.geocode_error,
+                    postal_code=stop.postal_code,
                 )
             )
         DeliveryStop.objects.bulk_create(child_stops)
@@ -213,6 +239,8 @@ def cluster_session(request, session_id):
         {
             "parent_id": str(session.id),
             "sub_routes": sub_routes,
+            "oversized_zips": oversized_zips,
+            "unzipped_stop_ids": [s.id for s in unzipped],
             "cluster_summary": {
                 "total_stops": len(geocoded_stops),
                 "skipped_stops": skipped_count,

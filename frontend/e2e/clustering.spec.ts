@@ -56,6 +56,46 @@ test.describe("Clustering", () => {
     await expect(page.locator(".cluster-banner")).toHaveCount(0);
   });
 
+  test("a2: splitting never puts one postal code on two routes", async ({ page }) => {
+    const token = await page.evaluate(() => localStorage.getItem("auth-token"));
+    const headers = { Authorization: `Token ${token}` };
+    const fs = await import("fs");
+    const upload = await page.request.post(`${API_BASE}/upload/`, {
+      headers,
+      multipart: {
+        file: {
+          name: "zip_groups_60.csv",
+          mimeType: "text/csv",
+          buffer: fs.readFileSync(path.resolve(__dirname, "test-data/zip_groups_60.csv")),
+        },
+      },
+    });
+    const { id } = await upload.json();
+
+    const split = await page.request.post(`${API_BASE}/sessions/${id}/cluster/`, {
+      headers,
+      data: { n_routes: 3 },
+    });
+    expect(split.status()).toBe(201);
+    const body = await split.json();
+    expect(body.sub_routes).toHaveLength(3);
+
+    const routesByZip = new Map<string, Set<string>>();
+    for (const route of body.sub_routes) {
+      const detail = await (
+        await page.request.get(`${API_BASE}/sessions/${route.id}/`, { headers })
+      ).json();
+      for (const stop of detail.stops) {
+        const zip = String(stop.raw_address).slice(0, 4);
+        routesByZip.set(zip, (routesByZip.get(zip) ?? new Set()).add(route.id));
+      }
+    }
+    expect(routesByZip.size).toBe(6);
+    for (const [zip, routes] of routesByZip) {
+      expect(routes.size, `zip ${zip} is on ${routes.size} routes`).toBe(1);
+    }
+  });
+
   test("a split route is one card for the planner; the bikers get the sub-routes", async ({
     page,
   }) => {

@@ -3,6 +3,8 @@ import math
 import numpy as np
 from sklearn.cluster import KMeans
 
+from .districts import extract_postal_code
+
 
 def cluster_stops(stops, n_clusters, max_stops_per_cluster=48, random_state=42):
     """
@@ -155,3 +157,107 @@ def calculate_n_clusters(stop_count, max_stops_per_cluster=48):
     if stop_count <= 0:
         return 0
     return math.ceil(stop_count / max_stops_per_cluster)
+
+
+def stop_zip(stop):
+    """Postal code of a stop ("" if unknown): the stored field, else parsed from the address."""
+    return (getattr(stop, "postal_code", "") or "").strip() or extract_postal_code(stop.raw_address)
+
+
+class ZipAtomicResult:
+    """Outcome of cluster_zip_atomic.
+
+    clusters:       list index-aligned with the requested targets (may contain empty lists).
+    oversized_zips: [{"zip": str, "stop_count": int}] for zips larger than max_stops (kept whole).
+    unzipped_stops: stops without a postal code (bucketed into the smallest route).
+    """
+
+    def __init__(self, clusters, oversized_zips, unzipped_stops):
+        self.clusters = clusters
+        self.oversized_zips = oversized_zips
+        self.unzipped_stops = unzipped_stops
+
+
+def _dist(a, b):
+    return math.hypot(a[0] - b[0], a[1] - b[1])
+
+
+def cluster_zip_atomic(stops, n_routes=None, targets=None, max_stops=48):
+    """Distribute geocoded stops over routes so that no postal code is ever split.
+
+    All stops sharing a zip form one indivisible group. Groups are placed largest-first
+    (greedy LPT): the biggest groups seed one route each, then every group goes to the
+    nearest route (by weighted centroid) that still has room under its target; if no route
+    has room, to the route with the most spare capacity. Stops without a zip are bucketed
+    together and added last to the smallest route.
+
+    Give either `targets` (desired stop count per route, index-aligned result) or
+    `n_routes` (equal targets). Deterministic for identical input.
+
+    If no stop has a zip at all, falls back to geographic weighted KMeans.
+    """
+    stops = list(stops)
+    if targets is None:
+        n = max(int(n_routes or 1), 1)
+        targets = split_counts(len(stops), [1] * n)
+    targets = list(targets)
+    k = len(targets)
+    if k == 0:
+        raise ValueError("Need at least one route.")
+
+    by_zip = {}
+    unzipped = []
+    for stop in stops:
+        z = stop_zip(stop)
+        if z:
+            by_zip.setdefault(z, []).append(stop)
+        else:
+            unzipped.append(stop)
+
+    if not by_zip:
+        # Nothing to keep atomic (no stop has a postal code): plain geographic split.
+        return ZipAtomicResult(cluster_stops_weighted(unzipped, targets), [], unzipped)
+
+    def centroid(group):
+        return (sum(s.lat for s in group) / len(group), sum(s.lng for s in group) / len(group))
+
+    groups = sorted(by_zip.items(), key=lambda kv: (-len(kv[1]), kv[0]))
+    oversized = [{"zip": z, "stop_count": len(g)} for z, g in groups if len(g) > max_stops]
+
+    clusters = [[] for _ in range(k)]
+    centers = [None] * k  # weighted centroid per route
+
+    def place(group, idx):
+        gc = centroid(group)
+        n_old = len(clusters[idx])
+        if n_old:
+            w = len(group) / (n_old + len(group))
+            centers[idx] = (centers[idx][0] * (1 - w) + gc[0] * w, centers[idx][1] * (1 - w) + gc[1] * w)
+        else:
+            centers[idx] = gc
+        clusters[idx].extend(group)
+
+    # Routes with a zero target stay empty (unless every target is zero).
+    active = [i for i in range(k) if targets[i] > 0] or list(range(k))
+
+    # Seed: largest groups to the routes with the largest targets, one per route.
+    seed_order = sorted(active, key=lambda i: (-targets[i], i))
+    seeded = groups[: len(seed_order)]
+    for (_, group), idx in zip(seeded, seed_order, strict=False):
+        place(group, idx)
+
+    for _, group in groups[len(seeded) :]:
+        size = len(group)
+        fitting = [i for i in active if len(clusters[i]) + size <= targets[i]]
+        if fitting:
+            gc = centroid(group)
+            idx = min(fitting, key=lambda i: (_dist(gc, centers[i]), i))
+        else:
+            idx = max(active, key=lambda i: (targets[i] - len(clusters[i]), -i))
+        place(group, idx)
+
+    if unzipped:
+        idx = min(active, key=lambda i: (len(clusters[i]), i))
+        clusters[idx].extend(unzipped)
+
+    return ZipAtomicResult(clusters, oversized, unzipped)
