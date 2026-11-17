@@ -13,6 +13,7 @@ from rest_framework.parsers import MultiPartParser
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
+from .. import zones
 from ..districts import extract_postal_code
 from ..geocoder import geocode_address
 from ..models import DeliverySession, DeliveryStop, SharedRoute
@@ -36,6 +37,14 @@ def list_bikers(request):
 
     bikers = User.objects.filter(profile__role="biker").select_related("profile")
     return Response(UserSerializer(bikers, many=True).data)
+
+
+@api_view(["GET"])
+def list_zones(request):
+    """Zone config (zip -> zone mapping) for planners."""
+    if not require_planner(request):
+        return Response({"error": "Planner access required."}, status=status.HTTP_403_FORBIDDEN)
+    return Response({"placeholder": zones.is_placeholder(), "zones": zones.all_zones()})
 
 
 @api_view(["GET"])

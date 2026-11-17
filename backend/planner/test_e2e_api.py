@@ -794,3 +794,12 @@ class PlannerWorkflowE2E(TestCase):
         # 10. Planner can delete the finished route
         resp = self.planner.delete(f"/api/sessions/{session_id}/delete/")
         self.assertEqual(resp.status_code, 204)
+
+
+class ZonesEndpointE2E(TestCase):
+    def test_a1_ac4_zones_endpoint_roles(self):
+        self.assertEqual(APIClient().get("/api/zones/").status_code, 401)
+        self.assertEqual(_auth_client("zbiker", "biker").get("/api/zones/").status_code, 403)
+        resp = _auth_client("zplanner", "planner").get("/api/zones/")
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(len(resp.json()["zones"]), 22)

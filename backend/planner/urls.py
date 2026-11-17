@@ -9,6 +9,7 @@ urlpatterns = [
     path("auth/logout/", views.logout_view, name="auth-logout"),
     # Planner
     path("users/bikers/", views.list_bikers, name="list-bikers"),
+    path("zones/", views.list_zones, name="list-zones"),
     # Sessions
     path("sessions/active/", views.active_sessions, name="active-sessions"),
     path("sessions/", views.list_sessions, name="list-sessions"),

@@ -8,7 +8,8 @@ Format: features are grouped by category. Each version includes a release date a
 
 ## Unreleased
 
-### Route planning wizard
+### Route planning wizard
+
 - For planners the wizard's last step is now **Bikers**: only after the postal codes are settled does the split dialog (biker workloads, zip/district locks) appear, inline in the wizard, leading to the split review.
 - **New Route is now a step-by-step wizard**: Upload → Geocode → Fix addresses → Optimize. Every step can be revisited with the stepper or Back/Next buttons; changing the picked files re-imports them into the same route.
 - **Multiple files per route.** Pick or drop several `.csv`/`.xlsx`/`.txt`/`.xml` files; their stops are merged into one route (`POST /api/upload/` accepts repeated `file` fields, plus `session_id` to replace the stops of a not-yet-started route).
