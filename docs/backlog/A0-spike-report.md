@@ -18,7 +18,7 @@ a bin with a capacity. This is bin packing / multiway partitioning, with at most
 | Current KMeans | Splits zips arbitrarily | Violates the minimum criterion; replaced. |
 
 ## Worst cases
-- **One zip larger than any biker's capacity** (`REALISTIC_DAY` has 1138 with 56 stops > 48): it cannot stay atomic.
+- **One zip larger than any biker's capacity** (`REALISTIC_DAY` has 1054 with 56 stops > 48): it cannot stay atomic.
   Spec'd behaviour: A2 keeps zips whole and flags the oversize zip (A3 validator warning); A6 splits only that zip,
   geographically, into the minimum number of parts.
 - More zips than bikers fit evenly: balance degrades gracefully, a biker may get one extra small zip.

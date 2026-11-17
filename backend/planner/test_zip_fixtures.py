@@ -39,6 +39,12 @@ class ZipFixturesTests(SimpleTestCase):
         for postal_code in ZIP_CENTROIDS:
             self.assertTrue(re.match(r"^1\d{3}$", postal_code))
 
+    def test_a0_fixture_zips_are_districts_v_to_ix(self):
+        zips = set(REALISTIC_DAY["zip_counts"]) | set(ZIP_CENTROIDS)
+        self.assertEqual(len(zips), 34)
+        for z in zips:
+            self.assertRegex(z, r"^10[5-9]\d$")
+
     def test_a0_empty_input(self):
         self.assertEqual(make_stops({}), [])
 
@@ -46,6 +52,6 @@ class ZipFixturesTests(SimpleTestCase):
 class MakeSessionTests(TestCase):
     def test_a0_make_session_persists_stops(self):
         owner = User.objects.create_user("fixture_owner")
-        session = make_session(owner, {"1051": 3, "1138": 2})
+        session = make_session(owner, {"1051": 3, "1054": 2})
         self.assertEqual(session.stops.count(), 5)
-        self.assertEqual(session.stops.filter(postal_code="1138").count(), 2)
+        self.assertEqual(session.stops.filter(postal_code="1054").count(), 2)
