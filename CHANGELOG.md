@@ -8,6 +8,13 @@ Format: features are grouped by category. Each version includes a release date a
 
 ## Unreleased
 
+### Route splitting
+- **Postal codes are never split across routes.** Splitting a route (automatic or with biker assignments) now keeps every stop of one irányítószám on a single route, replacing the stop-level KMeans split. Zips are placed whole, largest first, onto the nearest route with room. A zip bigger than the route size stays whole and is reported in `oversized_zips`; stops without a postal code go together onto the smallest route and are listed in `unzipped_stop_ids` (both new fields on the `POST /api/sessions/<id>/cluster/` response). If no stop has a postal code at all, the old geographic split is used. Sub-routes now keep the stops' `postal_code`.
+- **Split warning.** The split review shows a banner "N irányítószám több körben szerepel: 1082 (Route_1: 4, Route_2: 2)" whenever a postal code is on more than one route (e.g. after moving a stop), with a chip on each affected route; clicking a zip highlights its stops. It is informational and never blocks optimizing. API: `zip_conflicts` on the cluster and move-stop responses and on `GET /api/sessions/<id>/` of a split route.
+
+### Zones
+- Zone config (`backend/planner/zones.json`, `planner/zones.py`): the 34 postal codes of districts V-IX grouped into 16 sorting zones, from the customer's sheet. New planner-only `GET /api/zones/`. Zips outside the config have no zone.
+
 ### Developer tooling
 - Backlog A0: deterministic Budapest zip fixtures (`planner/testing/zip_fixtures.py`: `make_stops`, `make_session`, `REALISTIC_DAY`) and a zone-first feasibility spike report (`docs/backlog/A0-spike-report.md`). Test-only; no production behaviour change.
 
