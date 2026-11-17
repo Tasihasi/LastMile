@@ -96,6 +96,84 @@ test.describe("Clustering", () => {
     }
   });
 
+  test("a3: moving a stop that splits a postal code shows the banner; resolving it hides it", async ({
+    page,
+  }) => {
+    const token = await page.evaluate(() => localStorage.getItem("auth-token"));
+    const headers = { Authorization: `Token ${token}` };
+    const fs = await import("fs");
+    const upload = await page.request.post(`${API_BASE}/upload/`, {
+      headers,
+      multipart: {
+        file: {
+          name: "a3_zip_groups.csv",
+          mimeType: "text/csv",
+          buffer: fs.readFileSync(path.resolve(__dirname, "test-data/zip_groups_60.csv")),
+        },
+      },
+    });
+    const { id } = await upload.json();
+    const uniqueName = `Conflict Day ${Date.now()}`;
+    await page.request.patch(`${API_BASE}/sessions/${id}/rename/`, {
+      headers,
+      data: { name: uniqueName },
+    });
+    const split = await page.request.post(`${API_BASE}/sessions/${id}/cluster/`, {
+      headers,
+      data: { n_routes: 3 },
+    });
+    expect((await split.json()).zip_conflicts).toEqual([]);
+
+    const openReview = async () => {
+      await page.goto("/");
+      const card = page.locator(".dashboard-split .session-card", { hasText: uniqueName }).first();
+      await expect(card).toBeVisible({ timeout: 30_000 });
+      await card.locator(".session-card-info").click();
+      await expect(page.locator(".cluster-review")).toBeVisible({ timeout: 15_000 });
+    };
+
+    await openReview();
+    // Clean split: no banner (AC1).
+    await expect(page.getByTestId("zip-conflict-banner")).toHaveCount(0);
+
+    // Move one stop to another biker through the Move dialog.
+    await page.locator(".numbered-marker").first().click({ force: true });
+    await page.locator(".cluster-stop-popup").getByRole("button", { name: /^Move to/ }).click();
+    const dialog = page.getByRole("dialog", { name: "Move stop to another biker" });
+    await dialog.locator(".move-stop-option").first().click();
+
+    const banner = page.getByTestId("zip-conflict-banner");
+    await expect(banner).toBeVisible({ timeout: 10_000 });
+    await expect(banner).toContainText("irányítószám több körben szerepel");
+    await expect(banner).toContainText(/\d{4} \(.+: \d+, .+: \d+\)/);
+
+    // Clicking a zip in the banner highlights its stops.
+    await banner.locator(".cluster-zip-banner-item").first().click();
+    await expect(page.locator(".cluster-stop-item--zip-highlight").first()).toBeVisible();
+
+    // The API reports the same conflict; move the stray stop(s) back to resolve it.
+    const parent = await (await page.request.get(`${API_BASE}/sessions/${id}/`, { headers })).json();
+    expect(parent.zip_conflicts).toHaveLength(1);
+    const [minor, major] = [...parent.zip_conflicts[0].routes].sort(
+      (a: { count: number }, b: { count: number }) => a.count - b.count
+    );
+    const minorRoute = await (
+      await page.request.get(`${API_BASE}/sessions/${minor.session_id}/`, { headers })
+    ).json();
+    for (const stop of minorRoute.stops.filter(
+      (s: { postal_code: string }) => s.postal_code === parent.zip_conflicts[0].zip
+    )) {
+      const res = await page.request.post(`${API_BASE}/sessions/${minor.session_id}/move-stop/`, {
+        headers,
+        data: { stop_id: stop.id, to_session_id: major.session_id },
+      });
+      expect(res.status()).toBe(200);
+    }
+
+    await openReview();
+    await expect(page.getByTestId("zip-conflict-banner")).toHaveCount(0);
+  });
+
   test("a split route is one card for the planner; the bikers get the sub-routes", async ({
     page,
   }) => {

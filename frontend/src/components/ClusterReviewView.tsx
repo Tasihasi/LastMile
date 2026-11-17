@@ -2,7 +2,7 @@ import { HoldToConfirmButton } from "./HoldToConfirmButton";
 import { MoveStopModal } from "./MoveStopModal";
 import { StopDetailsModal } from "./StopDetailsModal";
 import { calcArrivalTimes } from "../utils/format";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet";
 import L from "leaflet";
 import type { DeliveryStop, SessionResponse } from "../types";
@@ -19,6 +19,7 @@ import { useSettings } from "../hooks/useSettings";
 import { useToast } from "../hooks/useToast";
 import { useSplitSubRoutes } from "../hooks/useSplitSubRoutes";
 import { formatDuration, formatDistance } from "../utils/format";
+import { findZipConflicts, stopZip } from "../utils/zipConflicts";
 import "leaflet/dist/leaflet.css";
 
 const CLUSTER_COLORS = [
@@ -80,6 +81,8 @@ export function ClusterReviewView({
     routeId: string;
   } | null>(null);
 
+  const [highlightZip, setHighlightZip] = useState<string | null>(null);
+
   const { settings } = useSettings();
   const { showToast } = useToast();
 
@@ -87,6 +90,19 @@ export function ClusterReviewView({
     session,
     color: CLUSTER_COLORS[i % CLUSTER_COLORS.length],
   }));
+
+  // Informational only: never blocks optimizing or saving.
+  const zipConflicts = useMemo(() => findZipConflicts(rawSubRoutes), [rawSubRoutes]);
+  const conflictZips = new Set(zipConflicts.map((c) => c.zip));
+
+  const handleZipBannerClick = (zip: string) => {
+    const next = highlightZip === zip ? null : zip;
+    setHighlightZip(next);
+    if (next) {
+      const first = zipConflicts.find((c) => c.zip === next)?.routes[0];
+      if (first) setExpandedRoute(first.session_id);
+    }
+  };
 
   const handleOptimize = async (routeId: string) => {
     setOptimizingId(routeId);
@@ -333,6 +349,25 @@ export function ClusterReviewView({
         </div>
       )}
 
+      {zipConflicts.length > 0 && (
+        <div className="cluster-zip-banner" role="alert" data-testid="zip-conflict-banner">
+          <strong>
+            {zipConflicts.length} irányítószám több körben szerepel:
+          </strong>
+          {zipConflicts.map((c) => (
+            <button
+              key={c.zip}
+              type="button"
+              className={`cluster-zip-banner-item ${highlightZip === c.zip ? "cluster-zip-banner-item--active" : ""}`}
+              onClick={() => handleZipBannerClick(c.zip)}
+              title="Show these stops"
+            >
+              {c.zip} ({c.routes.map((r) => `${r.name}: ${r.count}`).join(", ")})
+            </button>
+          ))}
+        </div>
+      )}
+
       <div className="cluster-review-layout">
         {/* Sidebar */}
         <aside className="cluster-review-sidebar">
@@ -407,6 +442,20 @@ export function ClusterReviewView({
                           </>
                         )}
                       </span>
+                      {(() => {
+                        const split = [
+                          ...new Set(route.session.stops.map(stopZip).filter((z) => conflictZips.has(z))),
+                        ].sort();
+                        return split.length > 0 ? (
+                          <span className="cluster-zip-chips">
+                            {split.map((z) => (
+                              <span key={z} className="cluster-zip-chip" title="This zip is also on another route">
+                                {z}
+                              </span>
+                            ))}
+                          </span>
+                        ) : null;
+                      })()}
                       {route.session.owner_name && (
                         <span className="cluster-route-owner">
                           Assigned to {route.session.owner_name}
@@ -560,7 +609,7 @@ export function ClusterReviewView({
                       {route.session.stops.map((stop) => (
                         <div
                           key={stop.id}
-                          className={`cluster-stop-item ${selectedStop?.stop.id === stop.id ? "cluster-stop-item--selected" : ""}`}
+                          className={`cluster-stop-item ${selectedStop?.stop.id === stop.id ? "cluster-stop-item--selected" : ""} ${highlightZip && stopZip(stop) === highlightZip ? "cluster-stop-item--zip-highlight" : ""}`}
                           onClick={() =>
                             setSelectedStop(
                               selectedStop?.stop.id === stop.id

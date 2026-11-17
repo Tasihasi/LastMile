@@ -3,6 +3,7 @@ import math
 import numpy as np
 from sklearn.cluster import KMeans
 
+from . import zones
 from .districts import extract_postal_code
 
 
@@ -261,3 +262,29 @@ def cluster_zip_atomic(stops, n_routes=None, targets=None, max_stops=48):
         clusters[idx].extend(unzipped)
 
     return ZipAtomicResult(clusters, oversized, unzipped)
+
+
+def find_zip_conflicts(sub_routes):
+    """Postal codes that are spread over more than one route.
+
+    `sub_routes` are sessions (with a `stops` relation). Excluded stops and stops without a
+    postal code are ignored. Returns, sorted by zip:
+    [{"zip", "zone", "routes": [{"session_id", "name", "count"}, ...]}]
+    """
+    by_zip = {}
+    for route in sub_routes:
+        for stop in route.stops.filter(excluded=False):
+            z = stop_zip(stop)
+            if z:
+                counts = by_zip.setdefault(z, {})
+                counts[route.id] = counts.get(route.id, 0) + 1
+    names = {route.id: route.name for route in sub_routes}
+    conflicts = []
+    for z in sorted(by_zip):
+        if len(by_zip[z]) > 1:
+            routes = [
+                {"session_id": str(rid), "name": names[rid], "count": n}
+                for rid, n in sorted(by_zip[z].items(), key=lambda kv: (names[kv[0]], str(kv[0])))
+            ]
+            conflicts.append({"zip": z, "zone": zones.zone_for_zip(z), "routes": routes})
+    return conflicts

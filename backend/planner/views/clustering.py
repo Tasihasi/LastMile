@@ -4,7 +4,7 @@ from rest_framework import status
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 
-from ..clustering import calculate_n_clusters, cluster_zip_atomic, split_counts, stop_zip
+from ..clustering import calculate_n_clusters, cluster_zip_atomic, find_zip_conflicts, split_counts, stop_zip
 from ..districts import district_label, extract_district, extract_zip
 from ..models import DeliverySession, DeliveryStop
 from .helpers import require_planner
@@ -240,6 +240,7 @@ def cluster_session(request, session_id):
             "parent_id": str(session.id),
             "sub_routes": sub_routes,
             "oversized_zips": oversized_zips,
+            "zip_conflicts": find_zip_conflicts(list(session.sub_routes.all())),
             "unzipped_stop_ids": [s.id for s in unzipped],
             "cluster_summary": {
                 "total_stops": len(geocoded_stops),
@@ -320,6 +321,7 @@ def move_stop(request, session_id):
             "to_session_id": str(target_session.id),
             "from_count": source_session.stops.count(),
             "to_count": target_session.stops.count(),
+            "zip_conflicts": find_zip_conflicts(list(target_session.parent.sub_routes.all())),
         }
     )
 

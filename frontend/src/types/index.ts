@@ -68,6 +68,13 @@ export interface DeliveryStop {
   delivered_at: string | null;
 }
 
+/** A postal code whose stops are spread over more than one route (informational). */
+export interface ZipConflict {
+  zip: string;
+  zone: string | null;
+  routes: { session_id: string; name: string; count: number }[];
+}
+
 export interface SessionResponse {
   id: string;
   name: string;
@@ -75,6 +82,8 @@ export interface SessionResponse {
   owner_name: string | null;
   parent_id: string | null;
   sub_route_count: number;
+  /** Filled for split routes: postal codes carried by several sub-routes. */
+  zip_conflicts?: ZipConflict[];
   stops: DeliveryStop[];
   needs_geocoding: boolean;
   total_duration: number | null;
@@ -157,6 +166,7 @@ export interface ClusterResponse {
   parent_id: string;
   sub_routes: ClusterSubRoute[];
   cluster_summary: ClusterSummary;
+  zip_conflicts?: ZipConflict[];
 }
 
 export interface MoveStopResponse {
@@ -165,4 +175,5 @@ export interface MoveStopResponse {
   to_session_id: string;
   from_count: number;
   to_count: number;
+  zip_conflicts?: ZipConflict[];
 }

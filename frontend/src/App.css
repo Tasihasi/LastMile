@@ -4357,6 +4357,54 @@ body {
   background: var(--color-danger-bg);
 }
 
+.cluster-zip-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  margin: 0 14px 8px;
+  padding: 8px 12px;
+  font-size: 0.8rem;
+  color: var(--color-warning-text);
+  background: var(--color-warning-bg);
+  border-radius: var(--radius-sm);
+}
+
+.cluster-zip-banner-item {
+  font: inherit;
+  color: inherit;
+  background: transparent;
+  border: 1px solid currentColor;
+  border-radius: var(--radius-sm);
+  padding: 2px 8px;
+  cursor: pointer;
+}
+
+.cluster-zip-banner-item--active {
+  font-weight: 600;
+  background: rgba(0, 0, 0, 0.08);
+}
+
+.cluster-zip-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 2px;
+}
+
+.cluster-zip-chip {
+  font-size: 0.7rem;
+  color: var(--color-warning-text);
+  background: var(--color-warning-bg);
+  border-radius: var(--radius-sm);
+  padding: 1px 6px;
+}
+
+.cluster-stop-item--zip-highlight {
+  outline: 2px solid var(--color-warning-text);
+  outline-offset: -2px;
+}
+
 .cluster-route-empty-warning {
   padding: 6px 12px;
   font-size: 0.75rem;

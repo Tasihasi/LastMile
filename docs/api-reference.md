@@ -170,7 +170,7 @@ Depot coordinates are optional. If omitted, the route is optimized without a fix
 
 ### POST /sessions/{id}/cluster/
 
-Cluster a session's geocoded stops into N geographic sub-routes using KMeans. Planner only. The parent session's status becomes `split` and its stops are moved to child sessions.
+Split a session's geocoded stops into N sub-routes. **A postal code is never split:** all stops sharing a `postal_code` go to the same sub-route (largest zips first, each to the nearest route with room). Planner only. The parent session's status becomes `split` and its stops are moved to child sessions.
 
 **Request** (all fields optional):
 ```json
@@ -190,7 +190,7 @@ Alternatively pass `assignments` for a planned split (used by the Split Planner 
 }
 ```
 
-District-locked bikers receive every stop in their district (derived from the postal code in `raw_address`); the remaining stops are clustered geographically with sizes proportional to `target_stops`. Each sub-route is created with its biker as owner. If every assignment is district-locked, leftover stops go into an extra unassigned sub-route.
+Zip-locked bikers receive every stop of that postal code, district-locked bikers every stop in their district (zip locks win); the remaining zips are distributed with sizes proportional to `target_stops`, never splitting a zip. Each sub-route is created with its biker as owner. If every assignment is district-locked, leftover stops go into an extra unassigned sub-route.
 
 **Response** `201`:
 ```json
@@ -200,6 +200,9 @@ District-locked bikers receive every stop in their district (derived from the po
     { "id": "uuid", "name": "Monday Deliveries - Route 1", "stop_count": 43, "owner_id": 3, "owner_name": "anna" },
     { "id": "uuid", "name": "Monday Deliveries - Route 2", "stop_count": 41, "owner_id": null, "owner_name": null }
   ],
+  "oversized_zips": [{ "zip": "1054", "stop_count": 56 }],
+  "unzipped_stop_ids": [],
+  "zip_conflicts": [],
   "cluster_summary": {
     "total_stops": 284,
     "skipped_stops": 16,
@@ -210,6 +213,8 @@ District-locked bikers receive every stop in their district (derived from the po
   }
 }
 ```
+
+`oversized_zips` lists zips larger than `max_stops_per_route` (kept whole on one route). `unzipped_stop_ids` lists stops without a postal code (grouped onto the smallest route; if no stop has a zip, a geographic split is used). `zip_conflicts` is explained under `move-stop` below and is empty right after a split.
 
 Stops that are not geocoded (`geocode_status` != `success` and no lat/lng) are skipped and remain on the parent session.
 
@@ -254,9 +259,21 @@ Move a stop from one sub-route to a sibling sub-route (both must share the same 
   "from_session_id": "uuid",
   "to_session_id": "uuid",
   "from_count": 42,
-  "to_count": 44
+  "to_count": 44,
+  "zip_conflicts": [
+    {
+      "zip": "1082",
+      "zone": "Z12",
+      "routes": [
+        { "session_id": "uuid", "name": "Day_1", "count": 4 },
+        { "session_id": "uuid", "name": "Day_2", "count": 2 }
+      ]
+    }
+  ]
 }
 ```
+
+`zip_conflicts` lists postal codes now spread over more than one sub-route of the parent (excluded stops and stops without a zip are ignored). It is informational and never blocks moving, optimizing or saving. The same field is returned by `GET /sessions/{id}/` for a split parent (`[]` otherwise)
 
 ### DELETE /sessions/{id}/uncluster/
 
