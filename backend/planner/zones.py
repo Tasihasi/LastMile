@@ -15,6 +15,10 @@ ZONES_PATH = Path(__file__).with_name("zones.json")
 _ZIP_RE = re.compile(r"^1\d{3}$")
 
 
+EXPECTED_ZONES = 16
+EXPECTED_ZIPS = 34
+
+
 class ZoneConfigError(ValueError):
     """The zone config is malformed."""
 
@@ -52,6 +56,10 @@ def validate_config(config):
             if z in seen_zips:
                 raise ZoneConfigError(f"Zip {z} appears in both {seen_zips[z]!r} and {zone_id!r}.")
             seen_zips[z] = zone_id
+    if not config.get("_placeholder") and (len(seen_ids), len(seen_zips)) != (EXPECTED_ZONES, EXPECTED_ZIPS):
+        raise ZoneConfigError(
+            f"Expected {EXPECTED_ZONES} zones and {EXPECTED_ZIPS} zips, got {len(seen_ids)} and {len(seen_zips)}."
+        )
 
 
 _cache = None

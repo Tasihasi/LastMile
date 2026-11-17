@@ -802,4 +802,4 @@ class ZonesEndpointE2E(TestCase):
         self.assertEqual(_auth_client("zbiker", "biker").get("/api/zones/").status_code, 403)
         resp = _auth_client("zplanner", "planner").get("/api/zones/")
         self.assertEqual(resp.status_code, 200)
-        self.assertEqual(len(resp.json()["zones"]), 22)
+        self.assertEqual(len(resp.json()["zones"]), 16)

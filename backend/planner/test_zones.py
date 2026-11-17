@@ -18,9 +18,17 @@ class ZonesTests(SimpleTestCase):
         cfg = zones.load()
         zones.validate_config(cfg)
         self.assertFalse(zones.is_placeholder())
-        # Data from the customer sheet: 22 zones / 40 zips (spec said 16/34, see PR notes).
-        self.assertEqual(len(zones.all_zones()), 22)
-        self.assertEqual(sum(len(z["zips"]) for z in zones.all_zones()), 40)
+        self.assertEqual(len(zones.all_zones()), 16)
+        self.assertEqual(sum(len(z["zips"]) for z in zones.all_zones()), 34)
+
+    def test_a1_ac2_wrong_counts_rejected_unless_placeholder(self):
+        cfg = {"zones": [{"id": "A", "zips": ["1051"]}]}
+        with self.assertRaisesRegex(zones.ZoneConfigError, "16 zones"):
+            zones.validate_config(cfg)
+        zones.validate_config({**cfg, "_placeholder": True})
+
+    def test_a1_out_of_area_zip_unzoned(self):
+        self.assertIsNone(zones.zone_for_zip("1111"))
 
     def test_a1_ac1_duplicate_zip_rejected(self):
         cfg = {"zones": [{"id": "A", "zips": ["1051"]}, {"id": "B", "zips": ["1051"]}]}
