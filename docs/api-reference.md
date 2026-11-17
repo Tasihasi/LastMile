@@ -201,6 +201,7 @@ Zip-locked bikers receive every stop of that postal code, district-locked bikers
     { "id": "uuid", "name": "Monday Deliveries - Route 2", "stop_count": 41, "owner_id": null, "owner_name": null }
   ],
   "oversized_zips": [{ "zip": "1054", "stop_count": 56 }],
+  "unassigned_zones": [],
   "unzipped_stop_ids": [],
   "zip_conflicts": [],
   "cluster_summary": {
@@ -215,6 +216,8 @@ Zip-locked bikers receive every stop of that postal code, district-locked bikers
 ```
 
 `oversized_zips` lists zips larger than `max_stops_per_route` (kept whole on one route). `unzipped_stop_ids` lists stops without a postal code (grouped onto the smallest route; if no stop has a zip, a geographic split is used). `zip_conflicts` is explained under `move-stop` below and is empty right after a split.
+
+**Zone-first allocation.** When every assignment carries `window_minutes` (the biker's available time) and none is locked to a `zip`/`district`, whole zones are handed to bikers by estimated load (stops x service time x optional `multiplier`, plus a heuristic travel estimate and a break) up to `window_minutes` + 7.5 %. Each sub-route then also has `load_minutes`, `capacity_minutes` and `zones`. A zone that fits nowhere is listed in `unassigned_zones` (`{zone, stop_count, load_minutes}`); its stops are still placed, zip by zip, on the least-loaded route so none are lost. Without `window_minutes` the behaviour is unchanged.
 
 Stops that are not geocoded (`geocode_status` != `success` and no lat/lng) are skipped and remain on the parent session.
 

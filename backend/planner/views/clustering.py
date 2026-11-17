@@ -8,6 +8,7 @@ from .. import zones
 from ..clustering import calculate_n_clusters, cluster_zip_atomic, find_zip_conflicts, split_counts, stop_zip
 from ..districts import district_label, extract_district, extract_zip
 from ..models import DeliverySession, DeliveryStop
+from ..zone_allocation import allocate_zones
 from .helpers import require_planner
 
 
@@ -57,7 +58,33 @@ def _parse_assignments(raw):
             if extract_district(str(zip_code)) is None:
                 return None, "zip must be a valid Budapest irányítószám."
 
-        parsed.append({"owner": owner, "target_stops": target, "district": district, "zip": zip_code})
+        window = item.get("window_minutes")
+        if window is not None:
+            try:
+                window = float(window)
+            except (ValueError, TypeError):
+                return None, "window_minutes must be a number."
+            if window <= 0:
+                return None, "window_minutes must be positive."
+        multiplier = item.get("multiplier")
+        if multiplier is not None:
+            try:
+                multiplier = float(multiplier)
+            except (ValueError, TypeError):
+                return None, "multiplier must be a number."
+            if multiplier <= 0:
+                return None, "multiplier must be positive."
+
+        parsed.append(
+            {
+                "owner": owner,
+                "target_stops": target,
+                "district": district,
+                "zip": zip_code,
+                "window_minutes": window,
+                "multiplier": multiplier,
+            }
+        )
     return parsed, None
 
 
@@ -127,6 +154,43 @@ def _build_assignment_clusters(geocoded_stops, assignments, max_stops=48):
     return clusters, [], oversized + result.oversized_zips, unzipped + result.unzipped_stops
 
 
+def _build_zone_first_clusters(geocoded_stops, assignments):
+    """A5: whole zones onto bikers by time window; leftovers stay zip-atomic (A2 behaviour).
+
+    Returns (clusters, route_info, unassigned_zones, unzipped_stops), index-aligned with assignments.
+    """
+    bikers = [
+        {"id": i, "window_minutes": a["window_minutes"], "multiplier": a["multiplier"] or 1.0}
+        for i, a in enumerate(assignments)
+    ]
+    alloc = allocate_zones(geocoded_stops, bikers)
+    clusters = [list(alloc["routes"][i]["stops"]) for i in range(len(assignments))]
+
+    placed = {id(s) for c in clusters for s in c}
+    rest = [s for s in geocoded_stops if id(s) not in placed]
+    unzipped = [s for s in rest if not stop_zip(s)]
+    by_zip = {}
+    for s in rest:
+        if stop_zip(s):
+            by_zip.setdefault(stop_zip(s), []).append(s)
+    for group in sorted(by_zip.values(), key=lambda g: (-len(g), stop_zip(g[0]))):
+        target = min(range(len(clusters)), key=lambda i: (len(clusters[i]), i))
+        clusters[target] += group
+    if unzipped:
+        smallest = min(range(len(clusters)), key=lambda i: (len(clusters[i]), i))
+        clusters[smallest] += unzipped
+
+    info = [
+        {
+            "load_minutes": alloc["routes"][i]["load_minutes"],
+            "capacity_minutes": alloc["routes"][i]["capacity_minutes"],
+            "zones": alloc["routes"][i]["zones"],
+        }
+        for i in range(len(assignments))
+    ]
+    return clusters, info, alloc["unassigned_zones"], unzipped
+
+
 @api_view(["POST"])
 @transaction.atomic
 def cluster_session(request, session_id):
@@ -169,15 +233,28 @@ def cluster_session(request, session_id):
             status=status.HTTP_400_BAD_REQUEST,
         )
 
+    route_info, unassigned_zones = None, []
     assignments_raw = request.data.get("assignments")
     if assignments_raw is not None:
         assignments, err = _parse_assignments(assignments_raw)
         if err:
             return Response({"error": err}, status=status.HTTP_400_BAD_REQUEST)
         max_stops = int(request.data.get("max_stops_per_route", 48))
-        clusters, leftover, oversized_zips, unzipped = _build_assignment_clusters(
-            geocoded_stops, assignments, max_stops=max_stops
+        zone_first = all(
+            a["window_minutes"] is not None and a["zip"] is None and a["district"] is None for a in assignments
         )
+        if zone_first:
+            clusters, route_info, unassigned_zones, unzipped = _build_zone_first_clusters(geocoded_stops, assignments)
+            leftover, oversized_zips = [], []
+            by_zip = {}
+            for c in clusters:
+                for st in c:
+                    by_zip[stop_zip(st)] = by_zip.get(stop_zip(st), 0) + 1
+            oversized_zips = [{"zip": z, "stop_count": n} for z, n in sorted(by_zip.items()) if z and n > max_stops]
+        else:
+            clusters, leftover, oversized_zips, unzipped = _build_assignment_clusters(
+                geocoded_stops, assignments, max_stops=max_stops
+            )
         owners = [a["owner"] for a in assignments]
         if leftover:
             # Every assignment was district-locked; keep the rest reviewable.
@@ -229,6 +306,7 @@ def cluster_session(request, session_id):
                 "stop_count": len(cluster),
                 "owner_id": owner.id if owner else None,
                 "owner_name": owner.username if owner else None,
+                **(route_info[i - 1] if route_info and i <= len(route_info) else {}),
             }
         )
 
@@ -241,6 +319,7 @@ def cluster_session(request, session_id):
             "parent_id": str(session.id),
             "sub_routes": sub_routes,
             "oversized_zips": oversized_zips,
+            "unassigned_zones": unassigned_zones,
             "zip_conflicts": find_zip_conflicts(list(session.sub_routes.all())),
             "unzipped_stop_ids": [s.id for s in unzipped],
             "cluster_summary": {
