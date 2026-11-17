@@ -402,6 +402,17 @@ export function ClusterReviewView({
         </div>
       )}
 
+      {(parentSession?.split_zones?.length ?? 0) > 0 && (
+        <div className="cluster-split-zones" data-testid="split-zones">
+          {parentSession!.split_zones!.map((z) => (
+            <div key={z.zone_id}>
+              Zóna {z.zone_id} szétbontva:{" "}
+              {z.parts.flatMap((p) => p.zips.map((zip) => `${zip}→${p.route}`)).join(", ")}
+            </div>
+          ))}
+        </div>
+      )}
+
       <div className="cluster-review-layout">
         {/* Sidebar */}
         <aside className="cluster-review-sidebar">

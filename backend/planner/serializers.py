@@ -1,7 +1,7 @@
 from django.contrib.auth.models import User
 from rest_framework import serializers
 
-from .clustering import find_zip_conflicts
+from .clustering import find_split_zones, find_zip_conflicts
 from .models import DeliverySession, DeliveryStop, SharedRoute, UserProfile
 
 
@@ -51,6 +51,7 @@ class DeliverySessionSerializer(serializers.ModelSerializer):
     parent_id = serializers.UUIDField(read_only=True, default=None)
     sub_route_count = serializers.IntegerField(source="sub_routes.count", read_only=True)
     zip_conflicts = serializers.SerializerMethodField()
+    split_zones = serializers.SerializerMethodField()
 
     class Meta:
         model = DeliverySession
@@ -62,6 +63,7 @@ class DeliverySessionSerializer(serializers.ModelSerializer):
             "parent_id",
             "sub_route_count",
             "zip_conflicts",
+            "split_zones",
             "stops",
             "needs_geocoding",
             "total_duration",
@@ -80,6 +82,10 @@ class DeliverySessionSerializer(serializers.ModelSerializer):
     def get_zip_conflicts(self, obj):
         """For a split route: postal codes spread over several sub-routes (informational)."""
         return find_zip_conflicts(list(obj.sub_routes.all()))
+
+    def get_split_zones(self, obj):
+        """For a split route: zones whose zips are carried by several sub-routes."""
+        return find_split_zones(list(obj.sub_routes.all()))
 
 
 class SessionListSerializer(serializers.ModelSerializer):

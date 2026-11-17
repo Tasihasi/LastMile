@@ -75,6 +75,12 @@ export interface ZipConflict {
   routes: { session_id: string; name: string; count: number }[];
 }
 
+/** A zone whose postal codes ended up on several routes (a whole zip is never divided). */
+export interface SplitZone {
+  zone_id: string;
+  parts: { zips: string[]; route: string }[];
+}
+
 export interface SessionResponse {
   id: string;
   name: string;
@@ -84,6 +90,8 @@ export interface SessionResponse {
   sub_route_count: number;
   /** Filled for split routes: postal codes carried by several sub-routes. */
   zip_conflicts?: ZipConflict[];
+  /** Filled for split routes: zones broken up between sub-routes. */
+  split_zones?: SplitZone[];
   stops: DeliveryStop[];
   needs_geocoding: boolean;
   total_duration: number | null;

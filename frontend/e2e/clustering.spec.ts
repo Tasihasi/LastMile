@@ -174,6 +174,49 @@ test.describe("Clustering", () => {
     await expect(page.getByTestId("zip-conflict-banner")).toHaveCount(0);
   });
 
+  test("a6: a zone that fits no biker whole is broken up by zip and labelled", async ({ page }) => {
+    const token = await page.evaluate(() => localStorage.getItem("auth-token"));
+    const headers = { Authorization: `Token ${token}` };
+    const fs = await import("fs");
+    const upload = await page.request.post(`${API_BASE}/upload/`, {
+      headers,
+      multipart: {
+        file: {
+          name: "zone_split_16.csv",
+          mimeType: "text/csv",
+          buffer: fs.readFileSync(path.resolve(__dirname, "test-data/zone_split_16.csv")),
+        },
+      },
+    });
+    const { id } = await upload.json();
+    const uniqueName = `Zone Split Day ${Date.now()}`;
+    await page.request.patch(`${API_BASE}/sessions/${id}/rename/`, { headers, data: { name: uniqueName } });
+    const bikers = await (await page.request.get(`${API_BASE}/users/bikers/`, { headers })).json();
+    const split = await page.request.post(`${API_BASE}/sessions/${id}/cluster/`, {
+      headers,
+      data: {
+        assignments: bikers
+          .slice(0, 2)
+          .map((b: { id: number }) => ({ biker_id: b.id, target_stops: 0, window_minutes: 60 })),
+      },
+    });
+    expect(split.status()).toBe(201);
+    const body = await split.json();
+    expect(body.unassigned_zones).toHaveLength(1);
+    expect(body.split_zones).toHaveLength(1);
+
+    await page.goto("/");
+    const card = page.locator(".dashboard-split .session-card", { hasText: uniqueName }).first();
+    await expect(card).toBeVisible({ timeout: 30_000 });
+    await card.locator(".session-card-info").click();
+    const label = page.getByTestId("split-zones");
+    await expect(label).toBeVisible({ timeout: 15_000 });
+    await expect(label).toContainText("Zóna Z12 szétbontva");
+    await expect(label).toContainText(/1082→.+, 1083→/);
+    // A whole zip is never divided: no zip warning.
+    await expect(page.getByTestId("zip-conflict-banner")).toHaveCount(0);
+  });
+
   test("a split route is one card for the planner; the bikers get the sub-routes", async ({
     page,
   }) => {

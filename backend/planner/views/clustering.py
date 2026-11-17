@@ -9,6 +9,7 @@ from ..clustering import calculate_n_clusters, cluster_zip_atomic, find_zip_conf
 from ..districts import district_label, extract_district, extract_zip
 from ..models import DeliverySession, DeliveryStop
 from ..zone_allocation import allocate_zones
+from ..zone_splitting import resolve_unassigned
 from .helpers import require_planner
 
 
@@ -164,31 +165,31 @@ def _build_zone_first_clusters(geocoded_stops, assignments):
         for i, a in enumerate(assignments)
     ]
     alloc = allocate_zones(geocoded_stops, bikers)
-    clusters = [list(alloc["routes"][i]["stops"]) for i in range(len(assignments))]
+    # A6: zones that fit whole nowhere are broken up zip by zip, as few as possible.
+    resolved = resolve_unassigned(alloc, bikers)
+    n = len(assignments)
+    clusters = [list(resolved["routes"][i]["stops"]) for i in range(n)]
 
-    placed = {id(s) for c in clusters for s in c}
-    rest = [s for s in geocoded_stops if id(s) not in placed]
-    unzipped = [s for s in rest if not stop_zip(s)]
-    by_zip = {}
-    for s in rest:
-        if stop_zip(s):
-            by_zip.setdefault(stop_zip(s), []).append(s)
-    for group in sorted(by_zip.values(), key=lambda g: (-len(g), stop_zip(g[0]))):
-        target = min(range(len(clusters)), key=lambda i: (len(clusters[i]), i))
-        clusters[target] += group
+    unzipped = [s for s in geocoded_stops if not stop_zip(s)]
     if unzipped:
-        smallest = min(range(len(clusters)), key=lambda i: (len(clusters[i]), i))
+        smallest = min(range(n), key=lambda i: (len(clusters[i]), i))
         clusters[smallest] += unzipped
 
+    over = set(resolved["over_capacity_routes"])
     info = [
         {
-            "load_minutes": alloc["routes"][i]["load_minutes"],
-            "capacity_minutes": alloc["routes"][i]["capacity_minutes"],
+            "load_minutes": resolved["routes"][i]["load_minutes"],
+            "capacity_minutes": resolved["routes"][i]["capacity_minutes"],
             "zones": alloc["routes"][i]["zones"],
+            "over_capacity": i in over,
         }
-        for i in range(len(assignments))
+        for i in range(n)
     ]
-    return clusters, info, alloc["unassigned_zones"], unzipped
+    extras = {
+        "split_zones": resolved["split_zones"],  # parts[].route is an assignment index until names exist
+        "over_capacity_zips": resolved["over_capacity_zips"],
+    }
+    return clusters, info, alloc["unassigned_zones"], unzipped, extras
 
 
 @api_view(["POST"])
@@ -233,7 +234,7 @@ def cluster_session(request, session_id):
             status=status.HTTP_400_BAD_REQUEST,
         )
 
-    route_info, unassigned_zones = None, []
+    route_info, unassigned_zones, zone_extras = None, [], {"split_zones": [], "over_capacity_zips": []}
     assignments_raw = request.data.get("assignments")
     if assignments_raw is not None:
         assignments, err = _parse_assignments(assignments_raw)
@@ -244,7 +245,9 @@ def cluster_session(request, session_id):
             a["window_minutes"] is not None and a["zip"] is None and a["district"] is None for a in assignments
         )
         if zone_first:
-            clusters, route_info, unassigned_zones, unzipped = _build_zone_first_clusters(geocoded_stops, assignments)
+            clusters, route_info, unassigned_zones, unzipped, zone_extras = _build_zone_first_clusters(
+                geocoded_stops, assignments
+            )
             leftover, oversized_zips = [], []
             by_zip = {}
             for c in clusters:
@@ -310,6 +313,15 @@ def cluster_session(request, session_id):
             }
         )
 
+    names = [r["name"] for r in sub_routes]
+    split_zones = [
+        {
+            "zone_id": z["zone_id"],
+            "parts": [{"zips": p["zips"], "route": names[p["route"]]} for p in z["parts"]],
+        }
+        for z in zone_extras["split_zones"]
+    ]
+
     session.status = DeliverySession.Status.SPLIT
     session.save(update_fields=["status"])
 
@@ -320,6 +332,8 @@ def cluster_session(request, session_id):
             "sub_routes": sub_routes,
             "oversized_zips": oversized_zips,
             "unassigned_zones": unassigned_zones,
+            "split_zones": split_zones,
+            "over_capacity_zips": zone_extras["over_capacity_zips"],
             "zip_conflicts": find_zip_conflicts(list(session.sub_routes.all())),
             "unzipped_stop_ids": [s.id for s in unzipped],
             "cluster_summary": {

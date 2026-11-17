@@ -288,3 +288,23 @@ def find_zip_conflicts(sub_routes):
             ]
             conflicts.append({"zip": z, "zone": zones.zone_for_zip(z), "routes": routes})
     return conflicts
+
+
+def find_split_zones(sub_routes):
+    """Zones whose postal codes are carried by more than one route (zips themselves stay whole).
+
+    Returns, sorted by zone id: [{"zone_id", "parts": [{"zips": [...], "route": name}, ...]}].
+    Zips outside the zone config and excluded / zipless stops are ignored.
+    """
+    placed = {}  # zone -> {route name -> set(zips)}
+    for route in sub_routes:
+        for stop in route.stops.filter(excluded=False):
+            z = stop_zip(stop)
+            zone = zones.zone_for_zip(z) if z else None
+            if zone:
+                placed.setdefault(zone, {}).setdefault(route.name, set()).add(z)
+    return [
+        {"zone_id": zone, "parts": [{"zips": sorted(zs), "route": name} for name, zs in sorted(parts.items())]}
+        for zone, parts in sorted(placed.items())
+        if len(parts) > 1
+    ]

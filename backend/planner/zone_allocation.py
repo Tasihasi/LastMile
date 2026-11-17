@@ -89,4 +89,5 @@ def allocate_zones(stops, bikers, depot=timing.DEPOT, estimator=None, tolerance=
             for bid, st in state.items()
         },
         "unassigned_zones": unassigned,
+        "unassigned_stops": {u["zone"]: units[u["zone"]] for u in unassigned},
     }

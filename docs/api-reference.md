@@ -219,6 +219,8 @@ Zip-locked bikers receive every stop of that postal code, district-locked bikers
 
 **Zone-first allocation.** When every assignment carries `window_minutes` (the biker's available time) and none is locked to a `zip`/`district`, whole zones are handed to bikers by estimated load (stops x service time x optional `multiplier`, plus a heuristic travel estimate and a break) up to `window_minutes` + 7.5 %. Each sub-route then also has `load_minutes`, `capacity_minutes` and `zones`. A zone that fits nowhere is listed in `unassigned_zones` (`{zone, stop_count, load_minutes}`); its stops are still placed, zip by zip, on the least-loaded route so none are lost. Without `window_minutes` the behaviour is unchanged.
 
+**Breaking zones (fallback).** Zones that fit no biker whole (`unassigned_zones`) are then placed zip by zip, breaking as few zones as possible (exhaustive search for small cases, greedy otherwise; ties go to the smaller total load). The response adds `split_zones` (`[{zone_id, parts: [{zips, route}]}]`, `route` = sub-route name) and `over_capacity_zips`; a sub-route that still exceeds its window (e.g. one zip bigger than any window, kept whole) has `over_capacity: true`. `GET /api/sessions/<id>/` of a split route also returns `split_zones`, computed from the routes as they are now.
+
 Stops that are not geocoded (`geocode_status` != `success` and no lat/lng) are skipped and remain on the parent session.
 
 ### GET /sessions/{id}/districts/

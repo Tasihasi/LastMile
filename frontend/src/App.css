@@ -4400,6 +4400,14 @@ body {
   padding: 1px 6px;
 }
 
+.cluster-split-zones {
+  margin: 0 14px 8px;
+  padding: 6px 12px;
+  font-size: 0.8rem;
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-secondary, rgba(0, 0, 0, 0.04));
+}
+
 .cluster-zip-move {
   font: inherit;
   font-size: 0.75rem;
