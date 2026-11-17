@@ -169,6 +169,14 @@ export interface ClusterResponse {
   zip_conflicts?: ZipConflict[];
 }
 
+export interface MoveZipResponse {
+  moved_count: number;
+  moved_zips: string[];
+  to_session_id: string;
+  counts: Record<string, number>;
+  zip_conflicts: ZipConflict[];
+}
+
 export interface MoveStopResponse {
   stop_id: number;
   from_session_id: string;

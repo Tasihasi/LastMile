@@ -275,6 +275,19 @@ Move a stop from one sub-route to a sibling sub-route (both must share the same 
 
 `zip_conflicts` lists postal codes now spread over more than one sub-route of the parent (excluded stops and stops without a zip are ignored). It is informational and never blocks moving, optimizing or saving. The same field is returned by `GET /sessions/{id}/` for a split parent (`[]` otherwise)
 
+### POST /sessions/{id}/move-zip/
+
+Move every stop of one postal code (or a whole zone) into one sub-route of a split session. `{id}` is the **parent** session. Planner only. Send exactly one of `zip` or `zone_id`. Excluded stops stay where they are. Every route that lost or gained stops loses its stop order, geometry and duration (re-optimize it). All-or-nothing.
+
+**Request:**
+```json
+{ "zip": "1082", "to_session_id": "uuid" }
+```
+
+**Response** `200`: `moved_count`, `moved_zips`, `to_session_id`, `counts` (stop count per sub-route id) and `zip_conflicts` (as in `move-stop`).
+
+**Errors** `400`: both or neither of `zip`/`zone_id`, unknown zone, no stops with that zip, parent not split, or any route involved is `in_progress`/`finished`. `404`: target is not a sub-route of this session. `403`: not a planner.
+
 ### DELETE /sessions/{id}/uncluster/
 
 Undo a cluster split. Deletes all sub-routes, restores stops to the parent session, and resets the parent status to `not_started`. Planner only.

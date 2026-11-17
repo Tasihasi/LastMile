@@ -6,6 +6,7 @@ import type {
   DistrictsResponse,
   SplitAssignment,
   MoveStopResponse,
+  MoveZipResponse,
   OptimizeResponse,
   SessionResponse,
   SessionSummary,
@@ -340,6 +341,18 @@ export async function moveStop(
   const { data } = await api.post<MoveStopResponse>(
     `/sessions/${sessionId}/move-stop/`,
     { stop_id: stopId, to_session_id: toSessionId }
+  );
+  return data;
+}
+
+export async function moveZip(
+  parentId: string,
+  zip: string,
+  toSessionId: string
+): Promise<MoveZipResponse> {
+  const { data } = await api.post<MoveZipResponse>(
+    `/sessions/${parentId}/move-zip/`,
+    { zip, to_session_id: toSessionId }
   );
   return data;
 }

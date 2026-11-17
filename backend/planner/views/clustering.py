@@ -4,6 +4,7 @@ from rest_framework import status
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 
+from .. import zones
 from ..clustering import calculate_n_clusters, cluster_zip_atomic, find_zip_conflicts, split_counts, stop_zip
 from ..districts import district_label, extract_district, extract_zip
 from ..models import DeliverySession, DeliveryStop
@@ -322,6 +323,85 @@ def move_stop(request, session_id):
             "from_count": source_session.stops.count(),
             "to_count": target_session.stops.count(),
             "zip_conflicts": find_zip_conflicts(list(target_session.parent.sub_routes.all())),
+        }
+    )
+
+
+@api_view(["POST"])
+@transaction.atomic
+def move_zip(request, session_id):
+    """Move every stop of a postal code (or a whole zone) into one sub-route."""
+    if not require_planner(request):
+        return Response({"error": "Planner access required."}, status=status.HTTP_403_FORBIDDEN)
+
+    try:
+        parent = DeliverySession.objects.select_for_update().get(id=session_id)
+    except DeliverySession.DoesNotExist:
+        return Response({"error": "Session not found."}, status=status.HTTP_404_NOT_FOUND)
+    if parent.status != DeliverySession.Status.SPLIT:
+        return Response({"error": "Session is not split."}, status=status.HTTP_400_BAD_REQUEST)
+
+    zip_code = str(request.data.get("zip") or "").strip()
+    zone_id = str(request.data.get("zone_id") or "").strip()
+    to_session_id = request.data.get("to_session_id")
+    if bool(zip_code) == bool(zone_id):
+        return Response({"error": "Send exactly one of zip or zone_id."}, status=status.HTTP_400_BAD_REQUEST)
+    if not to_session_id:
+        return Response({"error": "to_session_id is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+    if zone_id:
+        wanted = set(zones.zips_in_zone(zone_id))
+        if not wanted:
+            return Response({"error": f"Unknown zone {zone_id}."}, status=status.HTTP_400_BAD_REQUEST)
+    else:
+        wanted = {zip_code}
+
+    children = {str(c.id): c for c in parent.sub_routes.select_for_update()}
+    target = children.get(str(to_session_id))
+    if target is None:
+        return Response({"error": "Target is not a sub-route of this session."}, status=status.HTTP_404_NOT_FOUND)
+
+    to_move = [
+        s
+        for child in children.values()
+        for s in child.stops.filter(excluded=False)
+        if stop_zip(s) in wanted and child.id != target.id
+    ]
+    present = {stop_zip(s) for s in to_move}
+    if not zone_id and not present and not target.stops.filter(postal_code=zip_code).exists():
+        return Response({"error": f"No stops with postal code {zip_code}."}, status=status.HTTP_400_BAD_REQUEST)
+
+    blocked = {"in_progress", "finished"}
+    touched = {s.session_id for s in to_move}
+    for sid in touched | ({target.id} if to_move else set()):
+        child = next(c for c in children.values() if c.id == sid)
+        if child.status in blocked:
+            return Response(
+                {"error": f"Cannot move stops: route {child.name} is {child.status}."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+    for stop in to_move:
+        stop.session = target
+        stop.sequence_order = None
+        stop.save(update_fields=["session_id", "sequence_order"])
+
+    for sid in touched | ({target.id} if to_move else set()):
+        child = next(c for c in children.values() if c.id == sid)
+        child.route_geometry = None
+        child.route_segments = None
+        child.total_duration = None
+        child.total_distance = None
+        child.save(update_fields=["route_geometry", "route_segments", "total_duration", "total_distance"])
+
+    routes = list(parent.sub_routes.all())
+    return Response(
+        {
+            "moved_count": len(to_move),
+            "moved_zips": sorted(z for z in present if z),
+            "to_session_id": str(target.id),
+            "counts": {str(r.id): r.stops.count() for r in routes},
+            "zip_conflicts": find_zip_conflicts(routes),
         }
     )
 

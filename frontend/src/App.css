@@ -4400,6 +4400,25 @@ body {
   padding: 1px 6px;
 }
 
+.cluster-zip-move {
+  font: inherit;
+  font-size: 0.75rem;
+  color: var(--color-primary, inherit);
+  background: transparent;
+  border: none;
+  padding: 0 4px;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.cluster-zip-rows {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  padding: 6px 12px;
+  font-size: 0.75rem;
+}
+
 .cluster-stop-item--zip-highlight {
   outline: 2px solid var(--color-warning-text);
   outline-offset: -2px;

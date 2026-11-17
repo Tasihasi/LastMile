@@ -1,8 +1,9 @@
 import { HoldToConfirmButton } from "./HoldToConfirmButton";
 import { MoveStopModal } from "./MoveStopModal";
+import { MoveZipModal } from "./MoveZipModal";
 import { StopDetailsModal } from "./StopDetailsModal";
 import { calcArrivalTimes } from "../utils/format";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet";
 import L from "leaflet";
 import type { DeliveryStop, SessionResponse } from "../types";
@@ -11,6 +12,7 @@ import {
   optimizeRoute,
   assignSession,
   moveStop,
+  moveZip,
   removeStop,
   deleteSession,
   unclusterSession,
@@ -81,6 +83,7 @@ export function ClusterReviewView({
     routeId: string;
   } | null>(null);
 
+  const [zipMoveRequest, setZipMoveRequest] = useState<string | null>(null);
   const [highlightZip, setHighlightZip] = useState<string | null>(null);
 
   const { settings } = useSettings();
@@ -177,6 +180,29 @@ export function ClusterReviewView({
     } catch {
       setError("Failed to move stop. The route may already be in progress.");
       setMoveRequest(null);
+    } finally {
+      setMoving(false);
+    }
+  };
+
+  const handleMoveZip = async (toRouteId: string) => {
+    if (!zipMoveRequest) return;
+    setMoving(true);
+    try {
+      const res = await moveZip(parentSessionId, zipMoveRequest, toRouteId);
+      // Reload only the routes whose stop count changed (touched routes).
+      const changed = rawSubRoutes.filter(
+        (r) => r.id === toRouteId || res.counts[r.id] !== r.stops.length
+      );
+      const fresh = await Promise.all(changed.map((r) => getSession(r.id)));
+      setRawSubRoutes((prev) => prev.map((r) => fresh.find((f) => f.id === r.id) ?? r));
+      setSelectedStop(null);
+      setZipMoveRequest(null);
+      const target = fresh.find((f) => f.id === toRouteId);
+      showToast(`${res.moved_count} stops of ${zipMoveRequest} moved to ${target?.owner_name ?? target?.name ?? "route"}`);
+    } catch {
+      setError("Failed to move the postal code. A route may already be in progress.");
+      setZipMoveRequest(null);
     } finally {
       setMoving(false);
     }
@@ -355,8 +381,8 @@ export function ClusterReviewView({
             {zipConflicts.length} irányítószám több körben szerepel:
           </strong>
           {zipConflicts.map((c) => (
+            <Fragment key={c.zip}>
             <button
-              key={c.zip}
               type="button"
               className={`cluster-zip-banner-item ${highlightZip === c.zip ? "cluster-zip-banner-item--active" : ""}`}
               onClick={() => handleZipBannerClick(c.zip)}
@@ -364,6 +390,14 @@ export function ClusterReviewView({
             >
               {c.zip} ({c.routes.map((r) => `${r.name}: ${r.count}`).join(", ")})
             </button>
+            <button
+              type="button"
+              className="cluster-zip-move"
+              onClick={() => setZipMoveRequest(c.zip)}
+            >
+              Move zip…
+            </button>
+            </Fragment>
           ))}
         </div>
       )}
@@ -606,6 +640,21 @@ export function ClusterReviewView({
                   {/* Expanded stop list */}
                   {isExpanded && (
                     <div className="cluster-route-stops">
+                      <div className="cluster-zip-rows">
+                        {[...new Set(route.session.stops.map(stopZip).filter(Boolean))].sort().map((z) => (
+                          <span key={z} className="cluster-zip-row">
+                            {z} ({route.session.stops.filter((st) => stopZip(st) === z).length})
+                            <button
+                              type="button"
+                              className="cluster-zip-move"
+                              onClick={() => setZipMoveRequest(z)}
+                              aria-label={`Move zip ${z}`}
+                            >
+                              Move zip…
+                            </button>
+                          </span>
+                        ))}
+                      </div>
                       {route.session.stops.map((stop) => (
                         <div
                           key={stop.id}
@@ -708,6 +757,15 @@ export function ClusterReviewView({
           />
         );
       })()}
+      {zipMoveRequest && (
+        <MoveZipModal
+          zip={zipMoveRequest}
+          routes={subRoutes}
+          busy={moving}
+          onMove={handleMoveZip}
+          onClose={() => setZipMoveRequest(null)}
+        />
+      )}
       {moveRequest && (() => {
         const fromRoute = moveRequest ? subRoutes.find((r) => r.session.id === moveRequest.routeId) : undefined;
         return fromRoute ? (

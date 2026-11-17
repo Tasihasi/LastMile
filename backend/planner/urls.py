@@ -36,6 +36,7 @@ urlpatterns = [
     ),
     path("sessions/<uuid:session_id>/stops/bulk/", views.bulk_update_stops, name="bulk-update-stops"),
     path("sessions/<uuid:session_id>/move-stop/", views.move_stop, name="move-stop"),
+    path("sessions/<uuid:session_id>/move-zip/", views.move_zip, name="move-zip"),
     path("sessions/<uuid:session_id>/uncluster/", views.uncluster_session, name="uncluster-session"),
     path("sessions/<uuid:session_id>/start/", views.start_route, name="start-route"),
     path("sessions/<uuid:session_id>/stops/<int:stop_id>/status/", views.update_stop_status, name="update-stop-status"),
