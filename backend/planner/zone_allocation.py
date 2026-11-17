@@ -26,13 +26,14 @@ def zone_units(stops):
     return dict(units)
 
 
-def allocate_zones(stops, bikers, depot=timing.DEPOT, estimator=None, tolerance=timing.OVERRUN_TOLERANCE):
+def allocate_zones(stops, bikers, depot=timing.DEPOT, estimator=None, tolerance=0.0):
     """Place whole zones on bikers without exceeding any biker's time window.
 
     bikers: list of {"id", "window_minutes", "multiplier" (optional, default 1.0)}.
     estimator(stops, multiplier, depot) -> minutes; defaults to timing.estimate_route_minutes.
 
-    Zones go in by descending load. Each one is placed on the biker whose route grows the least
+    Capacity is the window itself (tolerance 0 by default): the 7.5 % overrun is not a planning
+    target, resolve_unassigned may use it as overflow. Zones go in by descending load. Each one is placed on the biker whose route grows the least
     (shortest detour) among those it still fits; ties go to the nearer route centroid, then to the
     earlier biker. A zone that fits nowhere is returned in `unassigned_zones` (never force-fit,
     never split here). Deterministic.

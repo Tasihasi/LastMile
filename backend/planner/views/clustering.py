@@ -86,6 +86,12 @@ def _parse_assignments(raw):
                 "multiplier": multiplier,
             }
         )
+    with_window = [a for a in parsed if a["window_minutes"] is not None]
+    if with_window:
+        if len(with_window) != len(parsed):
+            return None, "window_minutes must be given for every biker or for none."
+        if any(a["zip"] is not None or a["district"] is not None for a in parsed):
+            return None, "window_minutes cannot be combined with a zip/district lock."
     return parsed, None
 
 
@@ -176,16 +182,19 @@ def _build_zone_first_clusters(geocoded_stops, assignments):
         clusters[smallest] += unzipped
 
     over = set(resolved["over_capacity_routes"])
+    overrun = set(resolved["overrun_routes"])
     info = [
         {
             "load_minutes": resolved["routes"][i]["load_minutes"],
             "capacity_minutes": resolved["routes"][i]["capacity_minutes"],
             "zones": alloc["routes"][i]["zones"],
             "over_capacity": i in over,
+            "uses_overrun": i in overrun,
         }
         for i in range(n)
     ]
     extras = {
+        "split_exact": resolved["exact"],
         "split_zones": resolved["split_zones"],  # parts[].route is an assignment index until names exist
         "over_capacity_zips": resolved["over_capacity_zips"],
     }
@@ -235,6 +244,7 @@ def cluster_session(request, session_id):
         )
 
     route_info, unassigned_zones, zone_extras = None, [], {"split_zones": [], "over_capacity_zips": []}
+    unused_bikers = []
     assignments_raw = request.data.get("assignments")
     if assignments_raw is not None:
         assignments, err = _parse_assignments(assignments_raw)
@@ -249,6 +259,21 @@ def cluster_session(request, session_id):
                 geocoded_stops, assignments
             )
             leftover, oversized_zips = [], []
+            # A biker the time windows don't need gets no (empty) route.
+            used = [i for i, c in enumerate(clusters) if c]
+            if len(used) < len(clusters):
+                position = {old: new for new, old in enumerate(used)}
+                for z in zone_extras["split_zones"]:
+                    for part in z["parts"]:
+                        part["route"] = position[part["route"]]
+                unused_bikers = [
+                    assignments[i]["owner"].username if assignments[i]["owner"] else None
+                    for i in range(len(clusters))
+                    if i not in position
+                ]
+                clusters = [clusters[i] for i in used]
+                route_info = [route_info[i] for i in used]
+                assignments = [assignments[i] for i in used]
             by_zip = {}
             for c in clusters:
                 for st in c:
@@ -334,6 +359,8 @@ def cluster_session(request, session_id):
             "unassigned_zones": unassigned_zones,
             "split_zones": split_zones,
             "over_capacity_zips": zone_extras["over_capacity_zips"],
+            "unused_bikers": unused_bikers,
+            "split_exact": zone_extras.get("split_exact", True),
             "zip_conflicts": find_zip_conflicts(list(session.sub_routes.all())),
             "unzipped_stop_ids": [s.id for s in unzipped],
             "cluster_summary": {

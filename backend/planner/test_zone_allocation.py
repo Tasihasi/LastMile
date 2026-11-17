@@ -37,7 +37,7 @@ class AllocateZonesTests(SimpleTestCase):
 
     def test_ac1_ac2_zones_whole_and_within_capacity(self):
         stops = make_stops(DAY)
-        res = allocate_zones(stops, self._bikers(4, 200))
+        res = allocate_zones(stops, self._bikers(4, 220))
         units = zone_units(stops)
         seen = {}
         for bid, route in res["routes"].items():
@@ -63,7 +63,7 @@ class AllocateZonesTests(SimpleTestCase):
 
     def test_ac4_realistic_day_utilisation_and_tight_params(self):
         stops = make_stops(DAY)
-        ok = allocate_zones(stops, self._bikers(4, 200))
+        ok = allocate_zones(stops, self._bikers(4, 220))
         self.assertEqual(ok["unassigned_zones"], [])
         load = sum(r["load_minutes"] for r in ok["routes"].values())
         cap = sum(r["capacity_minutes"] for r in ok["routes"].values())
@@ -114,6 +114,14 @@ class AllocateZonesTests(SimpleTestCase):
     def test_empty_inputs(self):
         self.assertEqual(allocate_zones([], self._bikers(2, 60))["unassigned_zones"], [])
 
+    def test_f4_routes_are_packed_to_the_window_not_the_overrun(self):
+        res = allocate_zones(make_stops(DAY), self._bikers(4, 220))
+        for route in res["routes"].values():
+            self.assertLessEqual(route["load_minutes"], 220)
+        # 200 min only fits Z04 (213 min) by borrowing the overrun: it must be reported, not packed.
+        tight = allocate_zones(make_stops(DAY), self._bikers(4, 200))
+        self.assertTrue(tight["unassigned_zones"])
+
 
 class TimingTests(SimpleTestCase):
     def test_estimate_scales_with_multiplier_and_prefers_given_travel(self):
@@ -144,7 +152,7 @@ class ZoneFirstAPITest(TestCase):
         return self.client_.post(f"/api/sessions/{self.session.id}/cluster/", payload, format="json")
 
     def test_ac4_end_to_end_feasible(self):
-        resp = self._split(200)
+        resp = self._split(220)
         self.assertEqual(resp.status_code, 201)
         body = resp.json()
         self.assertEqual(body["unassigned_zones"], [])
@@ -172,4 +180,31 @@ class ZoneFirstAPITest(TestCase):
     def test_invalid_window_is_400(self):
         self.assertEqual(self._split(-5).status_code, 400)
         self.assertEqual(self._split("abc").status_code, 400)
-        self.assertEqual(self._split(200, multiplier=0).status_code, 400)
+        self.assertEqual(self._split(220, multiplier=0).status_code, 400)
+
+    def test_f2_mixed_window_payloads_are_rejected(self):
+        mixed = {
+            "assignments": [
+                {"biker_id": self.bikers[0].id, "target_stops": 0, "window_minutes": 200},
+                {"biker_id": self.bikers[1].id, "target_stops": 50},
+            ]
+        }
+        resp = self.client_.post(f"/api/sessions/{self.session.id}/cluster/", mixed, format="json")
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn("every biker or for none", resp.json()["error"])
+        locked = {
+            "assignments": [
+                {"biker_id": b.id, "target_stops": 0, "window_minutes": 200, "district": 8} for b in self.bikers
+            ]
+        }
+        resp = self.client_.post(f"/api/sessions/{self.session.id}/cluster/", locked, format="json")
+        self.assertEqual(resp.status_code, 400)
+        self.assertFalse(DeliverySession.objects.filter(parent=self.session).exists())
+
+    def test_f3_bikers_the_windows_do_not_need_get_no_empty_route(self):
+        body = self._split(420).json()
+        self.assertTrue(body["unused_bikers"])
+        counts = [r["stop_count"] for r in body["sub_routes"]]
+        self.assertTrue(all(c > 0 for c in counts))
+        self.assertEqual(len(body["sub_routes"]) + len(body["unused_bikers"]), len(self.bikers))
+        self.assertEqual(sum(counts), sum(DAY.values()))

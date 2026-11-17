@@ -111,6 +111,51 @@ class ResolveUnassignedTests(SimpleTestCase):
                 checked += 1
         self.assertGreater(checked, 10)
 
+    def test_f4_overrun_is_overflow_only_and_flagged(self):
+        stops = make_stops({"1051": 10})
+        bikers = [{"id": 0, "window_minutes": 9.5}]
+        alloc = allocate_zones(stops, bikers, estimator=stub, tolerance=0)
+        self.assertEqual(len(alloc["unassigned_zones"]), 1)
+        res = resolve_unassigned(alloc, bikers, estimator=stub, tolerance=0.075)
+        self.assertEqual(res["over_capacity_routes"], [])
+        self.assertEqual(res["overrun_routes"], [0])
+
+    def test_f5_exact_beyond_the_old_exhaustive_limit(self):
+        # 5 routes ** 8 zips = 390625 plans (old limit: 5000). Must still equal the brute-force optimum.
+        zone_zips = ["1053", "1056", "1054", "1055", "1061", "1065", "1066", "1062", "1063", "1068"]
+        checked = 0
+        for seed in range(80):
+            rng = random.Random(seed)
+            counts = {z: rng.randint(1, 3) for z in zone_zips}
+            stops = make_stops(counts, seed=seed)
+            windows = [-(-sum(counts.values()) // 5) + rng.randint(0, 3) for _ in range(5)]
+            alloc, res = run(stops, windows)
+            unit = alloc["unassigned_stops"]
+            if not unit or res["over_capacity_routes"]:
+                continue
+            zl = sorted({(zn, stop_zip(s)) for zn, ss in unit.items() for s in ss})
+            if not 6 <= len(zl) <= 8:
+                continue
+            sizes = {k: sum(1 for ss in unit.values() for s in ss if stop_zip(s) == k[1]) for k in zl}
+            base = [len(alloc["routes"][i]["stops"]) for i in range(5)]
+            best = None
+            for plan in itertools.product(range(5), repeat=len(zl)):
+                loads = list(base)
+                for k, r in zip(zl, plan, strict=True):
+                    loads[r] += sizes[k]
+                if any(loads[i] > windows[i] for i in range(5)):
+                    continue
+                by_zone = defaultdict(set)
+                for k, r in zip(zl, plan, strict=True):
+                    by_zone[k[0]].add(r)
+                broken = sum(1 for v in by_zone.values() if len(v) > 1)
+                best = broken if best is None else min(best, broken)
+            if best is not None and 5 ** len(zl) > 5000:
+                self.assertTrue(res["exact"], f"seed {seed}")
+                self.assertEqual(len(res["split_zones"]), best, f"seed {seed}")
+                checked += 1
+        self.assertGreater(checked, 0)
+
     def test_nothing_unassigned_is_a_noop(self):
         stops = make_stops({"1051": 3})
         _, res = run(stops, [50])
@@ -135,7 +180,7 @@ class SplitZonesAPITest(TestCase):
         return self.client_.post(f"/api/sessions/{self.session.id}/cluster/", payload, format="json")
 
     def test_tight_windows_report_split_zones_with_route_names(self):
-        resp = self._split(150)
+        resp = self._split(180)
         self.assertEqual(resp.status_code, 201)
         body = resp.json()
         names = {r["name"] for r in body["sub_routes"]}
@@ -151,7 +196,7 @@ class SplitZonesAPITest(TestCase):
         self.assertEqual(find_zip_conflicts(children), [])
 
     def test_feasible_windows_split_nothing(self):
-        body = self._split(200).json()
+        body = self._split(300).json()
         self.assertEqual(body["split_zones"], [])
         self.assertEqual(body["over_capacity_zips"], [])
         self.assertFalse(any(r["over_capacity"] for r in body["sub_routes"]))
