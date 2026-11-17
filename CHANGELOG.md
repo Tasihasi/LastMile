@@ -8,6 +8,9 @@ Format: features are grouped by category. Each version includes a release date a
 
 ## Unreleased
 
+### Developer tooling
+- Backlog A0: deterministic Budapest zip fixtures (`planner/testing/zip_fixtures.py`: `make_stops`, `make_session`, `REALISTIC_DAY`) and a zone-first feasibility spike report (`docs/backlog/A0-spike-report.md`). Test-only; no production behaviour change.
+
 ### Route planning wizard
 
 - For planners the wizard's last step is now **Bikers**: only after the postal codes are settled does the split dialog (biker workloads, zip/district locks) appear, inline in the wizard, leading to the split review.
