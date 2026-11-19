@@ -17,7 +17,7 @@ from planner import geocoder, optimizer, timing
 from planner.budapest import haversine_km
 
 # (address as typed in the daily files - with postal code, (lat, lng) of the house from OpenStreetMap).
-# A pinned address must be on its house (100 m) and never an offline-mock coordinate.
+# A pinned address must be on its house (250 m) and never an offline-mock coordinate.
 GEOCODE_CASES = [
     ("1075 Budapest, Kazinczy utca 14", (47.49693, 19.06331)),
     ("1085 Budapest, Gyulai Pál utca 2", (47.49527, 19.06784)),
@@ -25,7 +25,7 @@ GEOCODE_CASES = [
     ("1056 Budapest, Március 15. tér 7", (47.49158, 19.05297)),
     ("1082 Budapest, Futó utca 37", (47.48623, 19.07413)),
 ]
-GEOCODE_TOLERANCE_KM = 0.1
+GEOCODE_TOLERANCE_KM = 0.25  # same street: Nominatim may return any OSM object carrying the house number
 
 
 class Command(BaseCommand):

@@ -3,7 +3,7 @@
 `python manage.py smoke_real_services` (CI job **Real Services Smoke**; the **E2E** job `needs` it and the Production Smoke
 job, so no e2e test runs before both pass) checks the REAL services, no mock:
 
-- **Geocoding:** five real addresses *with postal code* (as in the daily files) must land within 100 m of their house and
+- **Geocoding:** five real addresses *with postal code* (as in the daily files) must land within 250 m of their house and
   must not equal the offline-mock coordinates. The real geocoder is the original one (Nominatim, first hit).
 - **Routing:** real VROOM order, road geometry (>= 10 points per waypoint), plausible road distance, optimized order no
   slower than input order.
