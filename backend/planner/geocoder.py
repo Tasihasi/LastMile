@@ -76,7 +76,19 @@ def _house_matches(requested: str, found: str | None) -> bool:
 
 
 def _is_address_point(r: dict) -> bool:
-    return (r.get("category"), r.get("type")) == ("place", "house") or r.get("category") == "building"
+    return (r.get("category"), r.get("type")) == ("place", "house")
+
+
+POINT_EXTENT_M = 8.0  # Nominatim pads a point's bounding box to ~7 m; buildings/areas are far larger
+
+
+def _extent_m(r: dict) -> float | None:
+    """Half-diagonal (m) of the result's bounding box: ~7 for a map point, 28-220 for a building or area."""
+    try:
+        south, north, west, east = (float(v) for v in r["boundingbox"])
+    except (KeyError, ValueError, TypeError):
+        return None
+    return haversine_km((south, west), (north, east)) * 500
 
 
 def _median(values):
@@ -92,8 +104,9 @@ def _pick_best(address: str, results: list[dict]) -> tuple[tuple[float, float] |
     1. The candidate's house number must match the requested one; street-level hits are rejected.
     2. With a postal code only candidates of that postcode count; without one, the postcode group
        nearest to the depot wins (the planner's couriers work around it).
-    3. Inside the group an OSM address point / building is preferred over shops and bars; otherwise
-       the median position of the group's candidates (POIs of one number can be ~100 m apart).
+    3. Only map POINTS count (buildings/areas have no exact spot). OSM address points are preferred
+       over shops and bars; the chosen points must agree within settings.GEOCODE_MAX_ERROR_M (2 m),
+       otherwise the address fails with a reason instead of getting a pin that may be off.
     """
     requested = requested_house_number(address)
     if not requested:
@@ -123,10 +136,18 @@ def _pick_best(address: str, results: list[dict]) -> tuple[tuple[float, float] |
             groups.setdefault(m[2], []).append(m)
         group = min(groups.values(), key=lambda g: min(haversine_km(DEPOT, m[:2]) for m in g))
 
-    points = [m for m in group if _is_address_point(m[3])]
-    if points:
-        return points[0][:2], ""
-    return (_median([m[0] for m in group]), _median([m[1] for m in group])), ""
+    max_err = settings.GEOCODE_MAX_ERROR_M
+    points = [m for m in group if (_extent_m(m[3]) or 0) <= POINT_EXTENT_M]
+    if not points:
+        extent = min(_extent_m(m[3]) for m in group)
+        return None, f"House {requested} is only mapped as a building/area (about {extent:.0f} m), not as a point"
+    address_points = [m for m in points if _is_address_point(m[3])]
+    chosen = address_points or points
+    lat, lng = _median([m[0] for m in chosen]), _median([m[1] for m in chosen])
+    spread_m = max(haversine_km((lat, lng), m[:2]) for m in chosen) * 1000
+    if spread_m > max_err:
+        return None, (f"House {requested}: {len(chosen)} map points up to {spread_m:.0f} m apart (limit {max_err:g} m)")
+    return (lat, lng), ""
 
 
 _state = threading.local()

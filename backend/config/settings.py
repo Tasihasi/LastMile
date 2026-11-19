@@ -194,6 +194,9 @@ ORS_API_KEY = os.getenv("ORS_API_KEY", "")
 # E2E testing mode — mocks external APIs (Nominatim, ORS) with deterministic fake data
 E2E_MOCK = os.getenv("E2E_MOCK", "").lower() == "true"
 
+# A geocoded pin must be within this many metres of the house (map points must agree this closely).
+GEOCODE_MAX_ERROR_M = float(os.getenv("GEOCODE_MAX_ERROR_M", "2"))
+
 # File upload size limits (10 MB)
 DATA_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024
 FILE_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024

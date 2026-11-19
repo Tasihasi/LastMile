@@ -13,12 +13,18 @@ Known limit: an address Nominatim cannot match at all (e.g. unaccented "Futyo ut
 
 CI needs the repository secret `ORS_API_KEY` (a real openrouteservice key). Without it the real-services job fails on purpose.
 
-## Precision (house level)
-A pin is accepted only if the geocoder result carries the requested **house number** (ranges like `2-4` count for `2`);
-a street-level hit, a missing house number, a wrong postal code or a typo'd street is a **failure with a reason**
-(`geocode_error`), never a guess. Address points / buildings win over shops and bars; several POIs of one number use
-their median. Without a postal code the postcode group nearest the depot is used, so send postal codes where possible.
-Smoke tolerance: 60 m from the house on 6 real addresses, and two addresses that must be refused.
+## Precision: within 2 m (`GEOCODE_MAX_ERROR_M`, default 2)
+A pin is accepted only if all of this holds, otherwise the stop **fails with a reason** (`geocode_error`), never a guess:
+1. the result carries the requested **house number** (ranges like `2-4` count for `2`);
+2. it is a **map point**, not a building outline or area (Nominatim's bounding box tells: ~7 m = point, 28-220 m = outline);
+3. OSM address points beat shops/bars; the chosen points must **agree within 2 m**;
+4. postal code (if typed) matches; without one the postcode group nearest the depot wins.
 
-Known limit: where OSM has no address point for a number (e.g. Kiraly utca 13: only shops/bars, spread ~130 m) the pin
-is the median of those POIs, up to ~60-100 m from the building. A second data source would be needed to do better.
+Smoke (`smoke_real_services`): pinned addresses must be within 2 m of their house's OSM node, at least 3 of 6 real
+addresses must be pinnable, and a typo'd street / missing house number must be refused.
+Result on 2026-11-19: 3 of 6 pinned (0.9-2 m), 3 refused (Gyulai Pal utca 2: only a 143 m building outline in OSM;
+Karoly korut 3: two shops 17 m apart; Kazinczy utca 14 typed *with* zip: two nodes 4 m apart).
+
+Limits: OSM node positions are mappers' clicks, so "within 2 m" means 2 m of the OSM point, not a surveyed door. A
+2 m guarantee refuses many real addresses (roughly half of this sample); loosen with env `GEOCODE_MAX_ERROR_M`
+(e.g. 25) or add a second data source / manual pin placement for refused stops.

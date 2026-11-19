@@ -121,15 +121,43 @@ class M1CandidatePickingTest(SimpleTestCase):
         ]
         self.assertEqual(geocoder._pick_best("Kiraly utca 13 Budapest", hits)[0], (47.4983, 19.0592))
 
-    def test_several_pois_use_the_median_position(self):
-        hits = [
-            self._hit(47.4980, 19.0590, "1075", "13"),
-            self._hit(47.4984, 19.0594, "1075", "13"),
-            self._hit(47.5000, 19.0620, "1075", "13"),
-        ]
-        lat, lng = geocoder._pick_best("Kiraly utca 13 Budapest", hits)[0]
-        self.assertAlmostEqual(lat, 47.4984)
-        self.assertAlmostEqual(lng, 19.0594)
+    @staticmethod
+    def _box(hit, half_deg):
+        lat, lng = float(hit["lat"]), float(hit["lon"])
+        hit["boundingbox"] = [str(lat - half_deg), str(lat + half_deg), str(lng - half_deg), str(lng + half_deg)]
+        return hit
+
+    def test_points_that_agree_within_2_m_are_accepted(self):
+        hits = [self._hit(47.498400, 19.059400, "1075", "13"), self._hit(47.498410, 19.059410, "1075", "13")]
+        coords, _ = geocoder._pick_best("Kiraly utca 13 Budapest", hits)
+        self.assertLess(haversine_km(coords, (47.498405, 19.059405)) * 1000, 2)
+
+    def test_points_further_apart_than_2_m_fail_instead_of_guessing(self):
+        hits = [self._hit(47.4980, 19.0590, "1075", "13"), self._hit(47.4984, 19.0594, "1075", "13")]
+        coords, why = geocoder._pick_best("Kiraly utca 13 Budapest", hits)
+        self.assertIsNone(coords)
+        self.assertIn("apart", why)
+
+    def test_limit_is_configurable(self):
+        hits = [self._hit(47.4980, 19.0590, "1075", "13"), self._hit(47.4981, 19.0591, "1075", "13")]
+        with override_settings(GEOCODE_MAX_ERROR_M=50):
+            self.assertIsNotNone(geocoder._pick_best("Kiraly utca 13 Budapest", hits)[0])
+        with override_settings(GEOCODE_MAX_ERROR_M=2):
+            self.assertIsNone(geocoder._pick_best("Kiraly utca 13 Budapest", hits)[0])
+
+    def test_building_outline_alone_is_not_a_point(self):
+        hit = self._box(self._hit(47.4914, 19.0528, "1056", "7", "building", "apartments"), 0.0003)
+        coords, why = geocoder._pick_best("Marcius 15 ter 7 Budapest", [hit])
+        self.assertIsNone(coords)
+        self.assertIn("building/area", why)
+
+    def test_address_point_beats_building_outline_and_far_pois(self):
+        point = self._box(self._hit(47.491578, 19.052971, "1056", "7", "place", "house"), 0.00004)
+        outline = self._box(self._hit(47.491437, 19.052852, "1056", "7", "building", "apartments"), 0.0003)
+        shop = self._box(self._hit(47.4930, 19.0550, "1056", "7"), 0.00004)
+        self.assertEqual(
+            geocoder._pick_best("Marcius 15 ter 7 Budapest", [outline, shop, point])[0], (47.491578, 19.052971)
+        )
 
     def test_candidates_outside_budapest_are_dropped(self):
         coords, _ = geocoder._pick_best("Fő utca 1", [self._hit(48.2, 16.37, "1010", "1")])
