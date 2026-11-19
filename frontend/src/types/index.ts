@@ -68,6 +68,19 @@ export interface DeliveryStop {
   delivered_at: string | null;
 }
 
+/** A postal code whose stops are spread over more than one route (informational). */
+export interface ZipConflict {
+  zip: string;
+  zone: string | null;
+  routes: { session_id: string; name: string; count: number }[];
+}
+
+/** A zone whose postal codes ended up on several routes (a whole zip is never divided). */
+export interface SplitZone {
+  zone_id: string;
+  parts: { zips: string[]; route: string }[];
+}
+
 export interface SessionResponse {
   id: string;
   name: string;
@@ -75,6 +88,10 @@ export interface SessionResponse {
   owner_name: string | null;
   parent_id: string | null;
   sub_route_count: number;
+  /** Filled for split routes: postal codes carried by several sub-routes. */
+  zip_conflicts?: ZipConflict[];
+  /** Filled for split routes: zones broken up between sub-routes. */
+  split_zones?: SplitZone[];
   stops: DeliveryStop[];
   needs_geocoding: boolean;
   total_duration: number | null;
@@ -114,34 +131,15 @@ export interface ClusterSubRoute {
 export interface SplitAssignment {
   biker_id: number | null;
   target_stops: number;
-  district: number | null;
-  zip: number | null;
+  /** Available working time in minutes; when every biker has one the server plans by zone. */
+  window_minutes?: number | null;
 }
 
-export interface DistrictInfo {
-  district: number;
-  label: string;
-  stop_count: number;
-}
-
-/**
- * A selectable lock area for the split planner: an exact irányítószám
- * (postal code) when a district has more than one, otherwise the whole
- * district.
- */
-export interface AreaOption {
-  type: "district" | "zip";
-  district: number;
-  zip: number | null;
-  label: string;
-  stop_count: number;
-}
-
-export interface DistrictsResponse {
-  districts: DistrictInfo[];
-  areas: AreaOption[];
-  unknown_district_stops: number;
-  total_stops: number;
+/** A planner-defined group of postal codes that are planned together. */
+export interface Zone {
+  id: string;
+  name: string;
+  zips: string[];
 }
 
 export interface ClusterSummary {
@@ -157,6 +155,15 @@ export interface ClusterResponse {
   parent_id: string;
   sub_routes: ClusterSubRoute[];
   cluster_summary: ClusterSummary;
+  zip_conflicts?: ZipConflict[];
+}
+
+export interface MoveZipResponse {
+  moved_count: number;
+  moved_zips: string[];
+  to_session_id: string;
+  counts: Record<string, number>;
+  zip_conflicts: ZipConflict[];
 }
 
 export interface MoveStopResponse {
@@ -165,4 +172,5 @@ export interface MoveStopResponse {
   to_session_id: string;
   from_count: number;
   to_count: number;
+  zip_conflicts?: ZipConflict[];
 }

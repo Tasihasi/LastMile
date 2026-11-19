@@ -1,8 +1,9 @@
 import { HoldToConfirmButton } from "./HoldToConfirmButton";
 import { MoveStopModal } from "./MoveStopModal";
+import { MoveZipModal } from "./MoveZipModal";
 import { StopDetailsModal } from "./StopDetailsModal";
 import { calcArrivalTimes } from "../utils/format";
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet";
 import L from "leaflet";
 import type { DeliveryStop, SessionResponse } from "../types";
@@ -11,6 +12,7 @@ import {
   optimizeRoute,
   assignSession,
   moveStop,
+  moveZip,
   removeStop,
   deleteSession,
   unclusterSession,
@@ -19,6 +21,7 @@ import { useSettings } from "../hooks/useSettings";
 import { useToast } from "../hooks/useToast";
 import { useSplitSubRoutes } from "../hooks/useSplitSubRoutes";
 import { formatDuration, formatDistance } from "../utils/format";
+import { findZipConflicts, stopZip } from "../utils/zipConflicts";
 import "leaflet/dist/leaflet.css";
 
 const CLUSTER_COLORS = [
@@ -80,6 +83,9 @@ export function ClusterReviewView({
     routeId: string;
   } | null>(null);
 
+  const [zipMoveRequest, setZipMoveRequest] = useState<string | null>(null);
+  const [highlightZip, setHighlightZip] = useState<string | null>(null);
+
   const { settings } = useSettings();
   const { showToast } = useToast();
 
@@ -87,6 +93,19 @@ export function ClusterReviewView({
     session,
     color: CLUSTER_COLORS[i % CLUSTER_COLORS.length],
   }));
+
+  // Informational only: never blocks optimizing or saving.
+  const zipConflicts = useMemo(() => findZipConflicts(rawSubRoutes), [rawSubRoutes]);
+  const conflictZips = new Set(zipConflicts.map((c) => c.zip));
+
+  const handleZipBannerClick = (zip: string) => {
+    const next = highlightZip === zip ? null : zip;
+    setHighlightZip(next);
+    if (next) {
+      const first = zipConflicts.find((c) => c.zip === next)?.routes[0];
+      if (first) setExpandedRoute(first.session_id);
+    }
+  };
 
   const handleOptimize = async (routeId: string) => {
     setOptimizingId(routeId);
@@ -161,6 +180,29 @@ export function ClusterReviewView({
     } catch {
       setError("Failed to move stop. The route may already be in progress.");
       setMoveRequest(null);
+    } finally {
+      setMoving(false);
+    }
+  };
+
+  const handleMoveZip = async (toRouteId: string) => {
+    if (!zipMoveRequest) return;
+    setMoving(true);
+    try {
+      const res = await moveZip(parentSessionId, zipMoveRequest, toRouteId);
+      // Reload only the routes whose stop count changed (touched routes).
+      const changed = rawSubRoutes.filter(
+        (r) => r.id === toRouteId || res.counts[r.id] !== r.stops.length
+      );
+      const fresh = await Promise.all(changed.map((r) => getSession(r.id)));
+      setRawSubRoutes((prev) => prev.map((r) => fresh.find((f) => f.id === r.id) ?? r));
+      setSelectedStop(null);
+      setZipMoveRequest(null);
+      const target = fresh.find((f) => f.id === toRouteId);
+      showToast(`${res.moved_count} stops of ${zipMoveRequest} moved to ${target?.owner_name ?? target?.name ?? "route"}`);
+    } catch {
+      setError("Failed to move the postal code. A route may already be in progress.");
+      setZipMoveRequest(null);
     } finally {
       setMoving(false);
     }
@@ -333,6 +375,44 @@ export function ClusterReviewView({
         </div>
       )}
 
+      {zipConflicts.length > 0 && (
+        <div className="cluster-zip-banner" role="alert" data-testid="zip-conflict-banner">
+          <strong>
+            {zipConflicts.length} irányítószám több körben szerepel:
+          </strong>
+          {zipConflicts.map((c) => (
+            <Fragment key={c.zip}>
+            <button
+              type="button"
+              className={`cluster-zip-banner-item ${highlightZip === c.zip ? "cluster-zip-banner-item--active" : ""}`}
+              onClick={() => handleZipBannerClick(c.zip)}
+              title="Show these stops"
+            >
+              {c.zip} ({c.routes.map((r) => `${r.name}: ${r.count}`).join(", ")})
+            </button>
+            <button
+              type="button"
+              className="cluster-zip-move"
+              onClick={() => setZipMoveRequest(c.zip)}
+            >
+              Move zip…
+            </button>
+            </Fragment>
+          ))}
+        </div>
+      )}
+
+      {(parentSession?.split_zones?.length ?? 0) > 0 && (
+        <div className="cluster-split-zones" data-testid="split-zones">
+          {parentSession!.split_zones!.map((z) => (
+            <div key={z.zone_id}>
+              Zóna {z.zone_id} szétbontva:{" "}
+              {z.parts.flatMap((p) => p.zips.map((zip) => `${zip}→${p.route}`)).join(", ")}
+            </div>
+          ))}
+        </div>
+      )}
+
       <div className="cluster-review-layout">
         {/* Sidebar */}
         <aside className="cluster-review-sidebar">
@@ -407,6 +487,20 @@ export function ClusterReviewView({
                           </>
                         )}
                       </span>
+                      {(() => {
+                        const split = [
+                          ...new Set(route.session.stops.map(stopZip).filter((z) => conflictZips.has(z))),
+                        ].sort();
+                        return split.length > 0 ? (
+                          <span className="cluster-zip-chips">
+                            {split.map((z) => (
+                              <span key={z} className="cluster-zip-chip" title="This zip is also on another route">
+                                {z}
+                              </span>
+                            ))}
+                          </span>
+                        ) : null;
+                      })()}
                       {route.session.owner_name && (
                         <span className="cluster-route-owner">
                           Assigned to {route.session.owner_name}
@@ -557,10 +651,25 @@ export function ClusterReviewView({
                   {/* Expanded stop list */}
                   {isExpanded && (
                     <div className="cluster-route-stops">
+                      <div className="cluster-zip-rows">
+                        {[...new Set(route.session.stops.map(stopZip).filter(Boolean))].sort().map((z) => (
+                          <span key={z} className="cluster-zip-row">
+                            {z} ({route.session.stops.filter((st) => stopZip(st) === z).length})
+                            <button
+                              type="button"
+                              className="cluster-zip-move"
+                              onClick={() => setZipMoveRequest(z)}
+                              aria-label={`Move zip ${z}`}
+                            >
+                              Move zip…
+                            </button>
+                          </span>
+                        ))}
+                      </div>
                       {route.session.stops.map((stop) => (
                         <div
                           key={stop.id}
-                          className={`cluster-stop-item ${selectedStop?.stop.id === stop.id ? "cluster-stop-item--selected" : ""}`}
+                          className={`cluster-stop-item ${selectedStop?.stop.id === stop.id ? "cluster-stop-item--selected" : ""} ${highlightZip && stopZip(stop) === highlightZip ? "cluster-stop-item--zip-highlight" : ""}`}
                           onClick={() =>
                             setSelectedStop(
                               selectedStop?.stop.id === stop.id
@@ -659,6 +768,15 @@ export function ClusterReviewView({
           />
         );
       })()}
+      {zipMoveRequest && (
+        <MoveZipModal
+          zip={zipMoveRequest}
+          routes={subRoutes}
+          busy={moving}
+          onMove={handleMoveZip}
+          onClose={() => setZipMoveRequest(null)}
+        />
+      )}
       {moveRequest && (() => {
         const fromRoute = moveRequest ? subRoutes.find((r) => r.session.id === moveRequest.routeId) : undefined;
         return fromRoute ? (

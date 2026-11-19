@@ -8,6 +8,21 @@ Format: features are grouped by category. Each version includes a release date a
 
 ## Unreleased
 
+### Route splitting
+- **Zones are edited by planners.** New "Zones" button in the main menu: add, edit and delete zones (groups of postal codes). Zones are stored in the database (seeded with the 16 from the daily sheet) and drive the zone-first split and the split labels; a postal code can belong to one zone only. API: `POST /api/zones/`, `PUT`/`DELETE /api/zones/<id>/` (planner only).
+- **Removed the "Single zip/district" lock** from the split dialog; zones replace it.
+- **Postal codes are never split across routes.** Splitting a route (automatic or with biker assignments) now keeps every stop of one irányítószám on a single route, replacing the stop-level KMeans split. Zips are placed whole, largest first, onto the nearest route with room. A zip bigger than the route size stays whole and is reported in `oversized_zips`; stops without a postal code go together onto the smallest route and are listed in `unzipped_stop_ids` (both new fields on the `POST /api/sessions/<id>/cluster/` response). If no stop has a postal code at all, the old geographic split is used. Sub-routes now keep the stops' `postal_code`.
+- **Split warning.** The split review shows a banner "N irányítószám több körben szerepel: 1082 (Route_1: 4, Route_2: 2)" whenever a postal code is on more than one route (e.g. after moving a stop), with a chip on each affected route; clicking a zip highlights its stops. It is informational and never blocks optimizing. API: `zip_conflicts` on the cluster and move-stop responses and on `GET /api/sessions/<id>/` of a split route.
+- **Move a whole postal code to another biker.** "Move zip…" in the split review (next to each warned zip in the banner, and per zip in an expanded route) opens a window showing each route's stop count before and after; confirming moves every stop of that zip. API: `POST /api/sessions/<id>/move-zip/` with `zip` or `zone_id`; atomic, and touched routes need re-optimizing.
+- **Zone-first allocation (backend).** When split assignments carry `window_minutes` (and optionally `multiplier`), whole zones are given to bikers so each fills its time window (the 7.5 % overrun is only used as overflow and flagged with `uses_overrun`; bikers the windows do not need get no empty route and are listed in `unused_bikers`; mixed window/lock payloads are rejected); `planner/timing.py` holds the time constants, `planner/zone_allocation.py` the algorithm. The cluster response adds `unassigned_zones` and per-route `load_minutes` / `capacity_minutes` / `zones`. The wizard does not send windows yet (backlog B1).
+- **Minimal zone splitting (backend + review label).** When whole zones don't fit the bikers' windows, the fewest possible zones are broken up, always along whole postal codes (`planner/zone_splitting.py`). The split review shows e.g. "Zóna Z12 szétbontva: 1082→Route_1, 1083→Route_2". A zip too big for any window stays whole and the route is flagged `over_capacity`.
+
+### Zones
+- Zone config (`backend/planner/zones.json`, `planner/zones.py`): the 34 postal codes of districts V-IX grouped into 16 sorting zones, from the customer's sheet. New planner-only `GET /api/zones/`. Zips outside the config have no zone.
+
+### Developer tooling
+- Backlog A0: deterministic Budapest zip fixtures (`planner/testing/zip_fixtures.py`: `make_stops`, `make_session`, `REALISTIC_DAY`) and a zone-first feasibility spike report (`docs/backlog/A0-spike-report.md`). Test-only; no production behaviour change.
+
 ### Route planning wizard
 - For planners the wizard's last step is now **Bikers**: only after the postal codes are settled does the split dialog (biker workloads, zip/district locks) appear, inline in the wizard, leading to the split review.
 - **New Route is now a step-by-step wizard**: Upload → Geocode → Fix addresses → Optimize. Every step can be revisited with the stepper or Back/Next buttons; changing the picked files re-imports them into the same route.

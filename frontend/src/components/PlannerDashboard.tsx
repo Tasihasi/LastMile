@@ -11,6 +11,7 @@ import {
   renameSession,
 } from "../api/client";
 import { FinishedRouteDetail } from "./FinishedRouteDetail";
+import { ZoneManagerModal } from "./ZoneManagerModal";
 
 interface PlannerDashboardProps {
   onViewSession: (sessionId: string) => void;
@@ -33,6 +34,7 @@ export function PlannerDashboard({ onViewSession, onOpenLiveMap, onOpenMapView, 
   const [dragOverTarget, setDragOverTarget] = useState<DropTarget | null>(null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [finishedDetailId, setFinishedDetailId] = useState<string | null>(null);
+  const [zonesOpen, setZonesOpen] = useState(false);
 
   const { settings } = useSettings();
   const { showToast } = useToast();
@@ -175,6 +177,15 @@ export function PlannerDashboard({ onViewSession, onOpenLiveMap, onOpenMapView, 
               </button>
             ))}
           </div>
+          <button className="btn btn-ghost btn-sm" onClick={() => setZonesOpen(true)}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="3" width="7" height="7" />
+              <rect x="14" y="3" width="7" height="7" />
+              <rect x="3" y="14" width="7" height="7" />
+              <rect x="14" y="14" width="7" height="7" />
+            </svg>
+            Zones
+          </button>
           {onOpenMapView && (
             <button className="btn btn-ghost btn-sm" onClick={onOpenMapView}>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -403,6 +414,7 @@ export function PlannerDashboard({ onViewSession, onOpenLiveMap, onOpenMapView, 
           onViewMap={(id) => { setFinishedDetailId(null); onViewSession(id); }}
         />
       )}
+      {zonesOpen && <ZoneManagerModal onClose={() => setZonesOpen(false)} />}
     </div>
   );
 }

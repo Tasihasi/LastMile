@@ -170,7 +170,7 @@ Depot coordinates are optional. If omitted, the route is optimized without a fix
 
 ### POST /sessions/{id}/cluster/
 
-Cluster a session's geocoded stops into N geographic sub-routes using KMeans. Planner only. The parent session's status becomes `split` and its stops are moved to child sessions.
+Split a session's geocoded stops into N sub-routes. **A postal code is never split:** all stops sharing a `postal_code` go to the same sub-route (largest zips first, each to the nearest route with room). Planner only. The parent session's status becomes `split` and its stops are moved to child sessions.
 
 **Request** (all fields optional):
 ```json
@@ -190,7 +190,7 @@ Alternatively pass `assignments` for a planned split (used by the Split Planner 
 }
 ```
 
-District-locked bikers receive every stop in their district (derived from the postal code in `raw_address`); the remaining stops are clustered geographically with sizes proportional to `target_stops`. Each sub-route is created with its biker as owner. If every assignment is district-locked, leftover stops go into an extra unassigned sub-route.
+Zip-locked bikers receive every stop of that postal code, district-locked bikers every stop in their district (zip locks win); the remaining zips are distributed with sizes proportional to `target_stops`, never splitting a zip. Each sub-route is created with its biker as owner. If every assignment is district-locked, leftover stops go into an extra unassigned sub-route.
 
 **Response** `201`:
 ```json
@@ -200,6 +200,10 @@ District-locked bikers receive every stop in their district (derived from the po
     { "id": "uuid", "name": "Monday Deliveries - Route 1", "stop_count": 43, "owner_id": 3, "owner_name": "anna" },
     { "id": "uuid", "name": "Monday Deliveries - Route 2", "stop_count": 41, "owner_id": null, "owner_name": null }
   ],
+  "oversized_zips": [{ "zip": "1054", "stop_count": 56 }],
+  "unassigned_zones": [],
+  "unzipped_stop_ids": [],
+  "zip_conflicts": [],
   "cluster_summary": {
     "total_stops": 284,
     "skipped_stops": 16,
@@ -210,6 +214,14 @@ District-locked bikers receive every stop in their district (derived from the po
   }
 }
 ```
+
+`oversized_zips` lists zips larger than `max_stops_per_route` (kept whole on one route). `unzipped_stop_ids` lists stops without a postal code (grouped onto the smallest route; if no stop has a zip, a geographic split is used). `zip_conflicts` is explained under `move-stop` below and is empty right after a split.
+
+**Zone-first allocation.** When every assignment carries `window_minutes` (the biker's available time) and none is locked to a `zip`/`district`, whole zones are handed to bikers by estimated load (stops x service time x optional `multiplier`, plus a heuristic travel estimate and a break) up to `window_minutes` itself (the 7.5 % overrun is not a planning target; see below). Each sub-route then also has `load_minutes`, `capacity_minutes` (= the window) and `zones`. A zone that fits nowhere is listed in `unassigned_zones` (`{zone, stop_count, load_minutes}`); its stops are still placed (see next paragraph) so none are lost. `window_minutes` must be given for every biker or for none, and cannot be combined with a `zip`/`district` lock (400 otherwise). A biker the windows do not need gets no empty route; they are listed in `unused_bikers` (usernames). Without `window_minutes` the behaviour is unchanged. The web wizard does not send `window_minutes` yet (backlog B1): today only API callers reach this path.
+
+**Managing zones.** `GET /api/zones/` lists zones (`{id, name, zips}`); `POST /api/zones/` `{name, zips}` adds one (id is assigned, `Z17`, ...); `PUT /api/zones/<id>/` replaces name and zips; `DELETE /api/zones/<id>/` removes it (its postal codes are then planned on their own). Planner only. A postal code is 4 digits starting with 1 and may belong to one zone; violations return 400 naming the code. Edits apply to the next split.
+
+**Breaking zones (fallback).** Zones that fit no biker whole (`unassigned_zones`) are then placed zip by zip, breaking as few zones as possible. Cost order: minutes beyond the 7.5 % tolerance, minutes beyond the window, zones broken, total load; so the tolerance is used only as overflow, and such a route has `uses_overrun: true`. The search is branch-and-bound and provably optimal within a node budget; `split_exact: false` means the budget ran out and the best plan found is returned. The response adds `split_zones` (`[{zone_id, parts: [{zips, route}]}]`, `route` = sub-route name) and `over_capacity_zips`; a sub-route that still exceeds its window (e.g. one zip bigger than any window, kept whole) has `over_capacity: true`. `GET /api/sessions/<id>/` of a split route also returns `split_zones`, computed from the routes as they are now.
 
 Stops that are not geocoded (`geocode_status` != `success` and no lat/lng) are skipped and remain on the parent session.
 
@@ -254,9 +266,34 @@ Move a stop from one sub-route to a sibling sub-route (both must share the same 
   "from_session_id": "uuid",
   "to_session_id": "uuid",
   "from_count": 42,
-  "to_count": 44
+  "to_count": 44,
+  "zip_conflicts": [
+    {
+      "zip": "1082",
+      "zone": "Z12",
+      "routes": [
+        { "session_id": "uuid", "name": "Day_1", "count": 4 },
+        { "session_id": "uuid", "name": "Day_2", "count": 2 }
+      ]
+    }
+  ]
 }
 ```
+
+`zip_conflicts` lists postal codes now spread over more than one sub-route of the parent (excluded stops and stops without a zip are ignored). It is informational and never blocks moving, optimizing or saving. The same field is returned by `GET /sessions/{id}/` for a split parent (`[]` otherwise)
+
+### POST /sessions/{id}/move-zip/
+
+Move every stop of one postal code (or a whole zone) into one sub-route of a split session. `{id}` is the **parent** session. Planner only. Send exactly one of `zip` or `zone_id`. Excluded stops stay where they are. Every route that lost or gained stops loses its stop order, geometry and duration (re-optimize it). All-or-nothing.
+
+**Request:**
+```json
+{ "zip": "1082", "to_session_id": "uuid" }
+```
+
+**Response** `200`: `moved_count`, `moved_zips`, `to_session_id`, `counts` (stop count per sub-route id) and `zip_conflicts` (as in `move-stop`).
+
+**Errors** `400`: both or neither of `zip`/`zone_id`, unknown zone, no stops with that zip, parent not split, or any route involved is `in_progress`/`finished`. `404`: target is not a sub-route of this session. `403`: not a planner.
 
 ### DELETE /sessions/{id}/uncluster/
 

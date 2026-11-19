@@ -9,6 +9,8 @@ urlpatterns = [
     path("auth/logout/", views.logout_view, name="auth-logout"),
     # Planner
     path("users/bikers/", views.list_bikers, name="list-bikers"),
+    path("zones/", views.list_zones, name="list-zones"),
+    path("zones/<str:zone_code>/", views.zone_detail, name="zone-detail"),
     # Sessions
     path("sessions/active/", views.active_sessions, name="active-sessions"),
     path("sessions/", views.list_sessions, name="list-sessions"),
@@ -35,6 +37,7 @@ urlpatterns = [
     ),
     path("sessions/<uuid:session_id>/stops/bulk/", views.bulk_update_stops, name="bulk-update-stops"),
     path("sessions/<uuid:session_id>/move-stop/", views.move_stop, name="move-stop"),
+    path("sessions/<uuid:session_id>/move-zip/", views.move_zip, name="move-zip"),
     path("sessions/<uuid:session_id>/uncluster/", views.uncluster_session, name="uncluster-session"),
     path("sessions/<uuid:session_id>/start/", views.start_route, name="start-route"),
     path("sessions/<uuid:session_id>/stops/<int:stop_id>/status/", views.update_stop_status, name="update-stop-status"),

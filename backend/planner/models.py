@@ -101,3 +101,21 @@ class SharedRoute(models.Model):
 
     def __str__(self):
         return f"Share {self.id} -> Session {self.session_id}"
+
+
+class Zone(models.Model):
+    """A planner-defined group of postal codes that travel together (sorting zone).
+
+    Zones are the preferred atomic unit when splitting a day between bikers. A postal code
+    belongs to at most one zone; zips in no zone are planned on their own.
+    """
+
+    code = models.CharField(max_length=20, unique=True)
+    name = models.CharField(max_length=100, blank=True, default="")
+    zips = models.JSONField(default=list)
+
+    class Meta:
+        ordering = ["code"]
+
+    def __str__(self):
+        return f"{self.code} ({', '.join(self.zips)})"

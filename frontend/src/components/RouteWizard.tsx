@@ -331,6 +331,19 @@ function FixStep({ stops, canRemove, onFixAddress, onRemoveStop, onBack, onNext 
   const stillFailed = rows.filter((s) => s.geocode_status !== "success").length;
   const located = stops.filter((s) => s.lat != null && s.lng != null).length;
 
+  // Most misses are addresses written without the city: retry them all in one go.
+  const [bulk, setBulk] = useState<{ done: number; total: number } | null>(null);
+  const retryAll = async () => {
+    const todo = rows.filter((s) => s.geocode_status !== "success");
+    setBulk({ done: 0, total: todo.length });
+    for (const [i, s] of todo.entries()) {
+      const addr = /budapest/i.test(s.raw_address) ? s.raw_address : `${s.raw_address}, Budapest`;
+      await onFixAddress(s.id, addr);
+      setBulk({ done: i + 1, total: todo.length });
+    }
+    setBulk(null);
+  };
+
   return (
     <section className="wizard-card">
       <h2 className="wizard-title">Fix addresses</h2>
@@ -342,6 +355,14 @@ function FixStep({ stops, canRemove, onFixAddress, onRemoveStop, onBack, onNext 
             The recipient may have mistyped the address. Correct it and search again
             {stillFailed > 0 ? ` — ${stillFailed} left.` : " — all fixed."}
           </p>
+          {stillFailed > 1 && (
+            <div className="fix-bulk">
+              <button type="button" className="btn btn-primary btn-sm" onClick={() => void retryAll()} disabled={bulk !== null}>
+                {bulk ? `Retrying ${bulk.done}/${bulk.total}…` : `Retry all ${stillFailed} with “Budapest” added`}
+              </button>
+              <span className="wizard-hint">Fixes most misses in one click.</span>
+            </div>
+          )}
           <ul className="fix-list">
             {rows.map((s) => (
               <FixRow key={s.id} stop={s} canRemove={canRemove} onFixAddress={onFixAddress} onRemoveStop={onRemoveStop} />

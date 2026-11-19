@@ -47,3 +47,9 @@ frontend/test-results/
 frontend/playwright-report/
 frontend/blob-report/
 .playwright-mcp/
+
+# Local RAG index + venv (local only)
+.rag/
+
+# Personal Claude notes (local only)
+CLAUDE.local.md

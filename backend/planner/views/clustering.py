@@ -4,9 +4,12 @@ from rest_framework import status
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 
-from ..clustering import calculate_n_clusters, cluster_stops, cluster_stops_weighted, split_counts
+from .. import zones
+from ..clustering import calculate_n_clusters, cluster_zip_atomic, find_zip_conflicts, split_counts, stop_zip
 from ..districts import district_label, extract_district, extract_zip
 from ..models import DeliverySession, DeliveryStop
+from ..zone_allocation import allocate_zones
+from ..zone_splitting import resolve_unassigned
 from .helpers import require_planner
 
 
@@ -56,54 +59,146 @@ def _parse_assignments(raw):
             if extract_district(str(zip_code)) is None:
                 return None, "zip must be a valid Budapest irányítószám."
 
-        parsed.append({"owner": owner, "target_stops": target, "district": district, "zip": zip_code})
+        window = item.get("window_minutes")
+        if window is not None:
+            try:
+                window = float(window)
+            except (ValueError, TypeError):
+                return None, "window_minutes must be a number."
+            if window <= 0:
+                return None, "window_minutes must be positive."
+        multiplier = item.get("multiplier")
+        if multiplier is not None:
+            try:
+                multiplier = float(multiplier)
+            except (ValueError, TypeError):
+                return None, "multiplier must be a number."
+            if multiplier <= 0:
+                return None, "multiplier must be positive."
+
+        parsed.append(
+            {
+                "owner": owner,
+                "target_stops": target,
+                "district": district,
+                "zip": zip_code,
+                "window_minutes": window,
+                "multiplier": multiplier,
+            }
+        )
+    with_window = [a for a in parsed if a["window_minutes"] is not None]
+    if with_window:
+        if len(with_window) != len(parsed):
+            return None, "window_minutes must be given for every biker or for none."
+        if any(a["zip"] is not None or a["district"] is not None for a in parsed):
+            return None, "window_minutes cannot be combined with a zip/district lock."
     return parsed, None
 
 
-def _build_assignment_clusters(geocoded_stops, assignments):
+def _build_assignment_clusters(geocoded_stops, assignments, max_stops=48):
     """Distribute stops across assignments honouring area locks and targets.
 
     An assignment can be locked to an exact irányítószám ("zip", the
     fine-grained key) or, when no zip is set, to a whole district (the
-    coarse fallback) -- same mechanic, just a more specific area.
+    coarse fallback). Zip locks are applied first so they always win over a
+    district lock. A postal code is never split: every stop of a zip ends up
+    in the same cluster.
 
-    Returns (clusters, leftover) where clusters is index-aligned with
-    assignments and leftover holds stops no assignment can take (only when
-    every assignment is area-locked).
+    Returns (clusters, leftover, oversized_zips, unzipped_stops). clusters is
+    index-aligned with assignments; leftover holds stops no assignment can take
+    (only when every assignment is area-locked).
     """
     pool = list(geocoded_stops)
     clusters = [[] for _ in assignments]
+    oversized = []
+    unzipped = []
 
-    # Area-locked bikers take every stop matching their lock: an exact zip
-    # when set, otherwise the whole district.
+    # Area locks: zip locks first, then district locks.
     area_groups = {}
     for i, a in enumerate(assignments):
         if a["zip"] is not None:
-            area_groups.setdefault(("zip", a["zip"]), []).append(i)
-        elif a["district"] is not None:
+            area_groups.setdefault(("zip", str(a["zip"])), []).append(i)
+    for i, a in enumerate(assignments):
+        if a["zip"] is None and a["district"] is not None:
             area_groups.setdefault(("district", a["district"]), []).append(i)
 
     for (kind, value), idxs in area_groups.items():
-        matches = extract_zip if kind == "zip" else extract_district
-        area_stops = [s for s in pool if matches(s.raw_address) == value]
-        pool = [s for s in pool if matches(s.raw_address) != value]
+        if kind == "zip":
+
+            def matches(stop, value=value):
+                return stop_zip(stop) == value
+        else:
+
+            def matches(stop, value=value):
+                return extract_district(stop_zip(stop)) == value
+
+        area_stops = [s for s in pool if matches(s)]
+        pool = [s for s in pool if not matches(s)]
         if len(idxs) == 1:
             clusters[idxs[0]] = area_stops
+        elif kind == "zip":
+            # One zip, several bikers: the zip is indivisible, the first biker takes it all.
+            clusters[idxs[0]] = area_stops
         else:
-            weights = [assignments[i]["target_stops"] for i in idxs]
-            counts = split_counts(len(area_stops), weights)
-            for i, group in zip(idxs, cluster_stops_weighted(area_stops, counts), strict=True):
+            result = cluster_zip_atomic(
+                area_stops,
+                targets=split_counts(len(area_stops), [assignments[i]["target_stops"] for i in idxs]),
+                max_stops=max_stops,
+            )
+            for i, group in zip(idxs, result.clusters, strict=True):
                 clusters[i] = group
+            oversized += result.oversized_zips
+            unzipped += result.unzipped_stops
 
     free_idxs = [i for i, a in enumerate(assignments) if a["zip"] is None and a["district"] is None]
     if not free_idxs:
-        return clusters, pool
+        return clusters, pool, oversized, unzipped
 
-    weights = [assignments[i]["target_stops"] for i in free_idxs]
-    counts = split_counts(len(pool), weights)
-    for i, group in zip(free_idxs, cluster_stops_weighted(pool, counts), strict=True):
+    counts = split_counts(len(pool), [assignments[i]["target_stops"] for i in free_idxs])
+    result = cluster_zip_atomic(pool, targets=counts, max_stops=max_stops)
+    for i, group in zip(free_idxs, result.clusters, strict=True):
         clusters[i] = group
-    return clusters, []
+    return clusters, [], oversized + result.oversized_zips, unzipped + result.unzipped_stops
+
+
+def _build_zone_first_clusters(geocoded_stops, assignments):
+    """A5: whole zones onto bikers by time window; leftovers stay zip-atomic (A2 behaviour).
+
+    Returns (clusters, route_info, unassigned_zones, unzipped_stops), index-aligned with assignments.
+    """
+    bikers = [
+        {"id": i, "window_minutes": a["window_minutes"], "multiplier": a["multiplier"] or 1.0}
+        for i, a in enumerate(assignments)
+    ]
+    alloc = allocate_zones(geocoded_stops, bikers)
+    # A6: zones that fit whole nowhere are broken up zip by zip, as few as possible.
+    resolved = resolve_unassigned(alloc, bikers)
+    n = len(assignments)
+    clusters = [list(resolved["routes"][i]["stops"]) for i in range(n)]
+
+    unzipped = [s for s in geocoded_stops if not stop_zip(s)]
+    if unzipped:
+        smallest = min(range(n), key=lambda i: (len(clusters[i]), i))
+        clusters[smallest] += unzipped
+
+    over = set(resolved["over_capacity_routes"])
+    overrun = set(resolved["overrun_routes"])
+    info = [
+        {
+            "load_minutes": resolved["routes"][i]["load_minutes"],
+            "capacity_minutes": resolved["routes"][i]["capacity_minutes"],
+            "zones": alloc["routes"][i]["zones"],
+            "over_capacity": i in over,
+            "uses_overrun": i in overrun,
+        }
+        for i in range(n)
+    ]
+    extras = {
+        "split_exact": resolved["exact"],
+        "split_zones": resolved["split_zones"],  # parts[].route is an assignment index until names exist
+        "over_capacity_zips": resolved["over_capacity_zips"],
+    }
+    return clusters, info, alloc["unassigned_zones"], unzipped, extras
 
 
 @api_view(["POST"])
@@ -148,12 +243,46 @@ def cluster_session(request, session_id):
             status=status.HTTP_400_BAD_REQUEST,
         )
 
+    route_info, unassigned_zones, zone_extras = None, [], {"split_zones": [], "over_capacity_zips": []}
+    unused_bikers = []
     assignments_raw = request.data.get("assignments")
     if assignments_raw is not None:
         assignments, err = _parse_assignments(assignments_raw)
         if err:
             return Response({"error": err}, status=status.HTTP_400_BAD_REQUEST)
-        clusters, leftover = _build_assignment_clusters(geocoded_stops, assignments)
+        max_stops = int(request.data.get("max_stops_per_route", 48))
+        zone_first = all(
+            a["window_minutes"] is not None and a["zip"] is None and a["district"] is None for a in assignments
+        )
+        if zone_first:
+            clusters, route_info, unassigned_zones, unzipped, zone_extras = _build_zone_first_clusters(
+                geocoded_stops, assignments
+            )
+            leftover, oversized_zips = [], []
+            # A biker the time windows don't need gets no (empty) route.
+            used = [i for i, c in enumerate(clusters) if c]
+            if len(used) < len(clusters):
+                position = {old: new for new, old in enumerate(used)}
+                for z in zone_extras["split_zones"]:
+                    for part in z["parts"]:
+                        part["route"] = position[part["route"]]
+                unused_bikers = [
+                    assignments[i]["owner"].username if assignments[i]["owner"] else None
+                    for i in range(len(clusters))
+                    if i not in position
+                ]
+                clusters = [clusters[i] for i in used]
+                route_info = [route_info[i] for i in used]
+                assignments = [assignments[i] for i in used]
+            by_zip = {}
+            for c in clusters:
+                for st in c:
+                    by_zip[stop_zip(st)] = by_zip.get(stop_zip(st), 0) + 1
+            oversized_zips = [{"zip": z, "stop_count": n} for z, n in sorted(by_zip.items()) if z and n > max_stops]
+        else:
+            clusters, leftover, oversized_zips, unzipped = _build_assignment_clusters(
+                geocoded_stops, assignments, max_stops=max_stops
+            )
         owners = [a["owner"] for a in assignments]
         if leftover:
             # Every assignment was district-locked; keep the rest reviewable.
@@ -165,7 +294,9 @@ def cluster_session(request, session_id):
         n_routes = (
             int(n_routes_param) if n_routes_param is not None else calculate_n_clusters(len(geocoded_stops), max_stops)
         )
-        clusters = cluster_stops(geocoded_stops, n_routes, max_stops_per_cluster=max_stops)
+        result = cluster_zip_atomic(geocoded_stops, n_routes=n_routes, max_stops=max_stops)
+        clusters = [c for c in result.clusters if c]
+        oversized_zips, unzipped = result.oversized_zips, result.unzipped_stops
         owners = [None] * len(clusters)
 
     sub_routes = []
@@ -191,6 +322,7 @@ def cluster_session(request, session_id):
                     lng=stop.lng,
                     geocode_status=stop.geocode_status,
                     geocode_error=stop.geocode_error,
+                    postal_code=stop.postal_code,
                 )
             )
         DeliveryStop.objects.bulk_create(child_stops)
@@ -202,8 +334,18 @@ def cluster_session(request, session_id):
                 "stop_count": len(cluster),
                 "owner_id": owner.id if owner else None,
                 "owner_name": owner.username if owner else None,
+                **(route_info[i - 1] if route_info and i <= len(route_info) else {}),
             }
         )
+
+    names = [r["name"] for r in sub_routes]
+    split_zones = [
+        {
+            "zone_id": z["zone_id"],
+            "parts": [{"zips": p["zips"], "route": names[p["route"]]} for p in z["parts"]],
+        }
+        for z in zone_extras["split_zones"]
+    ]
 
     session.status = DeliverySession.Status.SPLIT
     session.save(update_fields=["status"])
@@ -213,6 +355,14 @@ def cluster_session(request, session_id):
         {
             "parent_id": str(session.id),
             "sub_routes": sub_routes,
+            "oversized_zips": oversized_zips,
+            "unassigned_zones": unassigned_zones,
+            "split_zones": split_zones,
+            "over_capacity_zips": zone_extras["over_capacity_zips"],
+            "unused_bikers": unused_bikers,
+            "split_exact": zone_extras.get("split_exact", True),
+            "zip_conflicts": find_zip_conflicts(list(session.sub_routes.all())),
+            "unzipped_stop_ids": [s.id for s in unzipped],
             "cluster_summary": {
                 "total_stops": len(geocoded_stops),
                 "skipped_stops": skipped_count,
@@ -292,6 +442,86 @@ def move_stop(request, session_id):
             "to_session_id": str(target_session.id),
             "from_count": source_session.stops.count(),
             "to_count": target_session.stops.count(),
+            "zip_conflicts": find_zip_conflicts(list(target_session.parent.sub_routes.all())),
+        }
+    )
+
+
+@api_view(["POST"])
+@transaction.atomic
+def move_zip(request, session_id):
+    """Move every stop of a postal code (or a whole zone) into one sub-route."""
+    if not require_planner(request):
+        return Response({"error": "Planner access required."}, status=status.HTTP_403_FORBIDDEN)
+
+    try:
+        parent = DeliverySession.objects.select_for_update().get(id=session_id)
+    except DeliverySession.DoesNotExist:
+        return Response({"error": "Session not found."}, status=status.HTTP_404_NOT_FOUND)
+    if parent.status != DeliverySession.Status.SPLIT:
+        return Response({"error": "Session is not split."}, status=status.HTTP_400_BAD_REQUEST)
+
+    zip_code = str(request.data.get("zip") or "").strip()
+    zone_id = str(request.data.get("zone_id") or "").strip()
+    to_session_id = request.data.get("to_session_id")
+    if bool(zip_code) == bool(zone_id):
+        return Response({"error": "Send exactly one of zip or zone_id."}, status=status.HTTP_400_BAD_REQUEST)
+    if not to_session_id:
+        return Response({"error": "to_session_id is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+    if zone_id:
+        wanted = set(zones.zips_in_zone(zone_id))
+        if not wanted:
+            return Response({"error": f"Unknown zone {zone_id}."}, status=status.HTTP_400_BAD_REQUEST)
+    else:
+        wanted = {zip_code}
+
+    children = {str(c.id): c for c in parent.sub_routes.select_for_update()}
+    target = children.get(str(to_session_id))
+    if target is None:
+        return Response({"error": "Target is not a sub-route of this session."}, status=status.HTTP_404_NOT_FOUND)
+
+    to_move = [
+        s
+        for child in children.values()
+        for s in child.stops.filter(excluded=False)
+        if stop_zip(s) in wanted and child.id != target.id
+    ]
+    present = {stop_zip(s) for s in to_move}
+    if not zone_id and not present and not target.stops.filter(postal_code=zip_code).exists():
+        return Response({"error": f"No stops with postal code {zip_code}."}, status=status.HTTP_400_BAD_REQUEST)
+
+    blocked = {"in_progress", "finished"}
+    touched = {s.session_id for s in to_move}
+    for sid in touched | ({target.id} if to_move else set()):
+        child = next(c for c in children.values() if c.id == sid)
+        if child.status in blocked:
+            return Response(
+                {"error": f"Cannot move stops: route {child.name} is {child.status}."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+    for stop in to_move:
+        stop.session = target
+        stop.sequence_order = None
+        stop.save(update_fields=["session_id", "sequence_order"])
+
+    for sid in touched | ({target.id} if to_move else set()):
+        child = next(c for c in children.values() if c.id == sid)
+        child.route_geometry = None
+        child.route_segments = None
+        child.total_duration = None
+        child.total_distance = None
+        child.save(update_fields=["route_geometry", "route_segments", "total_duration", "total_distance"])
+
+    routes = list(parent.sub_routes.all())
+    return Response(
+        {
+            "moved_count": len(to_move),
+            "moved_zips": sorted(z for z in present if z),
+            "to_session_id": str(target.id),
+            "counts": {str(r.id): r.stops.count() for r in routes},
+            "zip_conflicts": find_zip_conflicts(routes),
         }
     )
 

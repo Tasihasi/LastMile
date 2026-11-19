@@ -4357,6 +4357,81 @@ body {
   background: var(--color-danger-bg);
 }
 
+.cluster-zip-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  margin: 0 14px 8px;
+  padding: 8px 12px;
+  font-size: 0.8rem;
+  color: var(--color-warning-text);
+  background: var(--color-warning-bg);
+  border-radius: var(--radius-sm);
+}
+
+.cluster-zip-banner-item {
+  font: inherit;
+  color: inherit;
+  background: transparent;
+  border: 1px solid currentColor;
+  border-radius: var(--radius-sm);
+  padding: 2px 8px;
+  cursor: pointer;
+}
+
+.cluster-zip-banner-item--active {
+  font-weight: 600;
+  background: rgba(0, 0, 0, 0.08);
+}
+
+.cluster-zip-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 2px;
+}
+
+.cluster-zip-chip {
+  font-size: 0.7rem;
+  color: var(--color-warning-text);
+  background: var(--color-warning-bg);
+  border-radius: var(--radius-sm);
+  padding: 1px 6px;
+}
+
+.cluster-split-zones {
+  margin: 0 14px 8px;
+  padding: 6px 12px;
+  font-size: 0.8rem;
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-secondary, rgba(0, 0, 0, 0.04));
+}
+
+.cluster-zip-move {
+  font: inherit;
+  font-size: 0.75rem;
+  color: var(--color-primary, inherit);
+  background: transparent;
+  border: none;
+  padding: 0 4px;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.cluster-zip-rows {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  padding: 6px 12px;
+  font-size: 0.75rem;
+}
+
+.cluster-stop-item--zip-highlight {
+  outline: 2px solid var(--color-warning-text);
+  outline-offset: -2px;
+}
+
 .cluster-route-empty-warning {
   padding: 6px 12px;
   font-size: 0.75rem;
@@ -5686,8 +5761,13 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding-top: 8px;
+  padding: 12px 0 4px;
   border-top: 1px solid var(--color-border-light);
+  /* The primary action must never scroll out of sight, however long the list above is. */
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  background: var(--color-surface);
 }
 
 .wizard-footer-right {
@@ -5887,7 +5967,13 @@ body {
 
 .split-planner--inline {
   max-width: 640px;
-  max-height: none;
+  /* Keep the Split button on screen however many bikers there are: the list scrolls. */
+  max-height: calc(100vh - 150px);
+  min-height: 0;
+}
+
+.split-planner--inline .split-planner-rows {
+  min-height: 0;
 }
 
 /* Inline route rename */
@@ -6120,3 +6206,39 @@ body {
     stroke-dashoffset: 0;
   }
 }
+
+/* Split planner: plan-by-time toggle */
+.split-planner-bytime {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md, 8px);
+  cursor: pointer;
+}
+.split-planner-bytime span { display: flex; flex-direction: column; gap: 2px; }
+.split-planner-bytime small { color: var(--color-text-muted); font-size: 0.8rem; }
+
+/* Fix step: bulk retry */
+.fix-bulk {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+/* Zone manager */
+.zone-manager { max-width: 620px; }
+.zone-manager-hint { margin: 0; color: var(--color-text-secondary); font-size: 0.85rem; }
+.zone-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; max-height: 46vh; overflow-y: auto; }
+.zone-item { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid var(--color-border); border-radius: var(--radius-sm); }
+.zone-item-main { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; min-width: 0; }
+.zone-item-id { font-size: 0.75rem; color: var(--color-text-secondary); }
+.zone-item-zips { display: flex; flex-wrap: wrap; gap: 4px; }
+.zone-chip { padding: 1px 7px; border-radius: 999px; background: var(--color-surface-hover); color: var(--color-text); border: 1px solid var(--color-border); font-size: 0.8rem; }
+.zone-item-actions { display: flex; gap: 4px; flex-shrink: 0; }
+.zone-editor { width: 100%; display: flex; flex-direction: column; gap: 8px; }
+.zone-editor input { padding: 8px 10px; border: 1px solid var(--color-border); border-radius: var(--radius-sm); background: var(--color-surface); color: var(--color-text); }
+.zone-editor-actions { display: flex; justify-content: flex-end; gap: 6px; }
