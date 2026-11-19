@@ -552,13 +552,13 @@ class GeocoderTest(TestCase):
     def test_geocode_success(self, mock_get, mock_time):
         mock_time.monotonic.return_value = 100.0
         mock_response = MagicMock()
-        mock_response.json.return_value = [{"lat": "47.5", "lon": "19.08"}]
+        mock_response.json.return_value = [{"lat": "47.5", "lon": "19.08", "address": {"house_number": "5"}}]
         mock_response.raise_for_status = MagicMock()
         mock_get.return_value = mock_response
 
         from .geocoder import geocode_address
 
-        result = geocode_address("Main St Budapest")
+        result = geocode_address("Main St 5 Budapest")
         self.assertEqual(result, (47.5, 19.08))
 
     @patch("planner.geocoder.time")

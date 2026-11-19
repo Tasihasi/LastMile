@@ -31,7 +31,7 @@ class M1GeocodingTest(SimpleTestCase):
 
     def test_real_geocoder_is_bounded_to_budapest(self):
         resp = MagicMock()
-        resp.json.return_value = [{"lat": "47.5", "lon": "19.05"}]
+        resp.json.return_value = [{"lat": "47.5", "lon": "19.05", "address": {"house_number": "1", "postcode": "1051"}}]
         with (
             override_settings(E2E_MOCK=False),
             patch.object(geocoder, "_rate_limit"),
@@ -55,19 +55,85 @@ class M1GeocodingTest(SimpleTestCase):
 
 
 class M1CandidatePickingTest(SimpleTestCase):
-    def _hits(self, *rows):
-        return [{"lat": str(la), "lon": str(ln), "address": {"postcode": z}} for la, ln, z in rows]
+    """The pin must be on the house the address names, never on the street or another street's number."""
+
+    def _hit(self, lat, lng, zip_code, number, category="amenity", type_="bar"):
+        return {
+            "lat": str(lat),
+            "lon": str(lng),
+            "category": category,
+            "type": type_,
+            "address": {"postcode": zip_code, "house_number": number},
+        }
+
+    def test_house_number_parsing(self):
+        parse = geocoder.requested_house_number
+        self.assertEqual(parse("Kazinczy utca 14 Budapest"), "14")
+        self.assertEqual(parse("1075 Budapest, Kazinczy utca 14"), "14")
+        self.assertEqual(parse("Kazinczy utca 14, 1075 Budapest"), "14")
+        self.assertEqual(parse("Vaci ut 1-3 Budapest"), "1-3")
+        self.assertEqual(parse("Marcius 15 ter 7 Budapest"), "7")
+        self.assertEqual(parse("Fo utca 12/A"), "12/a")
+        self.assertIsNone(parse("Vamhaz korut Budapest"))
+
+    def test_range_contains_requested_number(self):
+        self.assertTrue(geocoder._house_matches("1", "1-3"))
+        self.assertFalse(geocoder._house_matches("5", "2-4"))
+        self.assertFalse(geocoder._house_matches("14", "140"))
+
+    def test_street_level_hit_is_rejected(self):
+        coords, why = geocoder._pick_best("Kazinczy utca 14 Budapest", [self._hit(47.5, 19.05, "1075", None)])
+        self.assertIsNone(coords)
+        self.assertIn("not house number 14", why)
+
+    def test_other_house_number_is_rejected(self):
+        coords, _ = geocoder._pick_best("Kazinczy utca 14 Budapest", [self._hit(47.5, 19.05, "1075", "16")])
+        self.assertIsNone(coords)
+
+    def test_no_house_number_is_not_pinned(self):
+        coords, why = geocoder._pick_best("Vamhaz korut Budapest", [self._hit(47.48, 19.05, "1093", "1-3")])
+        self.assertIsNone(coords)
+        self.assertIn("No house number", why)
 
     def test_postcode_match_beats_nominatim_first_hit(self):
-        hits = self._hits((47.5652, 19.1239, "1152"), (47.4969, 19.0633, "1075"))
-        self.assertEqual(geocoder._pick_best("1075 Budapest, Kazinczy utca 14", hits), (47.4969, 19.0633))
+        hits = [self._hit(47.5652, 19.1239, "1152", "14"), self._hit(47.4969, 19.0633, "1075", "14")]
+        self.assertEqual(geocoder._pick_best("1075 Budapest, Kazinczy utca 14", hits)[0], (47.4969, 19.0633))
 
-    def test_without_zip_nearest_to_depot_wins(self):
-        hits = self._hits((47.5652, 19.1239, "1152"), (47.5540, 18.9637, "1028"), (47.4969, 19.0633, "1075"))
-        self.assertEqual(geocoder._pick_best("Kazinczy utca 14 Budapest", hits), (47.4969, 19.0633))
+    def test_wrong_postcode_is_rejected(self):
+        coords, why = geocoder._pick_best(
+            "1085 Budapest, Kazinczy utca 14", [self._hit(47.4969, 19.0633, "1075", "14")]
+        )
+        self.assertIsNone(coords)
+        self.assertIn("1085", why)
+
+    def test_without_zip_group_nearest_to_depot_wins(self):
+        hits = [
+            self._hit(47.5652, 19.1239, "1152", "14"),
+            self._hit(47.5540, 18.9637, "1028", "14"),
+            self._hit(47.4969, 19.0633, "1075", "14"),
+        ]
+        self.assertEqual(geocoder._pick_best("Kazinczy utca 14 Budapest", hits)[0], (47.4969, 19.0633))
+
+    def test_address_point_beats_poi(self):
+        hits = [
+            self._hit(47.4990, 19.0600, "1075", "13"),
+            self._hit(47.4983, 19.0592, "1075", "13", "place", "house"),
+        ]
+        self.assertEqual(geocoder._pick_best("Kiraly utca 13 Budapest", hits)[0], (47.4983, 19.0592))
+
+    def test_several_pois_use_the_median_position(self):
+        hits = [
+            self._hit(47.4980, 19.0590, "1075", "13"),
+            self._hit(47.4984, 19.0594, "1075", "13"),
+            self._hit(47.5000, 19.0620, "1075", "13"),
+        ]
+        lat, lng = geocoder._pick_best("Kiraly utca 13 Budapest", hits)[0]
+        self.assertAlmostEqual(lat, 47.4984)
+        self.assertAlmostEqual(lng, 19.0594)
 
     def test_candidates_outside_budapest_are_dropped(self):
-        self.assertIsNone(geocoder._pick_best("Fő utca 1", self._hits((48.2, 16.37, "1010"))))
+        coords, _ = geocoder._pick_best("Fő utca 1", [self._hit(48.2, 16.37, "1010", "1")])
+        self.assertIsNone(coords)
 
 
 def _stops(points):

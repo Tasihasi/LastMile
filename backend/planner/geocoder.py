@@ -1,5 +1,7 @@
 import hashlib
 import logging
+import re
+import threading
 import time
 
 import requests
@@ -44,32 +46,95 @@ def _mock_geocode(address: str) -> tuple[float, float]:
     return (lat, lng)
 
 
-def _pick_best(address: str, results: list[dict]) -> tuple[float, float] | None:
-    """Choose among Nominatim's candidates; its own first hit is often a same-named street elsewhere.
+_HOUSE_NO_RE = re.compile(r"(\d+[a-zA-Z]?(?:\s*[-/]\s*(?:\d+[a-zA-Z]?|[a-zA-Z]))?)\s*\.?$")
 
-    1. A candidate whose postcode equals the address's postal code wins.
-    2. Otherwise the candidate nearest to the postal code's centroid (or, with no postal code, to the
-       depot: the planner's couriers work around it). Candidates outside Budapest are dropped.
+
+def requested_house_number(address: str) -> str | None:
+    """The house number a planner typed: the last number group once postal code and city are removed."""
+    cleaned = re.sub(r"\b1\d{3}\b", " ", address)  # postal code
+    cleaned = re.sub(r"(?i)\bbudapest\b|\bh-", " ", cleaned).strip(" ,;.")
+    m = _HOUSE_NO_RE.search(cleaned)
+    return re.sub(r"\s+", "", m.group(1)).lower() if m else None
+
+
+def _number_parts(value: str) -> tuple[int, int] | None:
+    nums = [int(n) for n in re.findall(r"\d+", value)]
+    return (nums[0], nums[-1]) if nums else None
+
+
+def _house_matches(requested: str, found: str | None) -> bool:
+    """Exact house number, or the requested number lies inside the found range ('1' in '1-3')."""
+    if not found:
+        return False
+    found = re.sub(r"\s+", "", found).lower().rstrip(".")
+    if requested == found:
+        return True
+    req, fnd = _number_parts(requested), _number_parts(found)
+    if not req or not fnd or "/" in requested or req[0] != req[1]:
+        return False
+    return fnd[0] <= req[0] <= fnd[1] and not requested[-1].isalpha()
+
+
+def _is_address_point(r: dict) -> bool:
+    return (r.get("category"), r.get("type")) == ("place", "house") or r.get("category") == "building"
+
+
+def _median(values):
+    values = sorted(values)
+    mid = len(values) // 2
+    return values[mid] if len(values) % 2 else (values[mid - 1] + values[mid]) / 2
+
+
+def _pick_best(address: str, results: list[dict]) -> tuple[tuple[float, float] | None, str]:
+    """Choose the exact house among Nominatim's candidates -> ((lat, lng) | None, reason if None).
+
+    Precision rules (the pin must be on the house the address names):
+    1. The candidate's house number must match the requested one; street-level hits are rejected.
+    2. With a postal code only candidates of that postcode count; without one, the postcode group
+       nearest to the depot wins (the planner's couriers work around it).
+    3. Inside the group an OSM address point / building is preferred over shops and bars; otherwise
+       the median position of the group's candidates (POIs of one number can be ~100 m apart).
     """
+    requested = requested_house_number(address)
+    if not requested:
+        return None, "No house number in the address"
     zip_code = extract_postal_code(address)
-    candidates = []
+
+    matches = []
     for r in results:
         try:
             lat, lng = float(r["lat"]), float(r["lon"])
         except (KeyError, ValueError):
             continue
-        if in_budapest(lat, lng):
-            candidates.append((lat, lng, (r.get("address") or {}).get("postcode")))
-    if not candidates:
-        logger.warning("Nominatim: no hit inside Budapest for: %s", address)
-        return None
+        addr = r.get("address") or {}
+        if in_budapest(lat, lng) and _house_matches(requested, addr.get("house_number")):
+            matches.append((lat, lng, addr.get("postcode"), r))
+    if not matches:
+        return None, f"Street found, but not house number {requested}"
+
     if zip_code:
-        same_zip = [c for c in candidates if c[2] == zip_code]
-        if same_zip:
-            return same_zip[0][:2]
-    anchor = ZIP_CENTROIDS.get(zip_code or "", DEPOT)
-    best = min(candidates, key=lambda c: haversine_km(anchor, c[:2]))
-    return best[:2]
+        matches = [m for m in matches if m[2] in (zip_code, None)]
+        if not matches:
+            return None, f"House number {requested} not found in postal code {zip_code}"
+        group = matches
+    else:
+        groups: dict = {}
+        for m in matches:
+            groups.setdefault(m[2], []).append(m)
+        group = min(groups.values(), key=lambda g: min(haversine_km(DEPOT, m[:2]) for m in g))
+
+    points = [m for m in group if _is_address_point(m[3])]
+    if points:
+        return points[0][:2], ""
+    return (_median([m[0] for m in group]), _median([m[1] for m in group])), ""
+
+
+_state = threading.local()
+
+
+def last_failure_reason() -> str:
+    """Why the last geocode_address() call on this thread returned None ('' if it succeeded)."""
+    return getattr(_state, "reason", "") or "Address not found"
 
 
 def geocode_address(address: str) -> tuple[float, float] | None:
@@ -78,6 +143,7 @@ def geocode_address(address: str) -> tuple[float, float] | None:
     Returns (lat, lng) or None if not found.
     In E2E mock mode, returns deterministic fake coordinates.
     """
+    _state.reason = ""
     if settings.E2E_MOCK:
         # Deterministic miss for e2e: a city-less address marked 'nocity' is not found,
         # exactly like a real recipient forgetting the city. Appending the city fixes it.
@@ -86,6 +152,12 @@ def geocode_address(address: str) -> tuple[float, float] | None:
             return None
         return _mock_geocode(address)
 
+    coords, reason = _geocode_real(address)
+    _state.reason = reason
+    return coords
+
+
+def _geocode_real(address: str) -> tuple[tuple[float, float] | None, str]:
     _rate_limit()
 
     try:
@@ -109,13 +181,16 @@ def geocode_address(address: str) -> tuple[float, float] | None:
 
         if not results:
             logger.warning("Nominatim returned no results for: %s", address)
-            return None
+            return None, "Address not found"
 
-        return _pick_best(address, results)
+        coords, reason = _pick_best(address, results)
+        if coords is None:
+            logger.warning("Nominatim: %s (%s)", reason, address)
+        return coords, reason
 
     except requests.RequestException as e:
         logger.error("Nominatim request failed for '%s': %s", address, e)
-        return None
+        return None, "Geocoding service unavailable"
     except (KeyError, ValueError, IndexError) as e:
         logger.error("Nominatim response parse error for '%s': %s", address, e)
-        return None
+        return None, "Geocoding response could not be read"

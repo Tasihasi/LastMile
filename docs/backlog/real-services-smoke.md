@@ -12,3 +12,13 @@ Findings reported by the planner after PR #67, logged here and covered by `pytho
 Known limit: an address Nominatim cannot match at all (e.g. unaccented "Futyo utca 37", really "Fűtő utca") is reported as failed, never pinned.
 
 CI needs the repository secret `ORS_API_KEY` (a real openrouteservice key). Without it the real-services job fails on purpose.
+
+## Precision (house level)
+A pin is accepted only if the geocoder result carries the requested **house number** (ranges like `2-4` count for `2`);
+a street-level hit, a missing house number, a wrong postal code or a typo'd street is a **failure with a reason**
+(`geocode_error`), never a guess. Address points / buildings win over shops and bars; several POIs of one number use
+their median. Without a postal code the postcode group nearest the depot is used, so send postal codes where possible.
+Smoke tolerance: 60 m from the house on 6 real addresses, and two addresses that must be refused.
+
+Known limit: where OSM has no address point for a number (e.g. Kiraly utca 13: only shops/bars, spread ~130 m) the pin
+is the median of those POIs, up to ~60-100 m from the building. A second data source would be needed to do better.

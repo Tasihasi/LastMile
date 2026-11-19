@@ -8,7 +8,6 @@ Run: ``python manage.py smoke_real_services`` with ORS_API_KEY set and E2E_MOCK 
 Exit code != 0 on any failure. CI runs it before the e2e job (see .github/workflows/ci.yml).
 """
 
-import time
 from types import SimpleNamespace
 
 from django.conf import settings
@@ -17,16 +16,21 @@ from django.core.management.base import BaseCommand, CommandError
 from planner import geocoder, optimizer, timing
 from planner.budapest import haversine_km
 
-# (address as a planner would type it, true (lat, lng) from OpenStreetMap) - the first three are the
-# addresses that used to land in the wrong place (same-named streets in other districts).
+# (address as a planner would type it, true (lat, lng) of THAT HOUSE from OpenStreetMap). The pin must be
+# on the house the address names: tolerance is 60 m. The first ones used to land 7-11 km away (same-named
+# streets in other districts) or on the street instead of the house.
 GEOCODE_CASES = [
-    ("Kazinczy utca 14 Budapest", (47.4969, 19.0633)),
-    ("Kiraly utca 13 Budapest", (47.4986, 19.0591)),
-    ("Gyulai Pal utca 2 Budapest", (47.4952, 19.0678)),
-    ("Karoly korut 3 Budapest", (47.4953, 19.0594)),
-    ("1075 Budapest, Kazinczy utca 14", (47.4969, 19.0633)),
+    ("Kazinczy utca 14 Budapest", (47.49694, 19.06334)),
+    ("1075 Budapest, Kazinczy utca 14", (47.49694, 19.06334)),
+    ("Gyulai Pal utca 2 Budapest", (47.49527, 19.06784)),
+    ("Karoly korut 3 Budapest", (47.49525, 19.05958)),
+    ("Marcius 15 ter 7 Budapest", (47.49157, 19.05297)),
+    ("Futo utca 37 Budapest", (47.48627, 19.07447)),
 ]
-GEOCODE_TOLERANCE_KM = 0.6
+GEOCODE_TOLERANCE_KM = 0.06
+# Not asserted: "Kiraly utca 13" - OSM has only shops/bars there (no address point), spread over ~130 m.
+# Must NOT be pinned: a typo'd street (really "Futo") or a missing house number is a failure, never a guess.
+MUST_FAIL = ["Futyo utca 37 Budapest", "Vamhaz korut Budapest"]
 
 
 class Command(BaseCommand):
@@ -58,14 +62,21 @@ class Command(BaseCommand):
                 failures.append(f"geocoding: '{address}' was not found")
                 continue
             km = haversine_km(result, truth)
-            self.stdout.write(f"geocode {address!r}: {result[0]:.5f},{result[1]:.5f} ({km * 1000:.0f} m from truth)")
+            self.stdout.write(
+                f"geocode {address!r}: {result[0]:.5f},{result[1]:.5f} ({km * 1000:.0f} m from the house)"
+            )
             if km > GEOCODE_TOLERANCE_KM:
-                failures.append(f"geocoding: '{address}' landed {km:.1f} km from its real spot {truth}")
+                failures.append(f"geocoding: '{address}' landed {km * 1000:.0f} m from its house {truth}")
             if result == geocoder._mock_geocode(address):
                 failures.append(f"geocoding: '{address}' equals the mock coordinates (mock in use?)")
-            if i <= 4:  # the zip variant repeats a location, keep the stop list distinct
+            if i != 2:  # case 2 repeats a location (zip variant), keep the stop list distinct
                 stops.append(SimpleNamespace(id=i, lat=result[0], lng=result[1]))
-            time.sleep(0.2)
+        for address in MUST_FAIL:
+            result = geocoder.geocode_address(address)
+            if result is not None:
+                failures.append(f"geocoding: '{address}' must not be pinned but got {result}")
+            else:
+                self.stdout.write(f"geocode {address!r}: refused ({geocoder.last_failure_reason()})")
         return stops
 
     def _routing(self, stops, failures):

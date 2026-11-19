@@ -15,7 +15,7 @@ from rest_framework.response import Response
 
 from .. import zones
 from ..districts import extract_postal_code
-from ..geocoder import geocode_address
+from ..geocoder import geocode_address, last_failure_reason
 from ..models import DeliverySession, DeliveryStop, SharedRoute, Zone
 from ..optimizer import get_route_details, optimize_route
 from ..parsers import parse_file
@@ -267,7 +267,7 @@ def update_stop_address(request, session_id, stop_id):
     else:
         stop.lat = stop.lng = None
         stop.geocode_status = "failed"
-        stop.geocode_error = "Address not found"
+        stop.geocode_error = last_failure_reason()
     stop.sequence_order = None
     stop.save()
 
@@ -347,7 +347,7 @@ def _geocode_stream(session_id):
             stop.geocode_status = "success"
         else:
             stop.geocode_status = "failed"
-            stop.geocode_error = "Address not found"
+            stop.geocode_error = last_failure_reason()
 
         stop.save()
 
