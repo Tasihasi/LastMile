@@ -9,9 +9,9 @@ Format: features are grouped by category. Each version includes a release date a
 ## Unreleased
 
 ### Must conditions (geocoding and optimization)
-- **Addresses land where they really are.** Nominatim is restricted to Hungary / Budapest and a hit outside Budapest counts as "not found". The offline mock places an address inside its postal code's area instead of at a random point.
+- **Addresses land where they really are.** The real geocoder is unchanged (Nominatim, first hit). The offline mock places an address inside its postal code's area instead of at a random point.
 - **Routes are truly optimized.** The offline optimizer is nearest neighbour + 2-opt (was an angle sort), the split time estimate uses the same optimized tour, and optimize fails with an error when road geometry cannot be fetched (was: silent straight lines).
-- **Real Services Smoke (CI).** `manage.py smoke_real_services` checks real Nominatim geocoding and real ORS road routing; the E2E job now waits for it and for the Production Smoke job. Geocoder picks among several Nominatim candidates (postcode, else nearest the zip centroid/depot) instead of trusting the first hit.
+- **Real Services Smoke (CI).** `manage.py smoke_real_services` checks real Nominatim geocoding and real ORS road routing; the E2E job now waits for it and for the Production Smoke job.
 - The two rulings are written down next to the 15-minute ruling in `CLAUDE.md`.
 
 ### Route splitting

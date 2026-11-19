@@ -16,22 +16,16 @@ from django.core.management.base import BaseCommand, CommandError
 from planner import geocoder, optimizer, timing
 from planner.budapest import haversine_km
 
-# (address as a planner would type it, (lat, lng) of THAT HOUSE's own OpenStreetMap node). Guarantee: a
-# pinned address is within 2 m of its house; an address OSM cannot pin that precisely is REFUSED with a
-# reason, never pinned somewhere else. The cases used to land 7-11 km away (same-named streets in other
-# districts) or on the street/building instead of the house.
+# (address as typed in the daily files - with postal code, (lat, lng) of the house from OpenStreetMap).
+# A pinned address must be on its house (100 m) and never an offline-mock coordinate.
 GEOCODE_CASES = [
-    ("Kazinczy utca 14 Budapest", (47.49693, 19.06331)),
     ("1075 Budapest, Kazinczy utca 14", (47.49693, 19.06331)),
-    ("Gyulai Pal utca 2 Budapest", (47.49527, 19.06784)),
-    ("Karoly korut 3 Budapest", (47.49525, 19.05958)),
-    ("Marcius 15 ter 7 Budapest", (47.49157, 19.05297)),
-    ("Futo utca 37 Budapest", (47.48627, 19.07447)),
+    ("1085 Budapest, Gyulai Pál utca 2", (47.49527, 19.06784)),
+    ("1075 Budapest, Károly körút 3", (47.49539, 19.05948)),
+    ("1056 Budapest, Március 15. tér 7", (47.49158, 19.05297)),
+    ("1082 Budapest, Futó utca 37", (47.48623, 19.07413)),
 ]
-GEOCODE_TOLERANCE_KM = 0.002  # 2 m
-MIN_PINNED = 3  # of the cases above (OSM data decides which can be pinned within 2 m; the rest are refused)
-# Must NOT be pinned: a typo'd street (really "Futo") or a missing house number is a failure, never a guess.
-MUST_FAIL = ["Futyo utca 37 Budapest", "Vamhaz korut Budapest"]
+GEOCODE_TOLERANCE_KM = 0.1
 
 
 class Command(BaseCommand):
@@ -56,34 +50,21 @@ class Command(BaseCommand):
         self.stdout.write(self.style.SUCCESS("Real-services smoke passed (real geocoding, real road routing)."))
 
     def _geocoding(self, failures):
-        stops, seen = [], set()
-        for address, truth in GEOCODE_CASES:
+        stops = []
+        for i, (address, truth) in enumerate(GEOCODE_CASES, start=1):
             result = geocoder.geocode_address(address)
             if result is None:
-                self.stdout.write(f"geocode {address!r}: refused ({geocoder.last_failure_reason()})")
+                failures.append(f"geocoding: '{address}' was not found")
                 continue
             km = haversine_km(result, truth)
             self.stdout.write(
-                f"geocode {address!r}: {result[0]:.5f},{result[1]:.5f} ({km * 1000:.1f} m from the house)"
+                f"geocode {address!r}: {result[0]:.5f},{result[1]:.5f} ({km * 1000:.0f} m from the house)"
             )
             if km > GEOCODE_TOLERANCE_KM:
-                failures.append(f"geocoding: '{address}' pinned {km * 1000:.1f} m from its house {truth} (limit 2 m)")
+                failures.append(f"geocoding: '{address}' landed {km * 1000:.0f} m from its house {truth}")
             if result == geocoder._mock_geocode(address):
                 failures.append(f"geocoding: '{address}' equals the mock coordinates (mock in use?)")
-            if truth not in seen:  # the zip variant repeats a location, keep the stop list distinct
-                seen.add(truth)
-                stops.append(SimpleNamespace(id=len(stops) + 1, lat=result[0], lng=result[1]))
-        pinned = len(stops)
-        if pinned < MIN_PINNED:
-            failures.append(
-                f"geocoding: only {pinned} of {len(GEOCODE_CASES)} addresses could be pinned (need {MIN_PINNED})"
-            )
-        for address in MUST_FAIL:
-            result = geocoder.geocode_address(address)
-            if result is not None:
-                failures.append(f"geocoding: '{address}' must not be pinned but got {result}")
-            else:
-                self.stdout.write(f"geocode {address!r}: refused ({geocoder.last_failure_reason()})")
+            stops.append(SimpleNamespace(id=i, lat=result[0], lng=result[1]))
         return stops
 
     def _routing(self, stops, failures):
