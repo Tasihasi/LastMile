@@ -49,6 +49,19 @@ export interface SharedRouteResponse {
 
 export type DeliveryStopStatus = "pending" | "delivered" | "not_received" | "skipped";
 
+export interface ParsedParts {
+  zip?: string;
+  city?: string;
+  district?: number | null;
+  street?: string;
+  house?: string;
+  unit?: string;
+  /** Text the parser took out of the address: dates, phones, notes... */
+  removed?: { kind: string; text: string }[];
+  steps?: string[];
+  confidence?: number;
+}
+
 export interface DeliveryStop {
   id: number;
   name: string;
@@ -60,6 +73,13 @@ export interface DeliveryStop {
   lng: number | null;
   geocode_status: "pending" | "success" | "failed" | "skipped";
   geocode_error: string;
+  /** Pipeline stage that resolved the stop: cache | raw | parsed | google | manual (needs / got human input). */
+  geocode_stage?: "" | "cache" | "raw" | "parsed" | "google" | "manual";
+  /** The rule-based parser's cleaned address (set when the raw address failed). */
+  cleaned_address?: string;
+  parsed_parts?: ParsedParts;
+  /** Addresses the parser proposes for a failed stop, best first. */
+  address_candidates?: string[];
   postal_code: string;
   excluded: boolean;
   sequence_order: number | null;

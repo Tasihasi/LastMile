@@ -128,11 +128,26 @@ Rename a session. Planner only.
 
 Geocode all pending stops. Returns a stream of NDJSON (one JSON object per line).
 
+Stops go through the address pipeline, `GEOCODE_CONCURRENCY` (default 5) requests at a time: identical addresses are
+looked up once and reused from earlier results (`cache`); the address as written (`raw`); failures are cleaned by the
+rule-based Hungarian parser (birth dates, phones, notes, abbreviations, missing zip/city, misspelled street) and
+retried (`parsed`); then Google, only when `GOOGLE_GEOCODING_API_KEY` is set (`google`); what is still missing is
+`failed` with `geocode_stage: "manual"` and suggested addresses. A hit that disagrees with the address's postal code or
+settlement is never accepted. See `docs/backlog/address-pipeline.md`.
+
+Each streamed `stop` also carries `geocode_stage`, `cleaned_address`, `parsed_parts`
+(`zip, city, district, street, house, unit, removed[], steps[], confidence`) and `address_candidates` (best first).
+
 **Response** `200` (streamed):
 ```
 {"stop": {"id": 2, "name": "Pizza King", "lat": 47.4965, "lng": 19.0565, "geocode_status": "success"}, "progress": {"current": 1, "total": 9}}
 {"stop": {"id": 3, "name": "Spar Blaha", "lat": 47.4963, "lng": 19.0696, "geocode_status": "success"}, "progress": {"current": 2, "total": 9}}
 ```
+
+### PATCH /sessions/{id}/stops/{stop_id}/address/
+
+Replace a stop's address and re-geocode it through the same pipeline (`geocode_stage` is `manual` when the typed
+address was found directly). Body: `{"address": "..."}`.
 
 ### GET /sessions/{id}/geocode-status/
 

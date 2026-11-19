@@ -25,6 +25,16 @@ GEOCODE_CASES = [
     ("1056 Budapest, Március 15. tér 7", (47.49158, 19.05297)),
     ("1082 Budapest, Futó utca 37", (47.48623, 19.07413)),
 ]
+# The same houses as the planner's files really look: birth dates, phones, notes, abbreviations, missing accents.
+# They go through the whole address pipeline (parser included); each must be found on its house.
+MESSY_CASES = [
+    ("Kazinczy u. 14 1075 Bp. szül. 1990.05.12", (47.49693, 19.06331)),
+    ("Dr. Kovács Béla, 1085 Budapest, Gyulai Pal u. 2, tel: +36 20 123 4567", (47.49527, 19.06784)),
+    ("1075 Budapest, Károly krt. 3 kapukód: 1234", (47.49539, 19.05948)),
+    ("Március 15. tér 7 1056 Budapest 1985.03.07", (47.49158, 19.05297)),
+    ("1082 Budapest Futó u 37 2. em. 5. ajtó", (47.48623, 19.07413)),
+]
+MESSY_MIN_RESOLVED = 4  # of 5 must resolve without a human
 GEOCODE_TOLERANCE_KM = 0.25  # same street: Nominatim may return any OSM object carrying the house number
 
 
@@ -40,6 +50,7 @@ class Command(BaseCommand):
             raise CommandError("ORS_API_KEY is missing or a placeholder: real routing cannot be checked.")
 
         stops = self._geocoding(failures)
+        self._pipeline(failures)
         if len(stops) >= 3:
             self._routing(stops, failures)
         else:
@@ -66,6 +77,44 @@ class Command(BaseCommand):
                 failures.append(f"geocoding: '{address}' equals the mock coordinates (mock in use?)")
             stops.append(SimpleNamespace(id=i, lat=result[0], lng=result[1]))
         return stops
+
+    def _pipeline(self, failures):
+        """Per-stage resolve rate of the address pipeline (cache/raw/parsed/google/manual) on messy real addresses."""
+        from planner.geocode_pipeline import run
+        from planner.models import DeliverySession, DeliveryStop
+
+        session = DeliverySession.objects.create(name="smoke-address-pipeline")
+        try:
+            stops = [
+                DeliveryStop.objects.create(session=session, name=f"smoke {i}", raw_address=raw)
+                for i, (raw, _) in enumerate(MESSY_CASES, start=1)
+            ]
+            truth = {s.id: t for s, (_, t) in zip(stops, MESSY_CASES, strict=True)}
+            done = list(run(stops))
+        finally:
+            session.delete()
+        by_stage: dict[str, int] = {}
+        resolved = 0
+        for stop in done:
+            by_stage[stop.geocode_stage] = by_stage.get(stop.geocode_stage, 0) + 1
+            if stop.geocode_status != "success":
+                self.stdout.write(f"pipeline {stop.raw_address!r}: NOT resolved ({stop.geocode_error})")
+                continue
+            resolved += 1
+            km = haversine_km((stop.lat, stop.lng), truth[stop.id])
+            self.stdout.write(
+                f"pipeline {stop.raw_address!r} -> {stop.cleaned_address or stop.raw_address!r} "
+                f"[{stop.geocode_stage}] {km * 1000:.0f} m from the house"
+            )
+            if km > GEOCODE_TOLERANCE_KM:
+                failures.append(f"pipeline: '{stop.raw_address}' landed {km * 1000:.0f} m from its house")
+        self.stdout.write(
+            f"pipeline resolve rate: {resolved}/{len(MESSY_CASES)} without a human; by stage {dict(sorted(by_stage.items()))}"
+        )
+        if resolved < MESSY_MIN_RESOLVED:
+            failures.append(
+                f"pipeline: only {resolved}/{len(MESSY_CASES)} messy addresses resolved (need {MESSY_MIN_RESOLVED})"
+            )
 
     def _routing(self, stops, failures):
         depot = timing.DEPOT

@@ -8,6 +8,16 @@ Format: features are grouped by category. Each version includes a release date a
 
 ## Unreleased
 
+### Address pipeline (Epic J)
+- **Geocoding runs 5 requests at a time** (`GEOCODE_CONCURRENCY`) instead of one by one; identical addresses are looked up once and reused from earlier sessions. The public Nominatim server stays limited to 1 request/s in total across threads; a self-hosted Nominatim (`NOMINATIM_URL`, see `docs/self-hosted-nominatim.md`) lifts that limit.
+- **Rule-based Hungarian address parser** (`backend/planner/addressparse/`, no AI): removes birth dates, phones, e-mails, tracking codes, titles and delivery notes (kept in `removed[]`, a house number is never removed), finds the postal code, Budapest district and settlement, normalises street types (`u.`, `krt.`, `rkp.`), splits house number and staircase/floor/door, and corrects unique near-miss street spellings against a street list. Failed addresses are cleaned and re-sent in the same batches with ordered query variants.
+- **Stage order:** cache -> raw -> parsed -> Google (only with `GOOGLE_GEOCODING_API_KEY`) -> review queue. Each stop stores the stage that resolved it (`geocode_stage`), the cleaned address, the parsed parts and suggested addresses (migration 0013).
+- **Consistency guard:** a hit that disagrees with the address's postal code / settlement is rejected (lenient area check, not the reverted strict pinning).
+- **Geocoder provider seam:** `GEOCODER_PROVIDER` (`nominatim`, `mock`, `google`), structured Nominatim queries, provider errors never abort a batch; unknown provider fails `manage.py check`.
+- **Fix addresses step:** the parser's best address is pre-filled, "Did you mean" chips, a one-click "Use the suggested address for N", and an **Auto-fixed** counter on the geocoding step.
+- `manage.py build_street_index` builds the street list from an OSM export; `manage.py smoke_real_services` now also reports the per-stage resolve rate on messy real addresses (the CI job migrates the database first).
+- E2E mock: `nowhere` marks an address the parser cannot rescue (the wizard's bulk retry still fixes it); `nocity` is now recovered by the parser.
+
 ### Must conditions (geocoding and optimization)
 - **Addresses land where they really are.** The real geocoder is unchanged (Nominatim, first hit). The offline mock places an address inside its postal code's area instead of at a random point.
 - **Routes are truly optimized.** The offline optimizer is nearest neighbour + 2-opt (was an angle sort), the split time estimate uses the same optimized tour, and optimize fails with an error when road geometry cannot be fetched (was: silent straight lines).

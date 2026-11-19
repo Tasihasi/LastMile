@@ -257,7 +257,12 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      - name: Real geocoding and road routing
+      - name: Create the database (the address pipeline smoke stores stops)
+        run: python manage.py migrate --noinput
+        env:
+          DEBUG: "True"
+
+      - name: Real geocoding, address pipeline and road routing
         run: python manage.py smoke_real_services
         env:
           DEBUG: "True"

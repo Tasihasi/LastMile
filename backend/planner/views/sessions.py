@@ -15,7 +15,8 @@ from rest_framework.response import Response
 
 from .. import zones
 from ..districts import extract_postal_code
-from ..geocoder import geocode_address
+from ..geocode_pipeline import geocode_stop
+from ..geocode_pipeline import run as run_pipeline
 from ..models import DeliverySession, DeliveryStop, SharedRoute, Zone
 from ..optimizer import get_route_details, optimize_route
 from ..parsers import parse_file
@@ -259,15 +260,9 @@ def update_stop_address(request, session_id, stop_id):
 
     stop.raw_address = address[:500]
     stop.postal_code = extract_postal_code(stop.raw_address)
-    result = geocode_address(stop.raw_address)
-    if result:
-        stop.lat, stop.lng = result
-        stop.geocode_status = "success"
-        stop.geocode_error = ""
-    else:
-        stop.lat = stop.lng = None
-        stop.geocode_status = "failed"
-        stop.geocode_error = "Address not found"
+    stop.lat = stop.lng = None
+    stop.geocode_error = ""
+    stop = geocode_stop(stop, human_input=True)
     stop.sequence_order = None
     stop.save()
 
@@ -336,21 +331,11 @@ def _geocode_stream(session_id):
         yield json.dumps({"error": "Session not found."}) + "\n"
         return
 
-    pending_stops = session.stops.filter(geocode_status="pending")
-    total = pending_stops.count()
+    pending_stops = list(session.stops.filter(geocode_status="pending"))
+    total = len(pending_stops)
 
-    for i, stop in enumerate(pending_stops):
-        result = geocode_address(stop.raw_address)
-
-        if result:
-            stop.lat, stop.lng = result
-            stop.geocode_status = "success"
-        else:
-            stop.geocode_status = "failed"
-            stop.geocode_error = "Address not found"
-
-        stop.save()
-
+    # Cache -> raw -> rule-based parser -> Google -> review queue, 5 requests at a time (planner/geocode_pipeline.py).
+    for i, stop in enumerate(run_pipeline(pending_stops)):
         yield (
             json.dumps(
                 {

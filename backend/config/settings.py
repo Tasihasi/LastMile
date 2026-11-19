@@ -194,6 +194,17 @@ ORS_API_KEY = os.getenv("ORS_API_KEY", "")
 # E2E testing mode — mocks external APIs (Nominatim, ORS) with deterministic fake data
 E2E_MOCK = os.getenv("E2E_MOCK", "").lower() == "true"
 
+# Address pipeline (see docs/backlog/address-pipeline.md)
+GEOCODER_PROVIDER = os.getenv("GEOCODER_PROVIDER", "nominatim")
+# Self-hosted Nominatim (Hungary extract) lifts the 1 request/s limit of the public server.
+NOMINATIM_URL = os.getenv("NOMINATIM_URL", "https://nominatim.openstreetmap.org/search")
+NOMINATIM_MIN_INTERVAL = os.getenv("NOMINATIM_MIN_INTERVAL", "")  # seconds; empty = 1.0 public, 0 self-hosted
+GEOCODE_CONCURRENCY = int(os.getenv("GEOCODE_CONCURRENCY", "5"))
+# Stage 4 (last resort). Off unless a key is set; mind Google's terms for storing/using results.
+GOOGLE_GEOCODING_API_KEY = os.getenv("GOOGLE_GEOCODING_API_KEY", "")
+# Optional street list built from the OSM Hungary extract (manage.py build_street_index).
+ADDRESS_STREETS_FILE = os.getenv("ADDRESS_STREETS_FILE", "")
+
 # File upload size limits (10 MB)
 DATA_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024
 FILE_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024
