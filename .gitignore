@@ -50,3 +50,6 @@ frontend/blob-report/
 
 # Local RAG index + venv (local only)
 .rag/
+
+# Personal Claude notes (local only)
+CLAUDE.local.md

@@ -106,6 +106,8 @@ test.describe("UX ruling: whole planner day <= 15 minutes", () => {
     const toFix = footer.getByRole("button", { name: /(Fix|Review) addresses/ });
     await expect(toFix).toBeEnabled({ timeout: 90_000 });
     await expect(page.locator(".wizard-stat strong").first()).toHaveText(String(total));
+    // The "Not found" counter lives on this step; the next step only lists the misses.
+    if (failures > 0) await expect(page.locator(".wizard-stat--bad strong")).toHaveText(String(failures));
     await inViewport(page, toFix, "Review addresses");
     const geocodeWait = total * GEOCODE_SECONDS_PER_STOP;
     await toFix.click();
@@ -117,12 +119,11 @@ test.describe("UX ruling: whole planner day <= 15 minutes", () => {
       await footer.getByRole("button", { name: /^Continue/ }).click();
       stage("Fix addresses (nothing to fix)", HUMAN.read + HUMAN.click, 1);
     } else {
-      await expect(page.locator(".wizard-stat--bad strong")).toHaveText(String(failures));
       const retry = page.getByRole("button", { name: new RegExp(`Retry all ${failures}`) });
       await inViewport(page, retry, "Retry all");
       await retry.click();
       await expect(page.locator(".fix-row--ok")).toHaveCount(failures, { timeout: 60_000 });
-      await footer.getByRole("button", { name: /^Continue$/ }).click();
+      await footer.getByRole("button", { name: /^Continue/ }).click();
       // Without the bulk button every row would cost FIX_SECONDS_PER_ADDRESS by hand.
       stage(`Fix ${failures} addresses (bulk retry)`, HUMAN.read * 2 + HUMAN.click * 2, 2);
     }
