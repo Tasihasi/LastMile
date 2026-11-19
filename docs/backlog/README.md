@@ -44,7 +44,7 @@ Never call Nominatim/ORS from automated tests.
 ## Priorities (my assumption from the email — Gergő said "can't start using it without" = P0)
 
 - **P0** go-live blockers: A0–A4, B1, C1, E1, F1–F3
-- **P1** speeds up / sharpens: A5, A6, B2, C2, D1, G1, G2, H1, H2, E2
+- **P1** speeds up / sharpens: A5, A6, B2, C2, D1, G1, G2, H1, H2, H3, E2
 - **P2** explicitly "later": B3, B4, C3, I1
 
 Dani's commitment: **point 1 (Epic A) by end of next week (≈ Fri 2026-11-27)**, then sync with Gergő.
@@ -78,6 +78,7 @@ Barna: sort-app (E2 contract), geocoding evaluation (G2). The A-chain is the cri
 | [G2](tasks/G2-geocoding-accuracy-evaluation.md) | 97 % geocoding accuracy evaluation (Barna) | 6 | P1 | G1 |
 | [H1](tasks/H1-back-to-multi-route-view.md) | Back from single route to multi-route view | 7 | P1 | — |
 | [H2](tasks/H2-no-split-in-biker-view.md) | Biker view must not allow splitting | 7 | P1 | — |
+| [H3](tasks/H3-no-resplit-of-sub-route.md) | Sub-route can be re-split; original split unreachable (bug) | 7 | P1 | — |
 | [I1](tasks/I1-admin-api-settings.md) | Admin page for external-service API keys | + | P2 | G1 |
 
 Suggested order: `A0 ∥ A1 ∥ B1 ∥ C1 ∥ F1 ∥ H2` → `A2, A3, F2, F3, E1` → `A4` → `A5, B2, C2` → `A6` → rest.

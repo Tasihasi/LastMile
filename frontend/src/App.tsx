@@ -82,6 +82,8 @@ function App() {
   const inWizardPages = wizardStep !== null && (wizardStep < 5 || isPlanner);
   const [viewMode, setViewMode] = useState<"dashboard" | "map" | "live-map" | "split-review" | "stop-kanban">(isPlanner ? "dashboard" : "map");
   const [splitReviewId, setSplitReviewId] = useState<string | null>(null);
+  // The open route is a sub-route of a split: it is never re-planned or re-split here.
+  const [openIsSubRoute, setOpenIsSubRoute] = useState(false);
   const [bikers, setBikers] = useState<User[]>([]);
   const [shareLoading, setShareLoading] = useState(false);
   const [shareCopied, setShareCopied] = useState(false);
@@ -199,6 +201,7 @@ function App() {
   };
 
   const handleNewRoute = (ownerId?: number) => {
+    setOpenIsSubRoute(false);
     reset();
     clearWizard();
     setWizardOwnerId(ownerId);
@@ -209,6 +212,7 @@ function App() {
   const handleSelectSession = async (id: string) => {
     const session = await loadSession(id);
     clearWizard();
+    setOpenIsSubRoute(!!session?.parent_id);
     setViewMode("map");
     // A route that is still being planned reopens at its latest planning step.
     // Sub-routes of a split route are not re-planned: they open straight on the map.
@@ -300,7 +304,7 @@ function App() {
               My routes
             </button>
           )}
-          {viewMode === "map" && allStops.length > 0 && !inWizardPages && wizardStep !== 5 && sessionStatus === "not_started" && (
+          {viewMode === "map" && allStops.length > 0 && !inWizardPages && wizardStep !== 5 && sessionStatus === "not_started" && !openIsSubRoute && (
             <button className="btn btn-ghost" onClick={openPlanner} title="Back to the route planning steps">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <polyline points="15 18 9 12 15 6" />

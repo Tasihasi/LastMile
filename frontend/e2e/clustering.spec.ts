@@ -278,4 +278,23 @@ test.describe("Clustering", () => {
     await expect(dialog).toBeVisible();
     await expect(dialog.locator(".move-stop-option").first()).toBeVisible();
   });
+  test("h3: a sub-route has no way back into the planner, so it cannot be re-split", async ({
+    page,
+  }) => {
+    await page.getByRole("button", { name: "Upload Route" }).click();
+    await uploadTestFile(page, "large_geocoded_60.csv");
+    const modal = page.locator(".split-planner");
+    await expect(modal).toBeVisible({ timeout: 10_000 });
+    const checkedBikers = modal.locator(".split-planner-biker input:checked");
+    while ((await checkedBikers.count()) > 0) {
+      await checkedBikers.first().uncheck();
+    }
+    await modal.getByRole("button", { name: "Split automatically" }).click();
+    await expect(page.locator(".cluster-review")).toBeVisible({ timeout: 30_000 });
+
+    // Open one sub-route: it is shown on the map, without the "Route planner" button.
+    await page.locator('button[title="View full route"]').first().click();
+    await expect(page.locator(".cluster-review")).toBeHidden({ timeout: 15_000 });
+    await expect(page.getByRole("button", { name: /Route planner/ })).toHaveCount(0);
+  });
 });
