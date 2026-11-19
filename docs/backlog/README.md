@@ -82,6 +82,8 @@ Barna: sort-app (E2 contract), geocoding evaluation (G2). The A-chain is the cri
 | [H2](tasks/H2-no-split-in-biker-view.md) | Biker view must not allow splitting | 7 | P1 | — |
 | [I1](tasks/I1-admin-api-settings.md) | Admin page for external-service API keys | + | P2 | G1 |
 
+Epic **J** (address pipeline: parallel batches of 5, rule-based Hungarian parser, Google last resort, review queue) is planned in a single file, [address-pipeline.md](address-pipeline.md) (tasks J0–J8, depends on G1; implemented, see its status line and [self-hosted-nominatim.md](../self-hosted-nominatim.md)).
+
 Suggested order: `A0 ∥ A1 ∥ B1 ∥ C1 ∥ F1 ∥ H2` → `A2, A3, F2, F3, E1` → `A4` → `A5, B2, C2` → `A6` → rest.
 
 ## Open questions (blockers to raise with Gergő — do not guess)

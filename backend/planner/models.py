@@ -72,6 +72,12 @@ class DeliveryStop(models.Model):
         db_index=True,
     )
     geocode_error = models.CharField(max_length=500, blank=True, default="")
+    # Which pipeline stage resolved the stop: cache | raw | parsed | google | manual (= needs / got human input).
+    geocode_stage = models.CharField(max_length=20, blank=True, default="")
+    # The parser's cleaned address, its parts (+ what it removed) and the addresses it proposes for review.
+    cleaned_address = models.CharField(max_length=500, blank=True, default="")
+    parsed_parts = models.JSONField(blank=True, default=dict)
+    address_candidates = models.JSONField(blank=True, default=list)
     # Irányítószám. Derived from the address, but the planner may move a stop to
     # another postal-code group, so it is stored rather than recomputed.
     postal_code = models.CharField(max_length=10, blank=True, default="")

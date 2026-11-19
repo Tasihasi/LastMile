@@ -174,6 +174,7 @@ function GeocodeStep({ stops, needsGeocoding, isGeocoding, progress, onGeocode, 
   const located = stops.filter((s) => s.lat != null && s.lng != null).length;
   const failed = stops.filter((s) => s.geocode_status === "failed").length;
   const pending = stops.filter((s) => s.geocode_status === "pending").length;
+  const autoFixed = stops.filter((s) => s.geocode_stage === "parsed" || s.geocode_stage === "google").length;
 
   // Kick geocoding off once on entering the step; afterwards a failure is
   // retried only through the explicit button, so an error can't loop.
@@ -190,12 +191,17 @@ function GeocodeStep({ stops, needsGeocoding, isGeocoding, progress, onGeocode, 
   return (
     <section className="wizard-card">
       <h2 className="wizard-title">Finding coordinates</h2>
-      <p className="wizard-sub">Each address is looked up on the map. This takes about a second per stop.</p>
+      <p className="wizard-sub">Each address is looked up on the map, several at a time. Misspelled ones are cleaned up and retried automatically.</p>
 
       <div className="wizard-stats">
         <div className="wizard-stat"><strong>{stops.length}</strong><span>Stops</span></div>
         <div className="wizard-stat wizard-stat--ok"><strong>{located}</strong><span>Located</span></div>
         <div className={`wizard-stat ${failed ? "wizard-stat--bad" : ""}`}><strong>{failed}</strong><span>Not found</span></div>
+        {autoFixed > 0 && (
+          <div className="wizard-stat" title="Addresses the system cleaned up and found without your help">
+            <strong>{autoFixed}</strong><span>Auto-fixed</span>
+          </div>
+        )}
         {pending > 0 && <div className="wizard-stat"><strong>{pending}</strong><span>Waiting</span></div>}
       </div>
 
@@ -261,15 +267,18 @@ function FixRow({
   onFixAddress: FixStepProps["onFixAddress"];
   onRemoveStop: FixStepProps["onRemoveStop"];
 }) {
-  const [draft, setDraft] = useState(stop.raw_address);
+  const candidates = stop.address_candidates ?? [];
+  const removed = stop.parsed_parts?.removed?.filter((r) => r.kind !== "unparsed") ?? [];
+  // The parser's best guess is pre-filled: one click on "Find" accepts it.
+  const [draft, setDraft] = useState(candidates[0] ?? stop.raw_address);
   const [busy, setBusy] = useState(false);
   const [tried, setTried] = useState(false);
 
-  const submit = async () => {
-    if (!draft.trim() || busy) return;
+  const submit = async (address = draft) => {
+    if (!address.trim() || busy) return;
     setBusy(true);
     try {
-      await onFixAddress(stop.id, draft.trim());
+      await onFixAddress(stop.id, address.trim());
       setTried(true);
     } finally {
       setBusy(false);
@@ -284,6 +293,11 @@ function FixRow({
         {stop.recipient_name && <span className="fix-row-meta">{stop.recipient_name}</span>}
         {ok && <span className="fix-row-badge">✓ Located</span>}
       </div>
+      {!ok && removed.length > 0 && (
+        <p className="fix-row-removed">
+          Removed from the address: {removed.map((r) => r.text).join(" · ")}
+        </p>
+      )}
       <form
         className="fix-row-form"
         onSubmit={(e) => {
@@ -312,6 +326,25 @@ function FixRow({
           </HoldToConfirmButton>
         )}
       </form>
+      {!ok && candidates.length > 0 && (
+        <div className="fix-row-suggestions" aria-label={`Suggestions for ${stop.name}`}>
+          <span className="wizard-hint">Did you mean:</span>
+          {candidates.map((c) => (
+            <button
+              key={c}
+              type="button"
+              className="btn btn-ghost btn-sm fix-row-chip"
+              disabled={busy}
+              onClick={() => {
+                setDraft(c);
+                void submit(c);
+              }}
+            >
+              {c}
+            </button>
+          ))}
+        </div>
+      )}
       {!ok && tried && <p className="fix-row-error">Still not found — try adding the city or fixing the spelling.</p>}
     </li>
   );
@@ -327,7 +360,10 @@ function FixStep({ stops, canRemove, onFixAddress, onRemoveStop, onBack, onNext 
     if (failedNow.some((id) => !everFailed.has(id))) setEverFailed((prev) => new Set([...prev, ...failedNow]));
   }, [stops, everFailed]);
 
-  const rows = stops.filter((s) => everFailed.has(s.id) || s.geocode_status === "failed");
+  // Most promising suggestions first: the quickest fixes are at the top of the queue.
+  const rows = stops
+    .filter((s) => everFailed.has(s.id) || s.geocode_status === "failed")
+    .sort((a, b) => (b.parsed_parts?.confidence ?? 0) - (a.parsed_parts?.confidence ?? 0));
   const stillFailed = rows.filter((s) => s.geocode_status !== "success").length;
   const located = stops.filter((s) => s.lat != null && s.lng != null).length;
 
@@ -344,6 +380,16 @@ function FixStep({ stops, canRemove, onFixAddress, onRemoveStop, onBack, onNext 
     setBulk(null);
   };
 
+  const withSuggestion = rows.filter((s) => s.geocode_status !== "success" && (s.address_candidates?.length ?? 0) > 0);
+  const acceptSuggestions = async () => {
+    setBulk({ done: 0, total: withSuggestion.length });
+    for (const [i, s] of withSuggestion.entries()) {
+      await onFixAddress(s.id, s.address_candidates![0]);
+      setBulk({ done: i + 1, total: withSuggestion.length });
+    }
+    setBulk(null);
+  };
+
   return (
     <section className="wizard-card">
       <h2 className="wizard-title">Fix addresses</h2>
@@ -355,6 +401,14 @@ function FixStep({ stops, canRemove, onFixAddress, onRemoveStop, onBack, onNext 
             The recipient may have mistyped the address. Correct it and search again
             {stillFailed > 0 ? ` — ${stillFailed} left.` : " — all fixed."}
           </p>
+          {withSuggestion.length > 1 && (
+            <div className="fix-bulk">
+              <button type="button" className="btn btn-primary btn-sm" onClick={() => void acceptSuggestions()} disabled={bulk !== null}>
+                {bulk ? `Searching ${bulk.done}/${bulk.total}…` : `Use the suggested address for ${withSuggestion.length}`}
+              </button>
+              <span className="wizard-hint">The cleaned-up spelling of each address, checked on the map.</span>
+            </div>
+          )}
           {stillFailed > 1 && (
             <div className="fix-bulk">
               <button type="button" className="btn btn-primary btn-sm" onClick={() => void retryAll()} disabled={bulk !== null}>

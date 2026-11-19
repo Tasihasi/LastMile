@@ -1,0 +1,17 @@
+{
+ "budapest": {
+  "1": ["Attila út", "Tárnok utca", "Úri utca", "Szent György tér", "Hunyadi János út", "Fortuna utca", "Dísz tér", "Krisztina körút", "Mészáros utca", "Döbrentei tér", "Apród utca"],
+  "2": ["Margit körút", "Fény utca", "Retek utca", "Hűvösvölgyi út", "Szilágyi Erzsébet fasor", "Törökvész út", "Frankel Leó út", "Bég utca"],
+  "5": ["Váci utca", "Kossuth Lajos utca", "Október 6. utca", "Bajcsy-Zsilinszky út", "Szent István körút", "Nádor utca", "Sas utca", "Arany János utca", "Vörösmarty tér", "Március 15. tér", "Ferenciek tere", "Szabadság tér", "Honvéd utca", "Szent István tér", "Alkotmány utca", "Báthory utca", "Falk Miksa utca", "Balassi Bálint utca", "Mérleg utca", "Zoltán utca", "Régi posta utca", "Petőfi Sándor utca", "Reáltanoda utca", "Semmelweis utca", "Kecskeméti utca", "Múzeum körút", "Vigyázó Ferenc utca", "Akadémia utca", "Zrínyi utca", "Hercegprímás utca"],
+  "6": ["Andrássy út", "Teréz körút", "Nagymező utca", "Király utca", "Liszt Ferenc tér", "Podmaniczky utca", "Jókai utca", "Paulay Ede utca", "Hajós utca", "Bajnok utca", "Eötvös utca", "Csengery utca", "Lázár utca", "Dalszínház utca", "Zichy Jenő utca", "Weiner Leó utca", "Munkácsy Mihály utca", "Szondi utca", "Hunyadi tér", "Vörösmarty utca", "Izabella utca", "Benczúr utca", "Aradi utca", "Kmetty utca"],
+  "7": ["Kazinczy utca", "Dohány utca", "Wesselényi utca", "Király utca", "Rákóczi út", "Erzsébet körút", "Károly körút", "Klauzál tér", "Dob utca", "Akácfa utca", "Holló utca", "Rumbach Sebestyén utca", "Madách Imre út", "Síp utca", "Csengery utca", "Kürt utca", "Garay utca", "Almássy tér", "Thököly út", "Murányi utca", "Hársfa utca", "Nagydiófa utca", "Kertész utca", "Szövetség utca", "Damjanich utca", "Péterfy Sándor utca", "Cserhát utca", "Rózsák tere"],
+  "8": ["Futó utca", "József körút", "Népszínház utca", "Nagy Fuvaros utca", "Gyulai Pál utca", "Szentkirályi utca", "Baross utca", "Üllői út", "Orczy út", "Illés utca", "Mátyás tér", "Bérkocsis utca", "Horánszky utca", "Szigony utca", "Vas utca", "Rákóczi tér", "Lujza utca", "Köztársaság tér", "Dobozi utca", "Kálvária tér", "Práter utca", "Bókay János utca", "Tavaszmező utca", "Kőfaragó utca", "Víg utca", "Auróra utca", "Csarnok tér", "Magdolna utca"],
+  "9": ["Ráday utca", "Ferenc körút", "Üllői út", "Mester utca", "Török Pál utca", "Tompa utca", "Lónyay utca", "Kálvin tér", "Soroksári út", "Bakáts tér", "Gönczy Pál utca", "Angyal utca", "Vámház körút", "Tinódi utca", "Erkel utca", "Páva utca", "Berzenczey utca", "Viola utca", "Haller utca", "Boráros tér", "Gyáli út", "Mihálkovics utca", "Kinizsi utca", "Ipar utca", "Knézits utca"],
+  "11": ["Bartók Béla út", "Móricz Zsigmond körtér", "Szent Gellért tér", "Kelenhegyi út", "Villányi út", "Fehérvári út", "Karinthy Frigyes út", "Budafoki út", "Bocskai út", "Etele út"],
+  "12": ["Alkotás utca", "Csörsz utca", "Böszörményi út", "Németvölgyi út", "Szent János utca", "Apor Vilmos tér"],
+  "13": ["Váci út", "Lehel utca", "Pozsonyi út", "Szent István körút", "Visegrádi utca", "Hegedűs Gyula utca", "Dagály utca", "Jászai Mari tér", "Béke tér", "Tátra utca"],
+  "14": ["Thököly út", "Hungária körút", "Erzsébet királyné útja", "Örs vezér tere", "Mexikói út", "Francia út", "Szőnyi út"],
+  "18": ["Üllői út", "Ferihegyi út", "Nagykőrösi út"],
+  "19": ["Ady Endre utca", "Kossuth Lajos utca", "Üllői út"]
+ }
+}
