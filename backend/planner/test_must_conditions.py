@@ -54,6 +54,22 @@ class M1GeocodingTest(SimpleTestCase):
             self.assertIsNone(geocoder.geocode_address("Fő utca 1"))
 
 
+class M1CandidatePickingTest(SimpleTestCase):
+    def _hits(self, *rows):
+        return [{"lat": str(la), "lon": str(ln), "address": {"postcode": z}} for la, ln, z in rows]
+
+    def test_postcode_match_beats_nominatim_first_hit(self):
+        hits = self._hits((47.5652, 19.1239, "1152"), (47.4969, 19.0633, "1075"))
+        self.assertEqual(geocoder._pick_best("1075 Budapest, Kazinczy utca 14", hits), (47.4969, 19.0633))
+
+    def test_without_zip_nearest_to_depot_wins(self):
+        hits = self._hits((47.5652, 19.1239, "1152"), (47.5540, 18.9637, "1028"), (47.4969, 19.0633, "1075"))
+        self.assertEqual(geocoder._pick_best("Kazinczy utca 14 Budapest", hits), (47.4969, 19.0633))
+
+    def test_candidates_outside_budapest_are_dropped(self):
+        self.assertIsNone(geocoder._pick_best("Fő utca 1", self._hits((48.2, 16.37, "1010"))))
+
+
 def _stops(points):
     return [SimpleNamespace(id=i + 1, lat=p[0], lng=p[1]) for i, p in enumerate(points)]
 

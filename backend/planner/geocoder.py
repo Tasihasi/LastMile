@@ -5,8 +5,9 @@ import time
 import requests
 from django.conf import settings
 
-from .budapest import BBOX, ZIP_CENTROIDS, in_budapest
+from .budapest import BBOX, ZIP_CENTROIDS, haversine_km, in_budapest
 from .districts import extract_postal_code
+from .timing import DEPOT
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +44,34 @@ def _mock_geocode(address: str) -> tuple[float, float]:
     return (lat, lng)
 
 
+def _pick_best(address: str, results: list[dict]) -> tuple[float, float] | None:
+    """Choose among Nominatim's candidates; its own first hit is often a same-named street elsewhere.
+
+    1. A candidate whose postcode equals the address's postal code wins.
+    2. Otherwise the candidate nearest to the postal code's centroid (or, with no postal code, to the
+       depot: the planner's couriers work around it). Candidates outside Budapest are dropped.
+    """
+    zip_code = extract_postal_code(address)
+    candidates = []
+    for r in results:
+        try:
+            lat, lng = float(r["lat"]), float(r["lon"])
+        except (KeyError, ValueError):
+            continue
+        if in_budapest(lat, lng):
+            candidates.append((lat, lng, (r.get("address") or {}).get("postcode")))
+    if not candidates:
+        logger.warning("Nominatim: no hit inside Budapest for: %s", address)
+        return None
+    if zip_code:
+        same_zip = [c for c in candidates if c[2] == zip_code]
+        if same_zip:
+            return same_zip[0][:2]
+    anchor = ZIP_CENTROIDS.get(zip_code or "", DEPOT)
+    best = min(candidates, key=lambda c: haversine_km(anchor, c[:2]))
+    return best[:2]
+
+
 def geocode_address(address: str) -> tuple[float, float] | None:
     """
     Geocode a single address via Nominatim.
@@ -65,7 +94,8 @@ def geocode_address(address: str) -> tuple[float, float] | None:
             params={
                 "q": address,
                 "format": "jsonv2",
-                "limit": 1,
+                "limit": 5,
+                "addressdetails": 1,
                 # Budapest only: an address must never resolve to a same-named street elsewhere.
                 "countrycodes": "hu",
                 "viewbox": f"{BBOX[1]},{BBOX[2]},{BBOX[3]},{BBOX[0]}",
@@ -81,11 +111,7 @@ def geocode_address(address: str) -> tuple[float, float] | None:
             logger.warning("Nominatim returned no results for: %s", address)
             return None
 
-        lat, lng = float(results[0]["lat"]), float(results[0]["lon"])
-        if not in_budapest(lat, lng):
-            logger.warning("Nominatim hit outside Budapest for '%s': %s,%s", address, lat, lng)
-            return None
-        return lat, lng
+        return _pick_best(address, results)
 
     except requests.RequestException as e:
         logger.error("Nominatim request failed for '%s': %s", address, e)
