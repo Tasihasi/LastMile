@@ -4,7 +4,7 @@ import itertools
 import random
 from collections import defaultdict
 
-from django.test import SimpleTestCase, TestCase
+from django.test import TestCase
 
 from . import zones
 from .clustering import find_zip_conflicts, stop_zip
@@ -34,7 +34,7 @@ def zip_routes(res):
     return out
 
 
-class ResolveUnassignedTests(SimpleTestCase):
+class ResolveUnassignedTests(TestCase):
     def test_ac3_one_zone_must_break(self):
         stops = make_stops({"1082": 6, "1083": 6})  # both in zone Z12: 12 stops, windows of 10
         alloc, res = run(stops, [10, 10])

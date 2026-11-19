@@ -18,9 +18,11 @@ from .sessions import (
     share_session,
     update_stop_address,
     upload_file,
+    zone_detail,
 )
 
 __all__ = [
+    "zone_detail",
     "active_sessions",
     "assign_session",
     "bulk_update_stops",

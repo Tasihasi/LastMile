@@ -3,7 +3,7 @@
 import time
 from types import SimpleNamespace
 
-from django.test import SimpleTestCase, TestCase
+from django.test import TestCase
 
 from . import timing, zones
 from .models import DeliverySession, DeliveryStop
@@ -31,7 +31,7 @@ def _zone_of(stop):
     return zones.zone_for_zip(stop.postal_code) or f"zip:{stop.postal_code}"
 
 
-class AllocateZonesTests(SimpleTestCase):
+class AllocateZonesTests(TestCase):
     def _bikers(self, n, window, multiplier=1.0):
         return [{"id": i, "window_minutes": window, "multiplier": multiplier} for i in range(n)]
 
@@ -123,7 +123,7 @@ class AllocateZonesTests(SimpleTestCase):
         self.assertTrue(tight["unassigned_zones"])
 
 
-class TimingTests(SimpleTestCase):
+class TimingTests(TestCase):
     def test_estimate_scales_with_multiplier_and_prefers_given_travel(self):
         stops = [SimpleNamespace(lat=47.5, lng=19.05), SimpleNamespace(lat=47.51, lng=19.06)]
         base = timing.estimate_route_minutes(stops, travel_minutes=10)

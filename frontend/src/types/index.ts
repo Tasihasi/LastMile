@@ -131,34 +131,15 @@ export interface ClusterSubRoute {
 export interface SplitAssignment {
   biker_id: number | null;
   target_stops: number;
-  district: number | null;
-  zip: number | null;
+  /** Available working time in minutes; when every biker has one the server plans by zone. */
+  window_minutes?: number | null;
 }
 
-export interface DistrictInfo {
-  district: number;
-  label: string;
-  stop_count: number;
-}
-
-/**
- * A selectable lock area for the split planner: an exact irányítószám
- * (postal code) when a district has more than one, otherwise the whole
- * district.
- */
-export interface AreaOption {
-  type: "district" | "zip";
-  district: number;
-  zip: number | null;
-  label: string;
-  stop_count: number;
-}
-
-export interface DistrictsResponse {
-  districts: DistrictInfo[];
-  areas: AreaOption[];
-  unknown_district_stops: number;
-  total_stops: number;
+/** A planner-defined group of postal codes that are planned together. */
+export interface Zone {
+  id: string;
+  name: string;
+  zips: string[];
 }
 
 export interface ClusterSummary {

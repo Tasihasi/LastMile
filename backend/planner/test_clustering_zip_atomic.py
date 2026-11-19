@@ -1,7 +1,7 @@
 import random
 from collections import defaultdict
 
-from django.test import SimpleTestCase
+from django.test import TestCase
 
 from .clustering import cluster_zip_atomic
 from .testing.zip_fixtures import REALISTIC_DAY, ZIP_CENTROIDS, make_stops
@@ -15,7 +15,7 @@ def _assert_zip_atomic(test, clusters):
                 test.assertEqual(seen.setdefault(stop.postal_code, i), i, f"zip {stop.postal_code} split")
 
 
-class ZipAtomicTests(SimpleTestCase):
+class ZipAtomicTests(TestCase):
     def test_a2_ac1_ac2_property_over_random_seeds(self):
         zips = sorted(ZIP_CENTROIDS)
         for seed in range(60):

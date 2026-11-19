@@ -16,7 +16,7 @@ from rest_framework.response import Response
 from .. import zones
 from ..districts import extract_postal_code
 from ..geocoder import geocode_address
-from ..models import DeliverySession, DeliveryStop, SharedRoute
+from ..models import DeliverySession, DeliveryStop, SharedRoute, Zone
 from ..optimizer import get_route_details, optimize_route
 from ..parsers import parse_file
 from ..serializers import (
@@ -39,12 +39,51 @@ def list_bikers(request):
     return Response(UserSerializer(bikers, many=True).data)
 
 
-@api_view(["GET"])
+def _zone_payload(request, zone=None):
+    """Validated (name, zips) from a create/update body, or (None, error message)."""
+    name = str(request.data.get("name", zone.name if zone else "")).strip()[:100]
+    raw = request.data.get("zips", zone.zips if zone else None)
+    try:
+        return name, zones.validate_zips(raw, own_code=zone.code if zone else None), None
+    except zones.ZoneConfigError as exc:
+        return None, None, str(exc)
+
+
+@api_view(["GET", "POST"])
 def list_zones(request):
-    """Zone config (zip -> zone mapping) for planners."""
+    """GET: all zones. POST {name, zips}: add a zone (planner only, zips may not overlap another zone)."""
     if not require_planner(request):
         return Response({"error": "Planner access required."}, status=status.HTTP_403_FORBIDDEN)
+    if request.method == "POST":
+        name, zips, error = _zone_payload(request)
+        if error:
+            return Response({"error": error}, status=status.HTTP_400_BAD_REQUEST)
+        numbers = [int(c[1:]) for c in Zone.objects.values_list("code", flat=True) if c[1:].isdigit()]
+        zone = Zone.objects.create(code=f"Z{max(numbers, default=0) + 1:02d}", name=name, zips=zips)
+        zones.invalidate()
+        return Response({"id": zone.code, "name": zone.name, "zips": zone.zips}, status=status.HTTP_201_CREATED)
     return Response({"placeholder": zones.is_placeholder(), "zones": zones.all_zones()})
+
+
+@api_view(["PUT", "DELETE"])
+def zone_detail(request, zone_code):
+    """PUT {name, zips}: edit a zone. DELETE: remove it (its zips are then planned on their own)."""
+    if not require_planner(request):
+        return Response({"error": "Planner access required."}, status=status.HTTP_403_FORBIDDEN)
+    zone = Zone.objects.filter(code=zone_code).first()
+    if zone is None:
+        return Response({"error": "Zone not found."}, status=status.HTTP_404_NOT_FOUND)
+    if request.method == "DELETE":
+        zone.delete()
+        zones.invalidate()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+    name, zips, error = _zone_payload(request, zone)
+    if error:
+        return Response({"error": error}, status=status.HTTP_400_BAD_REQUEST)
+    zone.name, zone.zips = name, zips
+    zone.save()
+    zones.invalidate()
+    return Response({"id": zone.code, "name": zone.name, "zips": zone.zips})
 
 
 @api_view(["GET"])

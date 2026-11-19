@@ -1,7 +1,7 @@
 import re
 
 from django.contrib.auth.models import User
-from django.test import SimpleTestCase, TestCase
+from django.test import TestCase
 
 from .testing.zip_fixtures import REALISTIC_DAY, ZIP_CENTROIDS, make_session, make_stops
 
@@ -10,7 +10,7 @@ def _snapshot(stops):
     return [(s.name, s.postal_code, s.lat, s.lng) for s in stops]
 
 
-class ZipFixturesTests(SimpleTestCase):
+class ZipFixturesTests(TestCase):
     def test_a0_ac1_deterministic_same_seed(self):
         a = make_stops(REALISTIC_DAY["zip_counts"], seed=7)
         b = make_stops(REALISTIC_DAY["zip_counts"], seed=7)

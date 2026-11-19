@@ -38,6 +38,11 @@ def geocode_address(address: str) -> tuple[float, float] | None:
     In E2E mock mode, returns deterministic fake coordinates.
     """
     if settings.E2E_MOCK:
+        # Deterministic miss for e2e: a city-less address marked 'nocity' is not found,
+        # exactly like a real recipient forgetting the city. Appending the city fixes it.
+        lowered = address.lower()
+        if "nocity" in lowered and "budapest" not in lowered:
+            return None
         return _mock_geocode(address)
 
     _rate_limit()

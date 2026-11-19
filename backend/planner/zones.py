@@ -1,12 +1,13 @@
 """Zone config: which postal codes (irányítószám) belong to which sorting zone.
 
-Data lives in zones.json. If the file is a stand-in, it is
-flagged ``"_placeholder": true`` and a warning is logged at startup.
+Zones are planner-editable and live in the database (``Zone`` model). The bundled zones.json
+only seeds the first 16 (migration 0012); ``load``/``validate_config`` still read and check such a file.
 """
 
 import json
 import logging
 import re
+import time
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -63,32 +64,39 @@ def validate_config(config):
 
 
 _cache = None
+_cache_at = 0.0
+_CACHE_TTL = 5.0  # seconds; other workers pick up edits within this window
+
+
+def invalidate():
+    """Drop the cached zone table (called on every zone edit)."""
+    global _cache
+    _cache = None
 
 
 def _config():
-    global _cache
-    if _cache is None:
-        config = load()
-        validate_config(config)
-        _cache = config
+    global _cache, _cache_at
+    if _cache is None or time.monotonic() - _cache_at > _CACHE_TTL:
+        from .models import Zone
+
+        zones = [{"id": z.code, "name": z.name, "zips": list(z.zips)} for z in Zone.objects.all()]
+        _cache = {"zones": zones, "by_zip": {zip_: z["id"] for z in zones for zip_ in z["zips"]}}
+        _cache_at = time.monotonic()
     return _cache
 
 
 def is_placeholder():
-    return bool(_config().get("_placeholder"))
+    return False
 
 
 def all_zones():
-    return [{"id": z["id"], "name": z.get("name", ""), "zips": list(z["zips"])} for z in _config()["zones"]]
+    return [{"id": z["id"], "name": z["name"], "zips": list(z["zips"])} for z in _config()["zones"]]
 
 
 def zone_for_zip(zip_code):
     """Zone id for a postal code (str or int), or None if unknown."""
     zip_code = str(zip_code) if zip_code is not None else ""
-    for zone in _config()["zones"]:
-        if zip_code in zone["zips"]:
-            return zone["id"]
-    return None
+    return _config()["by_zip"].get(zip_code)
 
 
 def zips_in_zone(zone_id):
@@ -99,6 +107,22 @@ def zips_in_zone(zone_id):
     return []
 
 
-def warn_if_placeholder():
-    if is_placeholder():
-        logger.warning("zones.json is a PLACEHOLDER - replace it with the real zone table before go-live.")
+def validate_zips(zips, own_code=None):
+    """Return the cleaned zip list, or raise ZoneConfigError (naming the offending zip).
+
+    A zip may not already belong to another zone (``own_code`` is the zone being edited).
+    """
+    if not isinstance(zips, list) or not zips:
+        raise ZoneConfigError("A zone needs at least one postal code.")
+    cleaned = []
+    for z in zips:
+        z = str(z).strip()
+        if not _ZIP_RE.match(z):
+            raise ZoneConfigError(f"Invalid postal code {z!r} (expected 4 digits starting with 1).")
+        if z in cleaned:
+            raise ZoneConfigError(f"Postal code {z} is listed twice.")
+        owner = _config()["by_zip"].get(z)
+        if owner and owner != own_code:
+            raise ZoneConfigError(f"Postal code {z} already belongs to zone {owner}.")
+        cleaned.append(z)
+    return cleaned

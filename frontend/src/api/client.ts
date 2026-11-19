@@ -3,8 +3,8 @@ import type {
   AuthResponse,
   ClusterResponse,
   DeliveryStopStatus,
-  DistrictsResponse,
   SplitAssignment,
+  Zone,
   MoveStopResponse,
   MoveZipResponse,
   OptimizeResponse,
@@ -313,13 +313,23 @@ export async function clusterSession(
   return data;
 }
 
-export async function getSessionDistricts(
-  sessionId: string
-): Promise<DistrictsResponse> {
-  const { data } = await api.get<DistrictsResponse>(
-    `/sessions/${sessionId}/districts/`
-  );
+export async function listZones(): Promise<Zone[]> {
+  const { data } = await api.get<{ zones: Zone[] }>("/zones/");
+  return data.zones;
+}
+
+export async function createZone(zone: Pick<Zone, "name" | "zips">): Promise<Zone> {
+  const { data } = await api.post<Zone>("/zones/", zone);
   return data;
+}
+
+export async function updateZone(id: string, zone: Pick<Zone, "name" | "zips">): Promise<Zone> {
+  const { data } = await api.put<Zone>(`/zones/${id}/`, zone);
+  return data;
+}
+
+export async function deleteZone(id: string): Promise<void> {
+  await api.delete(`/zones/${id}/`);
 }
 
 export async function removeStop(

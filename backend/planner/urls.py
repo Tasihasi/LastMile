@@ -10,6 +10,7 @@ urlpatterns = [
     # Planner
     path("users/bikers/", views.list_bikers, name="list-bikers"),
     path("zones/", views.list_zones, name="list-zones"),
+    path("zones/<str:zone_code>/", views.zone_detail, name="zone-detail"),
     # Sessions
     path("sessions/active/", views.active_sessions, name="active-sessions"),
     path("sessions/", views.list_sessions, name="list-sessions"),
