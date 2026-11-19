@@ -1,5 +1,7 @@
 # LastMile backlog — from Gergő's email (2026-11-17)
 
+> **Must conditions (whole app):** 15-minute day, addresses placed where they really are, routes truly optimized (not lines between points). See `CLAUDE.md` and `backend/planner/test_must_conditions.py`.
+
 Source: Gergő's follow-up email after the walkthrough (Hungarian). Each numbered point of the
 email is split into small, independently shippable tasks. **One task = one file = one PR.**
 A fresh Claude session should be able to open exactly one task file plus this README and do the work.

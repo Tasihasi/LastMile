@@ -10,6 +10,8 @@ import type { Page } from "@playwright/test";
  *  - human : a keystroke-level model (KLM) estimate of what a person needs on that screen
  *            (reading, pointing, clicking, typing), plus the REAL geocoder wait
  *            (GEOCODE_SECONDS_PER_STOP, the wizard copy promises "about a second per stop").
+ * Sibling must-conditions (backend/planner/test_must_conditions.py): addresses are placed where they really
+ * are, and routes are truly optimized, not straight lines between points.
  * The ruling is checked against system + human + real geocoder wait.
  */
 

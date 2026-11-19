@@ -460,10 +460,14 @@ def optimize(request, session_id):
         stop.save(update_fields=["sequence_order"])
 
     ordered_stops = [id_to_stop[sid] for sid in ordered_ids]
+    # No silent fallback: without road geometry the map would show straight lines between stops.
     try:
         route = get_route_details(ordered_stops, depot=depot)
-    except Exception:
-        route = None
+    except Exception as e:
+        return Response(
+            {"error": f"Route geometry (roads) could not be fetched: {e}"},
+            status=status.HTTP_502_BAD_GATEWAY,
+        )
 
     if route:
         session.total_duration = route["total_duration"]
