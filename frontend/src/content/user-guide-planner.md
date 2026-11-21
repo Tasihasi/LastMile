@@ -120,6 +120,12 @@ Geocoding converts street addresses into map coordinates (latitude/longitude).
    - **Green** markers = successfully geocoded
    - **Red** markers = failed (address not found)
 
+> **Messy addresses are cleaned up for you.** Birth dates, phone numbers, gate codes and notes typed into the address
+> field, abbreviations (`u.`, `krt.`), missing accents, a missing postal code or city and small street misspellings are
+> fixed by the system and the address is looked up again; the **Auto-fixed** counter shows how many. Only what still
+> cannot be found is listed in the **Fix addresses** step, with the suggested address filled in. Nothing is
+> guessed: a spot that does not match the address's postal code is rejected.
+
 > **What if geocoding fails for some stops?** Failed stops show a red "Failed" badge. They will be excluded from route optimization. You may need to correct the address in the source file and re-upload.
 
 > **Stops that already have coordinates** (lat/lng provided in the file) skip geocoding and show a blue "Has coords" badge.

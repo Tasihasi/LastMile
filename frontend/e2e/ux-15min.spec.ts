@@ -10,6 +10,8 @@ import type { Page } from "@playwright/test";
  *  - human : a keystroke-level model (KLM) estimate of what a person needs on that screen
  *            (reading, pointing, clicking, typing), plus the REAL geocoder wait
  *            (GEOCODE_SECONDS_PER_STOP, the wizard copy promises "about a second per stop").
+ * Sibling must-conditions (backend/planner/test_must_conditions.py): addresses are placed where they really
+ * are, and routes are truly optimized, not straight lines between points.
  * The ruling is checked against system + human + real geocoder wait.
  */
 
@@ -32,7 +34,8 @@ const DAY: Record<string, [number, number, number]> = {
   "1086": [47.49, 19.09, 20],
 };
 
-/** `failures` stops are written without a city (the mock geocoder misses them, like a real typo). */
+/** `failures` stops are ones the offline geocoder cannot find even after the parser cleaned them (nowhere);
+ * the wizard's bulk retry fixes them. */
 function dayCsv(failures = 0): { csv: string; total: number } {
   const rows = [failures ? "name,address" : "name,address,lat,lng"];
   let n = 0;
@@ -41,7 +44,7 @@ function dayCsv(failures = 0): { csv: string; total: number } {
       n++;
       const jitter = (k: number) => ((((n * k) % 17) - 8) / 8) * 0.004;
       if (failures) {
-        rows.push(`Stop ${n},${zip} ${n <= failures ? "nocity" : "Budapest"} Teszt utca ${i + 1}`);
+        rows.push(`Stop ${n},${zip} ${n <= failures ? "nowhere" : "Budapest"} Teszt utca ${i + 1}`);
       } else {
         rows.push(
           `Stop ${n},${zip} Budapest Teszt utca ${i + 1},${(lat + jitter(7)).toFixed(6)},${(lng + jitter(11)).toFixed(6)}`

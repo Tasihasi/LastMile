@@ -5838,6 +5838,23 @@ body {
   outline-offset: -1px;
 }
 
+.fix-row-removed {
+  color: var(--color-text-secondary);
+  font-size: 0.8rem;
+}
+
+.fix-row-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.fix-row-chip {
+  border: 1px solid var(--color-border);
+  text-align: left;
+}
+
 .fix-row-error {
   color: var(--color-danger-text);
   font-size: 0.8rem;

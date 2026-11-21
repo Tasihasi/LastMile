@@ -1,8 +1,8 @@
-import math
-import random
-
 import requests
 from django.conf import settings
+
+from . import timing, tsp
+from .budapest import haversine_km
 
 ORS_BASE = "https://api.openrouteservice.org"
 
@@ -14,23 +14,20 @@ def _get_headers():
     }
 
 
+MOCK_DETOUR_FACTOR = 1.3  # street / straight-line distance, offline stand-in only
+
+
 def _mock_optimize(stops, depot=None) -> list[int]:
-    """Sort stops by angle from centroid for a reasonable-looking route order."""
-    if len(stops) < 2:
-        return [s.id for s in stops]
-
-    avg_lat = sum(s.lat for s in stops) / len(stops)
-    avg_lng = sum(s.lng for s in stops) / len(stops)
-
-    def angle(s):
-        return math.atan2(s.lat - avg_lat, s.lng - avg_lng)
-
-    sorted_stops = sorted(stops, key=angle)
-    return [s.id for s in sorted_stops]
+    """Offline stand-in for ORS/VROOM: a real short closed tour (nearest neighbour + 2-opt)."""
+    order = tsp.optimize_order([(s.lat, s.lng) for s in stops], depot)
+    return [stops[i].id for i in order]
 
 
 def _mock_route_details(ordered_stops, depot=None) -> dict | None:
-    """Generate fake but structurally valid route geometry and segments."""
+    """Offline stand-in for ORS directions: stop-to-stop geometry with distance/time from the model.
+
+    Straight segments only (no road network offline); durations use the planner's courier speed.
+    """
     if len(ordered_stops) < 2 and not depot:
         return None
 
@@ -45,12 +42,14 @@ def _mock_route_details(ordered_stops, depot=None) -> dict | None:
 
     segments = []
     for i in range(len(coordinates) - 1):
+        a, b = coordinates[i], coordinates[i + 1]
+        meters = haversine_km((a[1], a[0]), (b[1], b[0])) * 1000 * MOCK_DETOUR_FACTOR
         segments.append(
             {
                 "from_index": i,
                 "to_index": i + 1,
-                "duration": random.randint(120, 600),
-                "distance": random.randint(500, 3000),
+                "duration": round(meters / 1000 / timing.AVG_SPEED_KMH * 3600),
+                "distance": round(meters),
             }
         )
 
@@ -67,7 +66,7 @@ def optimize_route(stops, depot=None) -> list[int]:
     Call ORS optimization (VROOM) to get optimal stop order.
     depot is an optional (lat, lng) tuple for start/end location.
     Returns list of stop IDs in optimized order.
-    In E2E mock mode, returns angle-sorted order without calling ORS.
+    In E2E mock mode, returns an offline 2-opt tour without calling ORS.
     """
     if settings.E2E_MOCK:
         return _mock_optimize(stops, depot)

@@ -4,9 +4,8 @@ Service time, travel speed, break and the overrun tolerance are constants in cod
 Backlog B1/B2 extend this module (depot times, status badges); A5 only needs the estimator.
 """
 
-import math
-
-import numpy as np
+from . import tsp
+from .budapest import haversine_km
 
 SERVICE_TIME_PER_STOP_MIN = 2.0  # minutes spent at each address
 AVG_SPEED_KMH = 15.0  # door-to-door average of a courier in the inner city
@@ -16,33 +15,18 @@ OVERRUN_TOLERANCE = 0.075  # a route may exceed its window by 7.5 %
 # Depot: Orczy út 45, Budapest (approximate coordinates).
 DEPOT = (47.4893, 19.0760)
 
-_KM_PER_DEG_LAT = 111.2
-
-
-def _km_matrix(points):
-    pts = np.asarray(points, dtype=float)
-    lat0 = math.radians(pts[:, 0].mean())
-    xy = np.column_stack([pts[:, 0] * _KM_PER_DEG_LAT, pts[:, 1] * _KM_PER_DEG_LAT * math.cos(lat0)])
-    diff = xy[:, None, :] - xy[None, :, :]
-    return np.sqrt((diff**2).sum(axis=2))
-
 
 def tour_km(points, depot=DEPOT):
-    """Length (km) of a nearest-neighbour tour depot -> points -> depot (heuristic, deterministic)."""
+    """Length (km) of a short closed tour depot -> points -> depot.
+
+    The visiting order is optimized (nearest neighbour + 2-opt), not the file order. Straight-line
+    length; street detours are already inside AVG_SPEED_KMH (door-to-door). Deterministic.
+    """
     if not points:
         return 0.0
-    dist = _km_matrix([depot, *points])
-    n = len(points)
-    visited = np.zeros(n + 1, dtype=bool)
-    visited[0] = True
-    cur, total = 0, 0.0
-    for _ in range(n):
-        d = np.where(visited, np.inf, dist[cur])
-        nxt = int(np.argmin(d))
-        total += float(d[nxt])
-        visited[nxt] = True
-        cur = nxt
-    return total + float(dist[cur, 0])
+    order = tsp.optimize_order(list(points), depot)
+    path = [depot, *(points[i] for i in order), depot]
+    return sum(haversine_km(a, b) for a, b in zip(path, path[1:], strict=False))
 
 
 def estimate_route_minutes(

@@ -552,13 +552,13 @@ class GeocoderTest(TestCase):
     def test_geocode_success(self, mock_get, mock_time):
         mock_time.monotonic.return_value = 100.0
         mock_response = MagicMock()
-        mock_response.json.return_value = [{"lat": "47.5", "lon": "19.08"}]
+        mock_response.json.return_value = [{"lat": "47.5", "lon": "19.08", "address": {"house_number": "5"}}]
         mock_response.raise_for_status = MagicMock()
         mock_get.return_value = mock_response
 
         from .geocoder import geocode_address
 
-        result = geocode_address("Main St Budapest")
+        result = geocode_address("Main St 5 Budapest")
         self.assertEqual(result, (47.5, 19.08))
 
     @patch("planner.geocoder.time")
@@ -1009,11 +1009,23 @@ class UploadAPITest(TestCase):
     def test_update_stop_address_regeocodes(self):
         data = self._upload(self._csv("a.csv", b"Shop A,Typo Strt\n")).json()
         url = f"/api/sessions/{data['id']}/stops/{data['stops'][0]['id']}/address/"
-        with patch("planner.views.sessions.geocode_address", return_value=None):
-            failed = self.client.patch(url, {"address": "Still wrong"}, format="json")
+        from .geocoder import GeocodeResult, register_provider
+
+        class Stub:
+            name = "nominatim"
+
+            def __init__(self, result):
+                self.result = result
+
+            def geocode(self, query):
+                return self.result
+
+        self.addCleanup(register_provider, "nominatim", None)
+        register_provider("nominatim", Stub(None))
+        failed = self.client.patch(url, {"address": "Still wrong"}, format="json")
         self.assertEqual(failed.json()["geocode_status"], "failed")
-        with patch("planner.views.sessions.geocode_address", return_value=(47.5, 19.05)):
-            fixed = self.client.patch(url, {"address": "Main Street 1, Budapest"}, format="json")
+        register_provider("nominatim", Stub(GeocodeResult(47.5, 19.05)))
+        fixed = self.client.patch(url, {"address": "Main Street 1, Budapest"}, format="json")
         body = fixed.json()
         self.assertEqual(body["geocode_status"], "success")
         self.assertEqual(body["raw_address"], "Main Street 1, Budapest")
