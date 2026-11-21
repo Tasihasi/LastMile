@@ -4489,6 +4489,13 @@ body {
   transition: box-shadow var(--transition);
 }
 
+/* The assign dropdown opens below the card edge: do not clip it */
+.cluster-route-card--assigning {
+  overflow: visible;
+  position: relative;
+  z-index: 5;
+}
+
 .cluster-route-card:hover {
   box-shadow: var(--shadow-sm);
 }

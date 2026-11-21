@@ -460,7 +460,7 @@ export function ClusterReviewView({
               return (
                 <div
                   key={route.session.id}
-                  className={`cluster-route-card ${isExpanded ? "cluster-route-card--expanded" : ""}`}
+                  className={`cluster-route-card ${isExpanded ? "cluster-route-card--expanded" : ""} ${isAssigning ? "cluster-route-card--assigning" : ""}`}
                 >
                   <div
                     className="cluster-route-card-header"
